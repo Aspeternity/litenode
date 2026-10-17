@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -61,7 +62,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *got != *st {
+	if !reflect.DeepEqual(got, st) {
 		t.Errorf("round trip: got %+v, want %+v", got, st)
 	}
 	if id := got.AllocID(); id != 2 {
