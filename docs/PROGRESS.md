@@ -5,12 +5,12 @@
 ## 当前状态
 
 - **阶段**：M1 节点管理。
-- **当前任务**：无（M1-07a 已完成）。
-- **下一个任务**：M1-07 节点管理菜单。
+- **当前任务**：无（M1-07 已完成）。
+- **下一个任务**：M1-08 客户端管理菜单。
 
 ## 下次会话从这里开始
 
-1. 做 M1-07（`feat/M1-07-node-menu`）。之后依次 M1-08、M1-09、M1-10；M1 全部完成后停下来让用户实机验收（D-050）。
+1. 做 M1-08（`feat/M1-08-client-menu`）。之后依次、M1-09、M1-10；M1 全部完成后停下来让用户实机验收（D-050）。
    - 发布：GitHub 上有正式 Release `v0.0.1`（开发中测试版，`releases/latest` 指向它）。新版本发布时用 `git tag -a`，推送标签前先问用户。M6-02 更新脚本可复用 install.sh 的下载和校验方式（资产名 `litenode-linux-<架构>`，`sha256sums.txt` 为 `sha256sum` 标准格式）。
 2. 提议条目中 P-001、P-002、P-006、P-008、P-010 已确认；其余 P-003 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
@@ -44,7 +44,9 @@
 - 节点模型（M1-02）：`node.Node` / `node.Client` / `node.Reality` 存在 `state.State.Nodes`；组件、兼容性表、预设在 `internal/node/builtin` 显式注册（`builtin.Registry()`）；`Registry.CheckNode` 检查组合和流控；备注用 `node.NormalizeRemark`、`CheckNodeRemark`、`CheckClientRemark`（错误为 `ErrRemark*`，菜单映射为中文）。组件接口目前只有 `Name` / `Label`，M1-03 加生成 inbound 配置的方法。
 - CI：main 的必须通过检查为 `test`（amd64）和 `test-arm64`（GitHub 原生 arm64），两个任务 ID 不要改名，否则 Ruleset 会卡住合并。
 - Xray 配置生成（M1-03）：`xray.GenerateConfig(reg, nodes)`；组件接口有 `InboundSettings` / `Network` + `StreamSettings` / `StreamSecurity`。`xray` 配置类型（`change.Kind`：校验 `xray run -test`，应用按节点和 `xray.stopped` 启停，D-035 / D-045）在 M1-07 定义。
-- M1-07 要处理的两点：① Xray 对非 443 端口的 REALITY 会警告"可能更容易被 GFW 封锁 IP"，添加或修改节点端口时是否提示，需在 M1-07 与用户确认；② 在测试机上用真实客户端验证代理无法访问 127.0.0.1 上的服务（D-049 的实际效果）。
+- 节点（M1-07）：业务在 `internal/nodemgr`（`Service.Add/SetPort/SetTarget/SetFallbackLimit/RegenerateKeys/SetSharePort/SetRemark/SetEnabled/Delete/SetShareAddress/SyncUFW`），菜单在 `internal/app/nodes*.go`（只做显示和输入，错误由 `app.describe` 映射成中文）。`xray.Kind` / `ufw.Kind` 的应用步骤读取磁盘上的状态文件决定行为；回滚子命令使用同样的 kinds（`Env.kinds`）。
+- **实机测试方法**（M1-07 建立，后续沿用）：在测试机上用管道输入驱动真实菜单（`printf '...' | NO_COLOR=1 litenode`）；客户端连通性用 WSL 中的官方 Xray 客户端（scratchpad 的 `xclient/xray` + `tools/link2client.py` 把链接转成客户端配置），通过 SOCKS 访问 `https://www.cloudflare.com/cdn-cgi/trace`，出口 IP 为 VPS 即连通。**WSL 到 VPS 的直连经过 GFW（中国移动）**，所以"从中国大陆连通"和"协议可用"要分开测：协议用测试机本机的 `/tmp/vprobe.sh <链接>`（客户端在 VPS 上，绕开 GFW）。
+- D-049 实测：通过代理访问 VPS 的 127.0.0.1 被阻断，访问 VPS 公网 IP 与访问其他网站相同。
 - 预设（M1-04）：`node.Preset.Build(node.BuildInput{NodeID, ClientID, Port, Remark, Target, Rand})` 生成完整节点（密钥钳位后编码、8 位 shortId、v4 UUID、chrome、默认回落限速、第一个客户端备注同节点备注）。
 - Reality 目标（M1-05）：`reality.Checker{}.Check(ctx, target)` / `CheckAll(ctx, targets, 10)`，`Result.Usable()`、`LargeHomepage()`、`Keyword`；`reality.CommonTargets`；`reality.SplitTarget` 校验手动输入。选择菜单在 M1-07。
 - 分享（M1-06）：`share.Link(reg, node, client, addr)`（端口优先 `share_port`）、`share.QR(text, color)`、`share.NewDetector().Detect(ctx)` → `Detected{IPv4, IPv6, Source}`，`Candidates()` IPv4 在前；`OnInterface(ip)` 为 false 时提示 NAT；`share.ValidAddress` 校验手动输入。测试机已安装 `zbar-tools`（`zbarimg`）用于验证二维码。
@@ -64,4 +66,4 @@
 ## 最近一次会话
 
 - **日期**：2026-10-18
-- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）、M0-06（菜单细节见 D-030；在测试 VPS 上验证了菜单显示、非法输入、颜色、SIGINT/SIGHUP 退出）、M0-07（子命令细节见 D-031）、M0-08（D-032；CI 通过，v0.0.1 已发布，校验值在本机和测试机上核对一致）、M0-09（D-033；用户在测试机上确认一行命令安装、litenode / lnode 打开菜单、终端中安装后自动进入菜单）。M0 全部完成。M1-01 已完成（确认 P-001、P-002；D-034 权限规则、D-035；集成测试结果经用户确认）；改用分支开发（D-036）；端口冲突与 ufw 同步的设计变更（D-037、D-038）；M0-10 移除共存检测；M1-02 节点模型（D-039）；方案审查（D-040 ~ D-048）；M0-11 CI arm64；M1-00 多类整体变更；M1-03 Xray 配置生成（D-049）；M1-04 Reality 预设；M1-05 目标检测（D-051）；M1-06 分享链接和二维码（D-052）；M1-07a 端口 / ufw / 已有拦截检测；集成测试发现并修复：查询最新版本时响应大小上限过小、校验用临时文件名导致 Xray 无法识别格式、回退时被 systemd 启动频率限制拦住、恢复 xray.json 时丢失属组。
+- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）、M0-06（菜单细节见 D-030；在测试 VPS 上验证了菜单显示、非法输入、颜色、SIGINT/SIGHUP 退出）、M0-07（子命令细节见 D-031）、M0-08（D-032；CI 通过，v0.0.1 已发布，校验值在本机和测试机上核对一致）、M0-09（D-033；用户在测试机上确认一行命令安装、litenode / lnode 打开菜单、终端中安装后自动进入菜单）。M0 全部完成。M1-01 已完成（确认 P-001、P-002；D-034 权限规则、D-035；集成测试结果经用户确认）；改用分支开发（D-036）；端口冲突与 ufw 同步的设计变更（D-037、D-038）；M0-10 移除共存检测；M1-02 节点模型（D-039）；方案审查（D-040 ~ D-048）；M0-11 CI arm64；M1-00 多类整体变更；M1-03 Xray 配置生成（D-049）；M1-04 Reality 预设；M1-05 目标检测（D-051）；M1-06 分享链接和二维码（D-052）；M1-07a 端口 / ufw / 已有拦截检测；M1-07 节点菜单（D-053；实机发现并解决 ML-KEM 问题 D-054、常用列表重选 D-055）；集成测试发现并修复：查询最新版本时响应大小上限过小、校验用临时文件名导致 Xray 无法识别格式、回退时被 systemd 启动频率限制拦住、恢复 xray.json 时丢失属组。

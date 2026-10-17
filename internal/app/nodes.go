@@ -1,0 +1,542 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"strconv"
+
+	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/firewall"
+	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/nodemgr"
+	"github.com/Aspeternity/litenode/internal/ports"
+	"github.com/Aspeternity/litenode/internal/reality"
+	"github.com/Aspeternity/litenode/internal/share"
+	"github.com/Aspeternity/litenode/internal/state"
+	"github.com/Aspeternity/litenode/internal/text"
+	"github.com/Aspeternity/litenode/internal/ufw"
+	"github.com/Aspeternity/litenode/internal/ui"
+	"github.com/Aspeternity/litenode/internal/xray"
+)
+
+// TargetChecker checks REALITY targets (reality.Checker).
+type TargetChecker interface {
+	Check(ctx context.Context, target string) reality.Result
+	CheckAll(ctx context.Context, targets []string, limit int) []reality.Result
+}
+
+// mlkemAware is implemented by checkers that need to know whether the Xray
+// in use handles ML-KEM targets.
+type mlkemAware interface {
+	SetMLKEMSupported(bool)
+}
+
+// AddressDetector finds the public address (share.Detector).
+type AddressDetector interface {
+	Detect(ctx context.Context) share.Detected
+	OnInterface(ip string) bool
+}
+
+// nodeUI holds the node menus (DESIGN section 9). It only displays and
+// reads input; nodemgr does the work.
+type nodeUI struct {
+	ctx      context.Context
+	s        *ui.Session
+	svc      *nodemgr.Service
+	checker  TargetChecker
+	detector AddressDetector
+}
+
+func (u *nodeUI) state() *state.State {
+	st, err := u.svc.Store.Load()
+	if err != nil {
+		return state.New()
+	}
+	return st
+}
+
+// protocolLabel is e.g. "VLESS-TCP-Reality".
+func (u *nodeUI) protocolLabel(n node.Node) string {
+	label := func(c node.Component, ok bool, name string) string {
+		if ok {
+			return c.Label()
+		}
+		return name
+	}
+	p, pok := u.svc.Registry.Protocol(n.Protocol)
+	t, tok := u.svc.Registry.Transport(n.Transport)
+	s, sok := u.svc.Registry.Security(n.Security)
+	return label(p, pok, n.Protocol) + "-" + label(t, tok, n.Transport) + "-" + label(s, sok, n.Security)
+}
+
+// menu is the node list menu (DESIGN section 9.1).
+func (u *nodeUI) menu() ui.Menu {
+	st := u.state()
+	status := []string{text.ShareAddressLine(st.Server.ShareAddress)}
+	if len(st.Nodes) == 0 {
+		status = append(status, text.NodeNone)
+	} else {
+		rows := [][]string{{text.ColID, text.ColRemark, text.ColProtocol, text.ColPort, text.ColClients, text.ColState}}
+		for i, n := range st.Nodes {
+			state := u.s.Colors.Off(text.StateDisabled)
+			if n.Enabled {
+				state = u.s.Colors.Good(text.StateEnabled)
+			}
+			rows = append(rows, []string{strconv.Itoa(i + 1), n.Remark, u.protocolLabel(n), strconv.Itoa(n.Port), strconv.Itoa(len(n.Clients)), state})
+		}
+		status = append(status, ui.Table(rows)...)
+	}
+	none := len(st.Nodes) == 0
+	todo := func() error { u.s.Println(text.InDevelopment); return nil }
+	return ui.Menu{
+		Status: status,
+		Items: []ui.Item{
+			{Label: text.NodeAdd, Action: u.add},
+			{Label: text.NodeModify, Hidden: none, Action: u.modify},
+			{Label: text.NodeToggle, Hidden: none, Action: u.toggle},
+			{Label: text.NodeClients, Hidden: none, Action: todo},
+			{Label: text.NodeShareAddress, Hint: text.NodeShareAddrHint, Action: u.shareAddress},
+			{Label: text.NodeDelete, Hidden: none, Action: u.delete},
+		},
+	}
+}
+
+// chooseNode asks for a node's sequence number; nil means back.
+func (u *nodeUI) chooseNode() (*node.Node, error) {
+	st := u.state()
+	if len(st.Nodes) == 0 {
+		return nil, nil
+	}
+	i, err := u.s.PromptNumber(text.PromptNodeNumber, -1, 0, len(st.Nodes))
+	if err != nil || i == 0 {
+		return nil, err
+	}
+	n := st.Nodes[i-1]
+	return &n, nil
+}
+
+// add runs the add-node flow (DESIGN section 9.2).
+func (u *nodeUI) add() error {
+	presets := u.svc.Registry.Presets()
+	m := ui.Menu{Status: []string{text.ChoosePreset}}
+	for _, p := range presets {
+		hint := ""
+		if p.Recommended {
+			hint = text.Recommended
+		}
+		m.Items = append(m.Items, ui.Item{Label: p.Label, Hint: hint})
+	}
+	choice, err := u.s.Choose(m)
+	if err != nil || choice == 0 {
+		return err
+	}
+	preset := presets[choice-1]
+
+	addr, err := u.ensureShareAddress()
+	if err != nil {
+		return err
+	}
+	port, err := u.askNewPort(addr)
+	if err != nil {
+		return err
+	}
+	target, err := u.chooseTarget()
+	if err != nil || target == "" {
+		return err
+	}
+	remark, err := u.askRemark(u.defaultRemark(port), 0, true)
+	if err != nil {
+		return err
+	}
+	if _, ok := u.svc.Xray.Installed(u.ctx); !ok {
+		u.s.Println(text.InstallingXray)
+	}
+	u.s.Println(text.ApplyingChange)
+	n, err := u.svc.Add(u.ctx, nodemgr.AddInput{PresetID: preset.ID, Port: port, Target: target, Remark: remark})
+	if err != nil {
+		return err
+	}
+	u.s.Println(u.s.Colors.Good(text.NodeAdded))
+	u.showLink(n, n.Clients[0], addr, true)
+	return nil
+}
+
+// showLink prints a client's link, optionally with a QR code and hints.
+func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, full bool) {
+	link, err := share.Link(u.svc.Registry, n, c, addr)
+	if err != nil {
+		u.s.Println(u.s.Colors.Bad(text.ActionFailed(err)))
+		return
+	}
+	u.s.Println("\n" + text.ShareLinkTitle)
+	u.s.Println(link)
+	if !full {
+		return
+	}
+	if qr, err := share.QR(link, u.s.Colors.Enabled); err == nil {
+		u.s.Println()
+		fmt.Fprint(u.s.Out, qr)
+	}
+	port := n.Port
+	if n.SharePort > 0 {
+		port = n.SharePort
+	}
+	u.s.Println(text.SecurityGroup(port))
+	if !ufw.Active(u.ctx, u.svc.Runner) {
+		if f := firewall.DetectForeignFilter(u.ctx, u.svc.Runner); f.Found() {
+			u.s.Println(u.s.Colors.Warn(text.ForeignFilter(n.Port, f.Where)))
+		}
+	}
+}
+
+// printLinks lists the new links of all enabled clients of a node.
+func (u *nodeUI) printLinks(id int64) {
+	st := u.state()
+	for _, n := range st.Nodes {
+		if n.ID != id {
+			continue
+		}
+		u.s.Println("\n" + text.NewLinksTitle)
+		for _, c := range n.Clients {
+			if !c.Enabled {
+				continue
+			}
+			if link, err := share.Link(u.svc.Registry, n, c, st.Server.ShareAddress); err == nil {
+				u.s.Println(c.Remark + ":")
+				u.s.Println(link)
+			}
+		}
+	}
+}
+
+// askNewPort asks for a free port for a new node: 443 if free, else a
+// random free port (DESIGN section 9.2 step 2).
+func (u *nodeUI) askNewPort(addr string) (int, error) {
+	st := u.state()
+	pc, err := u.svc.PortChecker(st)
+	if err != nil {
+		return 0, err
+	}
+	def := 443
+	if len(pc.Check([]ports.Key{{Proto: ports.TCP, Port: def}}, "", nil)) > 0 {
+		def = pc.RandomFree(nil)
+	}
+	if ip := net.ParseIP(addr); ip != nil && !u.detector.OnInterface(addr) {
+		u.s.Println(u.s.Colors.Warn(text.NATHint))
+	}
+	for {
+		port, err := u.s.PromptNumber(text.PromptPort, def, 1, 65535)
+		if err != nil {
+			return 0, err
+		}
+		if conflicts := pc.Check([]ports.Key{{Proto: ports.TCP, Port: port}}, "", nil); len(conflicts) > 0 {
+			for _, c := range conflicts {
+				u.s.Println(u.s.Colors.Warn(text.PortTaken(c.Port, string(c.Proto), c.Owner)))
+			}
+			continue
+		}
+		if port != 443 {
+			u.s.Println(u.s.Colors.Warn(text.Non443Hint))
+		}
+		return port, nil
+	}
+}
+
+func (u *nodeUI) defaultRemark(port int) string {
+	st := u.state()
+	base := "Reality-" + strconv.Itoa(port)
+	r := base
+	for i := 2; node.CheckNodeRemark(st.Nodes, r, 0) != nil || node.CheckClientRemark(st.Nodes, r, 0) != nil; i++ {
+		r = base + "-" + strconv.Itoa(i)
+	}
+	return r
+}
+
+// askRemark asks for a node remark until it is valid and unique. For a
+// new node the first client takes the same remark, so it must also be
+// unique among clients.
+func (u *nodeUI) askRemark(def string, id int64, newNode bool) (string, error) {
+	for {
+		in, err := u.s.PromptDefault(text.PromptRemark, def)
+		if err != nil {
+			return "", err
+		}
+		r, err := node.NormalizeRemark(in)
+		if err == nil {
+			st := u.state()
+			err = node.CheckNodeRemark(st.Nodes, r, id)
+			if err == nil && newNode {
+				err = node.CheckClientRemark(st.Nodes, r, 0)
+			}
+		}
+		if err == nil {
+			return r, nil
+		}
+		u.s.Println(u.s.Colors.Warn(describe(err)))
+	}
+}
+
+// prepareChecker tells the checker whether the Xray in use (or the one
+// that will be installed for the first node) handles ML-KEM targets.
+func (u *nodeUI) prepareChecker() {
+	a, ok := u.checker.(mlkemAware)
+	if !ok {
+		return
+	}
+	v, installed := u.svc.Xray.Installed(u.ctx)
+	if !installed {
+		v, _ = u.svc.Xray.DefaultVersion(u.ctx)
+	}
+	a.SetMLKEMSupported(xray.SupportsMLKEMTargets(v))
+}
+
+// chooseTarget lets the user pick a checked REALITY target (DESIGN
+// section 10.1). "" means back.
+func (u *nodeUI) chooseTarget() (string, error) {
+	u.prepareChecker()
+	m := ui.Menu{Status: []string{text.ChooseTarget}, Items: []ui.Item{{Label: text.TargetCommon}, {Label: text.TargetManual}}}
+	choice, err := u.s.Choose(m)
+	if err != nil || choice == 0 {
+		return "", err
+	}
+	if choice == 1 {
+		u.s.Println(text.CommonListHint)
+		u.s.Println(text.Checking)
+		var usable []reality.Result
+		results := u.checker.CheckAll(u.ctx, reality.CommonTargets, 10)
+		width := 0
+		for _, r := range results {
+			width = max(width, ui.Width(r.Host))
+		}
+		for _, r := range results {
+			if r.Usable() {
+				usable = append(usable, r)
+				u.s.Println(fmt.Sprintf(" %d. %s", len(usable), text.CheckLine(ui.PadRight(r.Host, width), r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK)))
+			}
+		}
+		if len(usable) > 0 {
+			i, err := u.s.PromptNumber(text.PromptTargetIndex, 1, 0, len(usable))
+			if err != nil || i == 0 {
+				return "", err
+			}
+			return usable[i-1].Target, nil
+		}
+		u.s.Println(u.s.Colors.Warn(text.TargetNoneUsable))
+	}
+	return u.manualTarget()
+}
+
+func (u *nodeUI) manualTarget() (string, error) {
+	for {
+		in, err := u.s.Prompt(text.PromptTarget + ": ")
+		if err != nil {
+			return "", err
+		}
+		if in == "" {
+			return "", nil
+		}
+		if _, _, err := reality.SplitTarget(in); err != nil {
+			u.s.Println(u.s.Colors.Warn(text.ActionFailed(err)))
+			continue
+		}
+		u.s.Println(text.Checking)
+		r := u.checker.Check(u.ctx, in)
+		u.printCheck(r)
+		if !r.Usable() {
+			u.s.Println(u.s.Colors.Bad(text.TargetNotUsable))
+			continue
+		}
+		if r.Keyword != "" || r.LargeHomepage() {
+			ok, err := u.s.Confirm(text.TargetUseAnyway)
+			if err != nil {
+				return "", err
+			}
+			if !ok {
+				continue
+			}
+		}
+		return r.Target, nil
+	}
+}
+
+func (u *nodeUI) printCheck(r reality.Result) {
+	if r.Err != nil {
+		u.s.Println(text.CheckUnreachable(r.Host, r.Err))
+		return
+	}
+	u.s.Println(text.CheckLine(r.Host, r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK))
+	if r.MLKEM && !r.MLKEMSupported {
+		u.s.Println(u.s.Colors.Warn(text.MLKEMUnsupported(xray.MinMLKEMVersion)))
+	}
+	u.s.Println(text.HomepageSize(r.HomepageSize))
+	if r.Keyword != "" {
+		u.s.Println(u.s.Colors.Warn(text.RiskyKeyword(r.Keyword)))
+	}
+	if r.LargeHomepage() {
+		u.s.Println(u.s.Colors.Warn(text.LargeHomepage(r.HomepageSize)))
+	}
+}
+
+// ensureShareAddress returns the share address, detecting and asking for
+// it the first time (DESIGN section 9.5, D-041).
+func (u *nodeUI) ensureShareAddress() (string, error) {
+	if addr := u.state().Server.ShareAddress; addr != "" {
+		return addr, nil
+	}
+	return u.detectShareAddress()
+}
+
+func (u *nodeUI) detectShareAddress() (string, error) {
+	u.s.Println(text.Checking)
+	cands := u.detector.Detect(u.ctx).Candidates()
+	var addr string
+	switch len(cands) {
+	case 0:
+		u.s.Println(u.s.Colors.Warn(text.ShareAddrNone))
+		a, err := u.askAddress("")
+		if err != nil || a == "" {
+			return "", err
+		}
+		addr = a
+	case 1:
+		addr = cands[0]
+		u.s.Println(text.ShareAddrDetected + addr)
+	default:
+		m := ui.Menu{Status: []string{text.ChooseShareAddr}}
+		for _, c := range cands {
+			m.Items = append(m.Items, ui.Item{Label: c})
+		}
+		choice, err := u.s.Choose(m)
+		if err != nil || choice == 0 {
+			return "", err
+		}
+		addr = cands[choice-1]
+	}
+	return addr, u.svc.SetShareAddress(addr)
+}
+
+func (u *nodeUI) askAddress(def string) (string, error) {
+	for {
+		var in string
+		var err error
+		if def != "" {
+			in, err = u.s.PromptDefault(text.PromptShareAddress, def)
+		} else {
+			in, err = u.s.Prompt(text.PromptShareAddress + ": ")
+		}
+		if err != nil || in == "" {
+			return "", err
+		}
+		if share.ValidAddress(in) {
+			return in, nil
+		}
+		u.s.Println(u.s.Colors.Warn(text.ErrInvalidAddress))
+	}
+}
+
+// shareAddress is the "share address" menu (D-041).
+func (u *nodeUI) shareAddress() error {
+	return u.s.Run(func() ui.Menu {
+		return ui.Menu{
+			Status: []string{text.ShareAddressLine(u.state().Server.ShareAddress)},
+			Items: []ui.Item{
+				{Label: text.ShareAddrEnter, Action: func() error {
+					addr, err := u.askAddress(u.state().Server.ShareAddress)
+					if err != nil || addr == "" {
+						return err
+					}
+					return u.setShareAddress(addr)
+				}},
+				{Label: text.ShareAddrDetect, Action: func() error {
+					_, err := u.detectShareAddressThen()
+					return err
+				}},
+			},
+		}
+	})
+}
+
+func (u *nodeUI) detectShareAddressThen() (string, error) {
+	addr, err := u.detectShareAddress()
+	if err == nil && addr != "" {
+		u.s.Println(text.ShareAddrChanged)
+	}
+	return addr, err
+}
+
+func (u *nodeUI) setShareAddress(addr string) error {
+	if err := u.svc.SetShareAddress(addr); err != nil {
+		return err
+	}
+	u.s.Println(text.ShareAddrChanged)
+	return nil
+}
+
+// toggle enables or disables a node.
+func (u *nodeUI) toggle() error {
+	n, err := u.chooseNode()
+	if err != nil || n == nil {
+		return err
+	}
+	if err := u.svc.SetEnabled(u.ctx, n.ID, !n.Enabled); err != nil {
+		return err
+	}
+	if n.Enabled {
+		u.s.Println(text.NodeDisabled)
+	} else {
+		u.s.Println(text.NodeEnabled)
+	}
+	return nil
+}
+
+// delete removes a node after confirmation.
+func (u *nodeUI) delete() error {
+	n, err := u.chooseNode()
+	if err != nil || n == nil {
+		return err
+	}
+	ok, err := u.s.Confirm(text.ConfirmDelete(n.Remark, len(n.Clients)))
+	if err != nil || !ok {
+		return err
+	}
+	if err := u.svc.Delete(u.ctx, n.ID); err != nil {
+		return err
+	}
+	u.s.Println(text.NodeDeleted)
+	return nil
+}
+
+// describe maps known errors to user-facing text.
+func describe(err error) string {
+	var pt *nodemgr.PortTakenError
+	var ce *change.Error
+	var ie *nodemgr.XrayInstallError
+	switch {
+	case errors.Is(err, node.ErrRemarkEmpty):
+		return text.ErrRemarkEmpty
+	case errors.Is(err, node.ErrRemarkTooLong):
+		return text.ErrRemarkTooLong(node.MaxRemarkLen)
+	case errors.Is(err, node.ErrRemarkControl):
+		return text.ErrRemarkControl
+	case errors.Is(err, node.ErrRemarkDuplicate):
+		return text.ErrRemarkDuplicate
+	case errors.Is(err, nodemgr.ErrNotFound):
+		return text.ErrNodeNotFound
+	case errors.As(err, &pt):
+		msg := ""
+		for i, c := range pt.Conflicts {
+			if i > 0 {
+				msg += "\n"
+			}
+			msg += text.PortTaken(c.Port, string(c.Proto), c.Owner)
+		}
+		return msg
+	case errors.As(err, &ie):
+		return text.XrayInstallFailed(ie.Err)
+	case errors.As(err, &ce):
+		return text.ChangeFailed(ce, ce.RestoreErr == nil)
+	}
+	return text.ActionFailed(err)
+}

@@ -33,7 +33,9 @@ func server(t *testing.T, h2 bool, fn func(*tls.Config), body func(w http.Respon
 // checkerFor dials srv whatever host is asked for.
 func checkerFor(srv *httptest.Server, roots *x509.CertPool) *Checker {
 	addr := srv.Listener.Addr().String()
-	return &Checker{Timeout: 3 * time.Second, Roots: roots, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+	// Go's test server negotiates ML-KEM, like most sites: model an Xray
+	// that supports it unless a test says otherwise.
+	return &Checker{Timeout: 3 * time.Second, Roots: roots, MLKEMSupported: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, network, addr)
 	}}
@@ -166,7 +168,7 @@ func TestCheckAllOrder(t *testing.T) {
 	pool.AddCert(noH2.Certificate())
 	// All targets are example.com; the port picks the server.
 	addrs := map[string]string{"1": good.Listener.Addr().String(), "2": noH2.Listener.Addr().String()}
-	c := &Checker{Timeout: 3 * time.Second, Roots: pool, Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+	c := &Checker{Timeout: 3 * time.Second, Roots: pool, MLKEMSupported: true, Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
 		_, port, _ := net.SplitHostPort(addr)
 		a, ok := addrs[port]
 		if !ok {
@@ -183,5 +185,29 @@ func TestCheckAllOrder(t *testing.T) {
 	want := []string{"example.com:1", "example.com:2", "example.com:3"} // usable, reachable, unreachable
 	if strings.Join(order, ",") != strings.Join(want, ",") {
 		t.Errorf("order = %v, want %v", order, want)
+	}
+}
+
+func TestCheckMLKEM(t *testing.T) {
+	// The server prefers X25519MLKEM768, like most large sites today.
+	srv, roots := server(t, true, func(c *tls.Config) {
+		c.CurvePreferences = []tls.CurveID{tls.X25519MLKEM768, tls.X25519}
+	}, small)
+	c := checkerFor(srv, roots)
+	c.SetMLKEMSupported(false)
+	r := c.Check(context.Background(), "example.com")
+	if !r.MLKEM || !r.X25519 || r.Usable() {
+		t.Errorf("old Xray: %+v, want MLKEM detected and not usable", r)
+	}
+	c.SetMLKEMSupported(true)
+	if r := c.Check(context.Background(), "example.com"); !r.MLKEM || !r.Usable() {
+		t.Errorf("new Xray: %+v, want usable", r)
+	}
+	// A server that only does X25519 is usable either way.
+	srv2, roots2 := server(t, true, func(c *tls.Config) { c.CurvePreferences = []tls.CurveID{tls.X25519} }, small)
+	c2 := checkerFor(srv2, roots2)
+	c2.SetMLKEMSupported(false)
+	if r := c2.Check(context.Background(), "example.com"); r.MLKEM || !r.Usable() {
+		t.Errorf("X25519-only server: %+v", r)
 	}
 }
