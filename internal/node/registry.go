@@ -3,6 +3,7 @@ package node
 import (
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 )
 
@@ -69,6 +70,25 @@ type Preset struct {
 	Combo Combo
 	// Recommended marks the preset shown first with a recommendation.
 	Recommended bool
+	// Build creates a complete node from the user's answers, generating
+	// keys and IDs with the preset's defaults.
+	Build func(in BuildInput) (Node, error)
+}
+
+// BuildInput is what the add-node flow collects before building a node.
+type BuildInput struct {
+	// NodeID and ClientID are fresh stable IDs (State.AllocID).
+	NodeID   int64
+	ClientID int64
+	Port     int
+	// Remark is the node remark; the first client gets the same remark
+	// (D-039).
+	Remark string
+	// Target is the REALITY target "host:port" (security layers that use
+	// one).
+	Target string
+	// Rand is the randomness source (crypto/rand.Reader).
+	Rand io.Reader
 }
 
 // ErrIllegalCombo means the combination is not in the compatibility table.

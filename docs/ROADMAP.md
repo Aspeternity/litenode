@@ -144,12 +144,12 @@
   - [x] [VPS] 生成的配置通过 `xray run -test`。
   - 验证方式：xray 集成测试 `TestVPSGeneratedConfig`（同时启动服务并确认 IPv4 / IPv6 都在监听）。
 
-### M1-04 VLESS + TCP + Reality 预设 `未开始`
+### M1-04 VLESS + TCP + Reality 预设 `已完成`
 
 - x25519 密钥（`crypto/ecdh`）、shortId、UUID、默认指纹和流控。
 - 验收（D-047）：
-  - [ ] 单元测试：用真实 `xray x25519`（v26.3.27）输出作为测试向量，私钥推导出的公钥逐字一致；生成的密钥为 43 个字符的 base64url。
-  - [ ] [VPS] LiteNode 生成的私钥经 `xray x25519 -i <私钥>` 得到的公钥与 LiteNode 计算的一致。
+  - [x] 单元测试：用真实 `xray x25519`（v26.3.27）输出作为测试向量，私钥推导出的公钥逐字一致；生成的密钥为 43 个字符的 base64url。
+  - [x] [VPS] LiteNode 生成的私钥经 `xray x25519 -i <私钥>` 得到的公钥与 LiteNode 计算的一致。
 
 ### M1-05 Reality 目标检测、常用列表、手动输入 `未开始`
 
