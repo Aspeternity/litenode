@@ -10,7 +10,7 @@
 
 ## 下次会话从这里开始
 
-1. 开始 M1-02。
+1. 开始 M1-02。从这个任务起使用分支开发（D-036，见 CLAUDE.md「Git 约定」）：先 `git checkout -b feat/M1-02-node-model`。
    - 发布：GitHub 上有正式 Release `v0.0.1`（开发中测试版，`releases/latest` 指向它）。新版本发布时用 `git tag -a`，推送标签前先问用户。M6-02 更新脚本可复用 install.sh 的下载和校验方式（资产名 `litenode-linux-<架构>`，`sha256sums.txt` 为 `sha256sum` 标准格式）。
 2. 提议条目中 P-001、P-002、P-006、P-008、P-010 已确认；其余 P-003 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
