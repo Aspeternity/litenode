@@ -96,12 +96,12 @@
 
 完成后：可以在落地机上部署可用的 Reality 节点，管理客户端，客户端软件能连通。
 
-### M1-01 Xray 安装、更新、卸载 `进行中`
+### M1-01 Xray 安装、更新、卸载 `已完成`
 
 - 按 DESIGN 第 12 节：下载、`.dgst` 校验、安装到独立路径、`litenode-xray.service`、以非 root 运行（P-001、P-002 先与用户确认）。
 - 验收：
   - [x] 单元测试：Release 资产选择、摘要校验、systemd 单元文件生成。
-  - [ ] [VPS] 安装后服务能启动；更新到指定版本成功；更新失败时回退。
+  - [x] [VPS] 安装后服务能启动；更新到指定版本成功；更新失败时回退。
   - 验证方式（D-035）：`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o xray-vps.test ./internal/xray`，传到测试机后以 root 运行 `./xray-vps.test -test.v -test.run TestVPS`。
 
 ### M1-02 节点数据模型和注册表 `未开始`
