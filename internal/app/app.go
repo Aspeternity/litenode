@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -10,10 +11,15 @@ import (
 	"strings"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/node/builtin"
+	"github.com/Aspeternity/litenode/internal/nodemgr"
+	"github.com/Aspeternity/litenode/internal/reality"
+	"github.com/Aspeternity/litenode/internal/share"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
+	"github.com/Aspeternity/litenode/internal/xray"
 )
 
 // Env is what LiteNode needs from the outside world.
@@ -37,6 +43,51 @@ type Env struct {
 	Kinds change.Registry
 	// Session reads menu input. Nil means no interactive menu (tests).
 	Session *ui.Session
+
+	// Optional overrides for tests; nil uses the real implementations.
+	TargetChecker   TargetChecker
+	AddressDetector AddressDetector
+	XrayFetcher     xray.Fetcher
+	Rand            io.Reader
+}
+
+// services builds the node service and its dependencies on r.
+func (env Env) services(r system.Runner, store *state.Store) (*nodemgr.Service, error) {
+	reg, err := builtin.Registry()
+	if err != nil {
+		return nil, err
+	}
+	fetcher := env.XrayFetcher
+	if fetcher == nil {
+		fetcher = xray.NewHTTPFetcher()
+	}
+	rnd := env.Rand
+	if rnd == nil {
+		rnd = rand.Reader
+	}
+	return &nodemgr.Service{
+		Runner:   r,
+		Store:    store,
+		Changes:  change.NewManager(r, store),
+		Registry: reg,
+		Xray:     xray.NewInstaller(r, fetcher, runtime.GOARCH),
+		Rand:     rnd,
+	}, nil
+}
+
+// kinds is the registry the rollback subcommand uses: every kind a
+// confirm-or-rollback change may contain.
+func (env Env) kinds(r system.Runner, store *state.Store) change.Registry {
+	if env.Kinds != nil {
+		return env.Kinds
+	}
+	reg := change.Registry{}
+	if svc, err := env.services(r, store); err == nil {
+		for _, k := range svc.Kinds() {
+			reg.Register(k)
+		}
+	}
+	return reg
 }
 
 // Run dispatches the command line and returns the process exit code.
@@ -98,19 +149,44 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	defer lock.Release()
 
 	store := state.NewStore(r)
-	st, code := loadState(store, env.Stderr)
-	if code != 0 {
+	if _, code := loadState(store, env.Stderr); code != 0 {
 		return code
 	}
 	if env.Session == nil {
 		return 0
 	}
+	svc, err := env.services(r, store)
+	if err != nil {
+		fmt.Fprintln(env.Stderr, text.ActionFailed(err))
+		return 1
+	}
+	s := env.Session
+	s.Describe = describe
 	if dryRun {
-		env.Session.Println(env.Session.Colors.Warn(text.DryRunBanner))
+		s.Println(s.Colors.Warn(text.DryRunBanner))
+	}
+	nodes := &nodeUI{ctx: ctx, s: s, svc: svc, checker: env.TargetChecker, detector: env.AddressDetector}
+	if nodes.checker == nil {
+		nodes.checker = &reality.Checker{}
+	}
+	if nodes.detector == nil {
+		nodes.detector = share.NewDetector()
+	}
+	// The user may have enabled ufw since the last change (D-038).
+	if err := svc.SyncUFW(ctx); err != nil {
+		s.Println(s.Colors.Warn(text.ActionFailed(err)))
 	}
 	// Both going back from the main menu and quitting end the program.
-	env.Session.Run(func() ui.Menu {
-		return mainMenu(env.Session, env.Version, info, st)
+	s.Run(func() ui.Menu {
+		st := nodes.state()
+		_, installed := svc.Xray.Installed(ctx)
+		active := false
+		if installed {
+			active, _ = system.ServiceActive(ctx, r, xray.UnitName)
+		}
+		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st), func() error {
+			return s.Run(nodes.menu)
+		})
 	})
 	return 0
 }
@@ -168,7 +244,7 @@ func rollback(ctx context.Context, env Env) int {
 	}
 	store := state.NewStore(env.Runner)
 	confirmer := change.NewConfirmer(change.NewManager(env.Runner, store), env.Executable)
-	done, err := confirmer.Rollback(ctx, env.Kinds)
+	done, err := confirmer.Rollback(ctx, env.kinds(env.Runner, store))
 	switch {
 	case err != nil:
 		fmt.Fprintln(env.Stderr, text.RollbackFailed(err))

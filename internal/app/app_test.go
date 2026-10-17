@@ -80,7 +80,7 @@ func TestRunShowsMainMenu(t *testing.T) {
 	f := supported()
 	f.Files["/proc/meminfo"] = []byte("MemTotal:         996720 kB\n")
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "kvm\n"}}, "systemd-detect-virt")
-	r := run(t, f, 0, "1\n0\n")
+	r := run(t, f, 0, "2\n0\n")
 	if r.code != 0 || r.stderr != "" {
 		t.Fatalf("%+v", r)
 	}

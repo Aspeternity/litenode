@@ -27,6 +27,8 @@ var ErrQuit = errors.New("quit")
 type Session struct {
 	Out    io.Writer
 	Colors Colors
+	// Describe maps an action's error to a message (optional).
+	Describe func(error) string
 
 	lines <-chan string
 
@@ -120,14 +122,13 @@ func (s *Session) Println(a ...any) {
 
 // Run shows a menu until the user picks 0 or quits. build is called before
 // every display so the status is current. Run returns nil when the user
-// goes back, ErrQuit when they quit.
+// goes back, ErrQuit when they quit. An action's error is shown with
+// Describe and the menu continues.
 func (s *Session) Run(build func() Menu) error {
 	for {
 		m := build()
 		items := m.Visible()
-		fmt.Fprint(s.Out, "\n"+m.Render())
-
-		choice, err := s.choose(len(items))
+		choice, err := s.Choose(m)
 		if err != nil {
 			return err
 		}
@@ -138,8 +139,56 @@ func (s *Session) Run(build func() Menu) error {
 			if errors.Is(err, ErrQuit) {
 				return err
 			}
-			fmt.Fprintln(s.Out, s.Colors.Bad(text.ActionFailed(err)))
+			s.Println(s.Colors.Bad(s.describe(err)))
 		}
+	}
+}
+
+// Describe turns an action's error into the message shown to the user.
+// The application sets it to map known errors to text; by default the
+// error text is shown.
+func (s *Session) describe(err error) string {
+	if s.Describe != nil {
+		return s.Describe(err)
+	}
+	return text.ActionFailed(err)
+}
+
+// Choose shows m once and returns the chosen option: 1..n for visible
+// items in order, 0 for back.
+func (s *Session) Choose(m Menu) (int, error) {
+	fmt.Fprint(s.Out, "\n"+m.Render())
+	return s.choose(len(m.Visible()))
+}
+
+// PromptDefault asks with a default shown in brackets; an empty answer
+// returns the default.
+func (s *Session) PromptDefault(label, def string) (string, error) {
+	in, err := s.Prompt(text.WithDefault(label, def))
+	if err != nil || in != "" {
+		return in, err
+	}
+	return def, nil
+}
+
+// PromptNumber asks for a number between min and max, asking again after
+// invalid input. An empty answer returns def (when def >= min).
+func (s *Session) PromptNumber(label string, def, min, max int) (int, error) {
+	for {
+		var in string
+		var err error
+		if def >= min {
+			in, err = s.PromptDefault(label, strconv.Itoa(def))
+		} else {
+			in, err = s.Prompt(label + ": ")
+		}
+		if err != nil {
+			return 0, err
+		}
+		if n, err := strconv.Atoi(in); err == nil && n >= min && n <= max {
+			return n, nil
+		}
+		s.Println(s.Colors.Warn(text.InvalidNumber(min, max)))
 	}
 }
 

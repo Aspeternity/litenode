@@ -69,10 +69,11 @@ func (in *Installer) versionOf(ctx context.Context, path string) (string, bool) 
 	return v, err == nil
 }
 
-// resolve turns "" into the latest version and normalizes the rest.
+// resolve turns "" into the default version (D-054) and normalizes the
+// rest.
 func (in *Installer) resolve(ctx context.Context, version string) (string, error) {
 	if version == "" {
-		return in.Latest(ctx)
+		return in.DefaultVersion(ctx)
 	}
 	return NormalizeVersion(version)
 }
@@ -131,7 +132,7 @@ func extractXray(archive []byte) ([]byte, error) {
 	return nil, errors.New("xray program not found in archive")
 }
 
-// Install downloads Xray (the latest stable version if version is empty),
+// Install downloads Xray (DefaultVersion if version is empty),
 // creates its user and systemd unit, and returns the installed version.
 // It does not start the service: Xray only runs while there are enabled
 // nodes. On failure everything it created is removed.
@@ -186,8 +187,8 @@ func (in *Installer) ensureUser(ctx context.Context) error {
 	return nil
 }
 
-// Update replaces Xray with another version (the latest stable if version
-// is empty) and returns it. The new program must report the right version
+// Update replaces Xray with another version (DefaultVersion if version is
+// empty) and returns it. The new program must report the right version
 // and accept the current config, and a running service must keep running
 // after a restart; otherwise the old program is put back.
 func (in *Installer) Update(ctx context.Context, version string) (string, error) {
@@ -250,6 +251,11 @@ func (in *Installer) revert(ctx context.Context, bak string, running bool) error
 	// A new program that crashes is restarted by systemd (Restart=on-failure)
 	// until the start rate limit is hit; clear that so the old one can start.
 	in.Runner.Exec(ctx, "systemctl", "reset-failed", UnitName)
+	return in.restartAndCheck(ctx)
+}
+
+// Restart restarts the service and checks that it keeps running.
+func (in *Installer) Restart(ctx context.Context) error {
 	return in.restartAndCheck(ctx)
 }
 

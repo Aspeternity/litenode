@@ -30,18 +30,18 @@ func RiskyKeyword(host string) string {
 }
 
 // CommonTargets is the built-in list offered when the user does not scan
-// (DESIGN section 10.1, D-051). Large sites that are reachable from China
-// and generally support TLS 1.3, H2 and X25519. Each is checked from the
-// VPS before it can be used.
+// (DESIGN section 10.1, D-055). Each was verified end to end as a REALITY
+// target from a client in mainland China (2026-10-18); other large sites
+// (amazon, samsung, nvidia, tesla, yahoo, mozilla, bing, cloudflare...)
+// work as targets but their connections were interfered with there. Each
+// is still checked from the VPS before it can be used.
 var CommonTargets = []string{
 	"www.microsoft.com",
+	"learn.microsoft.com",
 	"www.apple.com",
-	"www.amazon.com",
-	"www.samsung.com",
-	"www.nvidia.com",
-	"www.tesla.com",
-	"addons.mozilla.org",
-	"www.yahoo.com",
+	"www.icloud.com",
+	"itunes.apple.com",
+	"gateway.icloud.com",
 }
 
 // CheckAll checks targets concurrently (at most limit at a time) and

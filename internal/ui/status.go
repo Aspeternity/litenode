@@ -69,9 +69,10 @@ const (
 
 // MainStatus is the data shown in the main menu status area.
 type MainStatus struct {
-	XrayInstalled bool
-	Nodes         int
-	Forwards      int
+	// Xray is the pre-rendered Xray state; empty shows "not installed".
+	Xray     string
+	Nodes    int
+	Forwards int
 	// SSH and Firewall are pre-rendered by their modules; empty shows "-".
 	SSH      string
 	Firewall string
@@ -83,9 +84,9 @@ type MainStatus struct {
 
 // MainStatusLines renders the main menu status area.
 func MainStatusLines(st MainStatus, c Colors) []string {
-	xray := c.Off(text.XrayNotInstalled)
-	if st.XrayInstalled {
-		xray = c.Good(text.XrayInstalled)
+	xray := st.Xray
+	if xray == "" {
+		xray = c.Off(text.XrayNotInstalled)
 	}
 	ssh, fw := st.SSH, st.Firewall
 	if ssh == "" {
