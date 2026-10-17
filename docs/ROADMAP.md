@@ -82,13 +82,13 @@
   - [x] 推送代码后 CI 通过。
   - [x] 推送测试标签（如 `v0.0.1`）后 Release 中有两个二进制文件和 `sha256sums.txt`，校验值正确。
 
-### M0-09 install.sh `进行中`
+### M0-09 install.sh `已完成`
 
 - 按 DESIGN 第 3 节实现。
 - 验收：
   - [x] shellcheck 无警告，文件为 LF 换行。
-  - [ ] [VPS] 在 Debian 12 测试 VPS 上一行命令安装成功，`litenode` 和 `lnode` 都能打开主菜单。
-  - [ ] [VPS] 校验值不匹配时安装中止，不留下文件。
+  - [x] [VPS] 在 Debian 12 测试 VPS 上一行命令安装成功，`litenode` 和 `lnode` 都能打开主菜单。
+  - [x] [VPS] 校验值不匹配时安装中止，不留下文件。
 
 ---
 
