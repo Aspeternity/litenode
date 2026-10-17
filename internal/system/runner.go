@@ -4,7 +4,8 @@
 // Every system command, file write and service change goes through a Runner.
 // Read-only operations (Query, ReadFile) always execute, including in dry-run
 // mode, so menus can show the real system state. Mutating operations (Exec,
-// WriteFile, Remove, MkdirAll) are only printed in dry-run mode.
+// WriteFile, Remove, RemoveAll, Rename, MkdirAll) are only printed in
+// dry-run mode.
 package system
 
 import (
@@ -29,10 +30,18 @@ type Runner interface {
 	Exec(ctx context.Context, name string, args ...string) (Result, error)
 	// ReadFile reads a file. It always executes, even in dry-run mode.
 	ReadFile(path string) ([]byte, error)
+	// ReadDir returns the sorted names of the entries in a directory. It
+	// always executes, even in dry-run mode.
+	ReadDir(path string) ([]string, error)
 	// WriteFile atomically replaces path with data (temporary file + rename).
 	WriteFile(path string, data []byte, perm fs.FileMode) error
 	// Remove deletes a file. Removing a file that does not exist is not an error.
 	Remove(path string) error
+	// RemoveAll deletes a path and everything under it.
+	RemoveAll(path string) error
+	// Rename atomically renames a file. Unlike Remove, a missing source is
+	// an error (fs.ErrNotExist), which makes it usable as an atomic claim.
+	Rename(oldPath, newPath string) error
 	// MkdirAll creates a directory and any missing parents.
 	MkdirAll(path string, perm fs.FileMode) error
 }

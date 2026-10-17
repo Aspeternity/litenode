@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
@@ -122,5 +123,29 @@ func TestRunWithoutStateDoesNotWrite(t *testing.T) {
 	}
 	if m := f.Mutations(); len(m) != 0 {
 		t.Errorf("first run must not write anything: %v", m)
+	}
+}
+
+func TestRunInternalRollback(t *testing.T) {
+	f := systemtest.New()
+	store := state.NewStore(f)
+	confirmer := change.NewConfirmer(change.NewManager(f, store), "/usr/local/bin/litenode")
+	kinds := change.Registry{}
+	if err := kinds.Register(&change.Kind{Name: "sshd"}); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut strings.Builder
+	env := Env{
+		Runner: f, Euid: 0, Stdout: &out, Stderr: &errOut, Store: store,
+		// No lock path: rollback must not take the instance lock.
+		Args: []string{"internal", "rollback", "sshd"}, Confirmer: confirmer, Kinds: kinds,
+	}
+	if code := Run(context.Background(), env); code != 0 || !strings.Contains(out.String(), text.RollbackNotNeeded) {
+		t.Errorf("code=%d stdout=%q stderr=%q", code, out.String(), errOut.String())
+	}
+
+	env.Args = []string{"bogus"}
+	if code := Run(context.Background(), env); code == 0 {
+		t.Error("unknown command should fail")
 	}
 }

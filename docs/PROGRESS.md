@@ -5,16 +5,17 @@
 ## 当前状态
 
 - **阶段**：M0 项目骨架。
-- **当前任务**：无（M0-04 已完成）。
-- **下一个任务**：M0-05 配置变更流程。
+- **当前任务**：无（M0-05 已完成）。
+- **下一个任务**：M0-06 菜单框架。
 
 ## 下次会话从这里开始
 
-1. 开始 M0-05。注意 D-028：`internal rollback` 不受实例锁限制；菜单等待确认期间超时回滚后，菜单需要重新加载状态。
+1. 开始 M0-06。
 2. 提议条目中 P-006、P-008、P-010 已确认；其余 P-001 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
 ## 未解决的问题
 
+- 限时确认期间服务器重启，修改不会被回滚（DESIGN 第 6 节已记录为已知限制）。如需处理，可在 M2-02 讨论。
 - `docs/DESIGN.md` 第 18 节"待讨论事项"剩余 3 项（第 1~3 项），在对应任务开始前讨论。第 4 项已确定为界面文字集中管理（D-025）。
 
 ## 实现约定（本次会话确定）
@@ -26,7 +27,10 @@
 - 其他包的测试用 `systemtest.New()`：`Respond` 设定命令输出，`Files` 模拟文件，`WriteErr` 模拟写入失败，`Execs()` / `Mutations()` 断言。
 - 启动流程在 `internal/app`：root 检查 → `system.Detect` → 版本判断 → 实例锁 → 加载状态。主菜单完成前（M0-06）只打印系统行和警告行后退出。
 - 状态文件：`state.Store` 的 `Load` / `Save` 经过 Runner；新 ID 用 `State.AllocID()`；迁移函数登记在 `internal/state/migrate.go` 的 `migrations`（目前为空）。功能任务新增字段时同步更新 DESIGN 第 5 节的结构示意。
-- 迁移前的备份写在 `/etc/litenode/backups/`，数量清理在 M0-05 统一实现。
+- 迁移前的备份写在 `/etc/litenode/backups/state-v<N>-<时间>.json`，不参与按类型的数量清理。
+- 配置变更：`change.Manager.Apply(ctx, change.Change{Kind, Files, State})`；需要限时确认的用 `change.Confirmer.Apply`，然后询问用户，确认时调 `Disarm`（返回 `change.ErrRolledBack` 表示已超时回滚，菜单需重新加载状态）。各功能的 `change.Kind` 在对应任务中定义，并在 `cmd/litenode/main.go` 的 `Kinds` 注册表中登记（目前为空）。
+- Runner 新增 `ReadDir`（只读）、`RemoveAll`、`Rename`（修改操作）。`Rename` 对不存在的源文件返回 `fs.ErrNotExist`，用于原子认领。
+- `internal rollback <类型>` 目前在 `app.Run` 中做了最小路由，M0-07 改为正式的子命令结构。
 - 能力探测注册在 `internal/system/probe.go` 的 `probes`，目前只有 BBR；swap、sysctl、nftables 在对应任务中加入。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。
 
@@ -42,4 +46,4 @@
 ## 最近一次会话
 
 - **日期**：2026-10-18
-- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）。
+- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）。

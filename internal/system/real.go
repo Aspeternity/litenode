@@ -37,6 +37,27 @@ func (r *Real) ReadFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
+func (r *Real) ReadDir(path string) ([]string, error) {
+	entries, err := os.ReadDir(path)
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names, err
+}
+
+func (r *Real) RemoveAll(path string) error {
+	err := os.RemoveAll(path)
+	r.Log.Record("remove-all "+path, err)
+	return err
+}
+
+func (r *Real) Rename(oldPath, newPath string) error {
+	err := os.Rename(oldPath, newPath)
+	r.Log.Record("rename "+oldPath+" -> "+newPath, err)
+	return err
+}
+
 func (r *Real) WriteFile(path string, data []byte, perm fs.FileMode) error {
 	err := writeFileAtomic(path, data, perm)
 	r.Log.Record(fmt.Sprintf("write %s (%d bytes, mode %04o)", path, len(data), perm), err)

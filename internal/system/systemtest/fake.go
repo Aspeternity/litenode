@@ -9,6 +9,10 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/Aspeternity/litenode/internal/system"
@@ -23,15 +27,18 @@ const (
 	OpRead   Op = "read"
 	OpWrite  Op = "write"
 	OpRemove Op = "remove"
+	OpRename Op = "rename"
+	OpRmAll  Op = "remove-all"
 	OpMkdir  Op = "mkdir"
 )
 
 // Call is one recorded Runner call. Command is set for query and exec, Path
-// for file operations, Data and Perm for writes.
+// for file operations (NewPath for renames), Data and Perm for writes.
 type Call struct {
 	Op      Op
 	Command string
 	Path    string
+	NewPath string
 	Data    []byte
 	Perm    fs.FileMode
 }
@@ -50,6 +57,9 @@ type Fake struct {
 	Responses map[string]Response
 	// Files holds file contents by path. Writes and removals update it.
 	Files map[string][]byte
+	// Dirs holds directories created by MkdirAll. Directories that contain
+	// files exist implicitly.
+	Dirs map[string]bool
 	// WriteErr makes WriteFile fail for the given paths.
 	WriteErr map[string]error
 
@@ -62,6 +72,7 @@ func New() *Fake {
 	return &Fake{
 		Responses: map[string]Response{},
 		Files:     map[string][]byte{},
+		Dirs:      map[string]bool{},
 		WriteErr:  map[string]error{},
 	}
 }
@@ -98,7 +109,7 @@ func (f *Fake) Mutations() []Call {
 	var out []Call
 	for _, c := range f.Calls() {
 		switch c.Op {
-		case OpExec, OpWrite, OpRemove, OpMkdir:
+		case OpExec, OpWrite, OpRemove, OpRmAll, OpRename, OpMkdir:
 			out = append(out, c)
 		}
 	}
@@ -173,5 +184,63 @@ func (f *Fake) MkdirAll(path string, perm fs.FileMode) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, Call{Op: OpMkdir, Path: path, Perm: perm})
+	for p := filepath.Clean(path); p != "/" && p != "."; p = filepath.Dir(p) {
+		f.Dirs[p] = true
+	}
+	return nil
+}
+
+func (f *Fake) ReadDir(path string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, Call{Op: OpRead, Path: path})
+	dir := filepath.Clean(path)
+	names := map[string]bool{}
+	add := func(p string) {
+		if rel, ok := strings.CutPrefix(p, dir+"/"); ok {
+			name, _, _ := strings.Cut(rel, "/")
+			names[name] = true
+		}
+	}
+	for p := range f.Files {
+		add(p)
+	}
+	for p := range f.Dirs {
+		add(p)
+	}
+	if len(names) == 0 && !f.Dirs[dir] {
+		return nil, &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
+	}
+	return slices.Sorted(maps.Keys(names)), nil
+}
+
+func (f *Fake) RemoveAll(path string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, Call{Op: OpRmAll, Path: path})
+	p := filepath.Clean(path)
+	for k := range f.Files {
+		if k == p || strings.HasPrefix(k, p+"/") {
+			delete(f.Files, k)
+		}
+	}
+	for k := range f.Dirs {
+		if k == p || strings.HasPrefix(k, p+"/") {
+			delete(f.Dirs, k)
+		}
+	}
+	return nil
+}
+
+func (f *Fake) Rename(oldPath, newPath string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, Call{Op: OpRename, Path: oldPath, NewPath: newPath})
+	data, ok := f.Files[oldPath]
+	if !ok {
+		return &os.LinkError{Op: "rename", Old: oldPath, New: newPath, Err: fs.ErrNotExist}
+	}
+	delete(f.Files, oldPath)
+	f.Files[newPath] = data
 	return nil
 }
