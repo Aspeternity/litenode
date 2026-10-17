@@ -82,6 +82,14 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/sc
 
 脚本要求：通过 shellcheck 检查，LF 换行，失败时给出清楚的中文错误信息，不留下半安装状态。
 
+**实现细节**：
+
+- 第 1 步只检查 `ID` 是否为 debian / ubuntu，具体版本由 `litenode` 启动时判断（见第 2 节）。
+- 先把程序和 `sha256sums.txt` 下载到临时目录并校验，通过后才写入 `/usr/local/bin`：在同一目录生成临时文件再 rename，替换是原子的。任何一步失败都删除临时文件并中止，不修改已安装的文件。
+- 已经安装过时，用最新版覆盖程序（可用于修复或重装程序），状态和配置不动。
+- `/usr/local/bin/lnode` 已被其他程序占用（不是指向 `litenode` 的软链接）时不覆盖，提示用户使用 `litenode` 命令，安装照常完成。
+- 只有标准输入和输出都是终端时才在最后执行 `litenode` 进入菜单；否则只提示安装完成。
+
 ### 发布
 
 GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-ldflags "-s -w -X <版本变量>=<标签>"` 编译 `litenode-linux-amd64` 和 `litenode-linux-arm64`，生成 `sha256sums.txt`，发布到 GitHub Releases。每次推送都运行 `go vet` 和 `go test`。
