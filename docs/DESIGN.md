@@ -88,6 +88,13 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 
 版本号遵循语义化版本（`v0.1.0`）。
 
+**实现细节**：
+
+- `.github/workflows/ci.yml`：每次推送和 PR 运行 gofmt 检查、`go vet`、`go test -race`，并交叉编译 amd64 / arm64。
+- `.github/workflows/release.yml`：推送 `v*` 标签时先运行检查，再编译两个架构，生成 `sha256sums.txt`，用 runner 自带的 `gh release create --verify-tag` 发布。Release 说明取自带注释标签（`git tag -a`）的说明文字。
+- 只使用 GitHub 官方 Action（`actions/checkout`、`actions/setup-go`），按 commit SHA 固定版本；Go 版本读取 `go.mod`。不使用第三方发布 Action。
+- 打标签用 `git tag -a <版本> -m "<发布说明>"`，推送标签前先问用户。
+
 ### 更新
 
 "维护 → 更新脚本"：查询 GitHub 最新 Release → 比较版本 → 下载并校验 sha256 → 原子替换 `/usr/local/bin/litenode`，旧版本保留为 `/usr/local/bin/litenode.bak`。

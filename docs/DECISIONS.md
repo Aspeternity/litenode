@@ -175,6 +175,12 @@
 - **原因**：dry-run 读到的状态和锁与真实运行一致，预览才可信（在 WSL 中用 `sudo litenode --dry-run`，dry-run 不修改系统）；短写法符合命令行工具习惯。
 - **否决**：dry-run 不要求 root（读不到状态文件、拿不到锁，需要大量特殊处理）；只支持 `version` 和 `help`。
 
+### D-032 CI 和发布只用 GitHub 官方 Action + gh CLI；v0.0.1 保留为正式 Release
+
+- **内容**：`actions/checkout`、`actions/setup-go` 按 commit SHA 固定；发布用 `gh release create`，说明取自标签注释。测试标签 `v0.0.1`（开发中测试版）保留为正式 Release。
+- **原因**：与"依赖尽量少"的原则一致，固定 SHA 防止 Action 被篡改；install.sh 从 `releases/latest` 下载，预发布版不算 latest，保留 v0.0.1 正好用于 M0-09 在测试机上验证安装。
+- **否决**：第三方发布 Action（softprops/action-gh-release、goreleaser）；测试标签标记为预发布版或验收后删除。
+
 ---
 
 ## 提议（待用户确认）

@@ -74,13 +74,13 @@
   - [x] `litenode version` 显示注入的版本号，未注入时显示 `dev`。
   - [x] `litenode help` 不显示 `internal` 子命令。
 
-### M0-08 GitHub Actions `未开始`
+### M0-08 GitHub Actions `已完成`
 
 - CI：每次推送运行 `gofmt` 检查、`go vet`、`go test`。
 - 发布：推送 `v*` 标签时编译 amd64 / arm64，生成 `sha256sums.txt`，发布 Release。
 - 验收：
-  - [ ] 推送代码后 CI 通过。
-  - [ ] 推送测试标签（如 `v0.0.1`）后 Release 中有两个二进制文件和 `sha256sums.txt`，校验值正确。
+  - [x] 推送代码后 CI 通过。
+  - [x] 推送测试标签（如 `v0.0.1`）后 Release 中有两个二进制文件和 `sha256sums.txt`，校验值正确。
 
 ### M0-09 install.sh `未开始`
 
