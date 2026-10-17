@@ -11,6 +11,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 	"github.com/Aspeternity/litenode/internal/text"
+	"github.com/Aspeternity/litenode/internal/ui"
 )
 
 func run(t *testing.T, f *systemtest.Fake, euid int) (code int, stdout, stderr string) {
@@ -63,20 +64,26 @@ func TestRunMissingOSRelease(t *testing.T) {
 	}
 }
 
-func TestRunShowsStatus(t *testing.T) {
+func TestRunShowsMainMenu(t *testing.T) {
 	f := systemtest.New()
 	f.Files["/etc/os-release"] = []byte("ID=debian\nVERSION_ID=\"12\"\n")
 	f.Files["/proc/meminfo"] = []byte("MemTotal:         996720 kB\n")
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "kvm\n"}}, "systemd-detect-virt")
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "docker.service enabled enabled\n"}},
 		"systemctl", "list-unit-files", "--no-legend", "--plain", "x-ui.service", "xray.service", "docker.service")
-	code, out, errOut := run(t, f, 0)
-	if code != 0 || errOut != "" {
-		t.Fatalf("code=%d stderr=%q", code, errOut)
+	var out, errOut strings.Builder
+	session := ui.NewSession(strings.NewReader("1\n0\n"), &out, nil, ui.Colors{})
+	code := Run(context.Background(), Env{
+		Runner: f, Euid: 0, Stdout: &out, Stderr: &errOut,
+		LockPath: filepath.Join(t.TempDir(), "litenode.lock"), Store: state.NewStore(f),
+		Version: "dev", Session: session,
+	})
+	if code != 0 || errOut.String() != "" {
+		t.Fatalf("code=%d stderr=%q", code, errOut.String())
 	}
-	for _, want := range []string{"Debian 12 | KVM | 973M | BBR ✗", "Docker"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("stdout missing %q:\n%s", want, out)
+	for _, want := range []string{"LiteNode 节点管理  dev", "Debian 12 | KVM | 973M | BBR ✗", "Docker", text.InDevelopment, " 0. 退出"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("stdout missing %q:\n%s", want, out.String())
 		}
 	}
 }

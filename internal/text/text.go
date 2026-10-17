@@ -77,9 +77,6 @@ func ConflictWarning(names []string) string {
 	return "⚠ 检测到 " + strings.Join(names, "、") + "，可能与 LiteNode 冲突"
 }
 
-// MenuInDevelopment is shown until the main menu is implemented.
-const MenuInDevelopment = "主菜单开发中。"
-
 // AlreadyRunning is shown when another LiteNode instance holds the lock.
 const AlreadyRunning = "另一个 LiteNode 正在运行。请先退出另一个窗口中的 LiteNode，再重新执行。"
 
@@ -121,4 +118,60 @@ func RollbackFailed(err error) string {
 // UnknownCommand is shown for an unrecognized command line.
 func UnknownCommand(args string) string {
 	return "未知命令：" + args
+}
+
+// Menu option 0 labels.
+const (
+	Back = "返回"
+	Exit = "退出"
+)
+
+// MainTitle is the main menu title.
+func MainTitle(version string) string {
+	return "LiteNode 节点管理  " + version
+}
+
+// Main menu items.
+const (
+	MenuNodes        = "节点管理"
+	MenuForwards     = "端口转发"
+	MenuXray         = "Xray 服务"
+	MenuSSH          = "SSH 管理"
+	MenuFirewall     = "防火墙管理"
+	MenuSysopt       = "系统优化"
+	MenuMaint        = "维护"
+	MenuMaintHint    = "(备份 / 更新 / 卸载)"
+	InDevelopment    = "该功能开发中。"
+	StatusUnknown    = "-"
+	XrayNotInstalled = "○ 未安装"
+	XrayInstalled    = "● 已安装"
+)
+
+// StatusXray, StatusNodes, StatusForwards, StatusSSH and StatusFirewall
+// label the fields of the main menu status area.
+func StatusXray(v string) string     { return "Xray: " + v }
+func StatusNodes(n int) string       { return fmt.Sprintf("节点: %d", n) }
+func StatusForwards(n int) string    { return fmt.Sprintf("转发规则: %d", n) }
+func StatusSSH(v string) string      { return "SSH: " + v }
+func StatusFirewall(v string) string { return "防火墙: " + v }
+
+// PromptChoice asks for a menu option between 0 and max.
+func PromptChoice(max int) string {
+	return fmt.Sprintf("请输入选项 [0-%d]: ", max)
+}
+
+// InvalidChoice is shown for input that is not a listed option.
+func InvalidChoice(max int) string {
+	return fmt.Sprintf("无效的选项，请输入 0 到 %d 之间的数字。", max)
+}
+
+// ConfirmSuffix is appended to yes/no questions; the default is no.
+const ConfirmSuffix = " [y/N]: "
+
+// BusyInterrupt is shown when Ctrl+C is pressed while an operation runs.
+const BusyInterrupt = "正在执行操作，完成后退出……"
+
+// ActionFailed is shown when a menu action returns an error.
+func ActionFailed(err error) string {
+	return "操作失败：" + err.Error()
 }

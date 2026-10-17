@@ -31,6 +31,10 @@ type Env struct {
 	Confirmer *change.Confirmer
 	// Kinds lists the configuration kinds the rollback subcommand handles.
 	Kinds change.Registry
+	// Version is shown in the main menu title.
+	Version string
+	// Session reads menu input. Nil means no interactive menu (tests).
+	Session *ui.Session
 }
 
 // Run checks the environment and starts LiteNode. It returns the process
@@ -58,15 +62,17 @@ func Run(ctx context.Context, env Env) int {
 		return 1
 	}
 	defer lock.Release()
-	if _, code := loadState(env); code != 0 {
+	st, code := loadState(env)
+	if code != 0 {
 		return code
 	}
-	// Placeholder until the main menu (M0-06): show the status lines.
-	fmt.Fprintln(env.Stdout, ui.SystemLine(info))
-	if line := ui.ConflictLine(info.Conflicts); line != "" {
-		fmt.Fprintln(env.Stdout, line)
+	if env.Session == nil {
+		return 0
 	}
-	fmt.Fprintln(env.Stdout, text.MenuInDevelopment)
+	// Both going back from the main menu and quitting end the program.
+	env.Session.Run(func() ui.Menu {
+		return mainMenu(env.Session, env.Version, info, st)
+	})
 	return 0
 }
 

@@ -81,3 +81,45 @@ func memSize(mb int) string {
 	g := fmt.Sprintf("%.1f", float64(mb)/1024)
 	return strings.TrimSuffix(g, ".0") + "G"
 }
+
+// Main status area column positions, from the DESIGN section 8 example.
+const (
+	statusCol2 = 17
+	statusCol3 = 30
+)
+
+// MainStatus is the data shown in the main menu status area.
+type MainStatus struct {
+	XrayInstalled bool
+	Nodes         int
+	Forwards      int
+	// SSH and Firewall are pre-rendered by their modules; empty shows "-".
+	SSH      string
+	Firewall string
+	System   system.Info
+}
+
+// MainStatusLines renders the main menu status area.
+func MainStatusLines(st MainStatus, c Colors) []string {
+	xray := c.Off(text.XrayNotInstalled)
+	if st.XrayInstalled {
+		xray = c.Good(text.XrayInstalled)
+	}
+	ssh, fw := st.SSH, st.Firewall
+	if ssh == "" {
+		ssh = text.StatusUnknown
+	}
+	if fw == "" {
+		fw = text.StatusUnknown
+	}
+	lines := []string{
+		PadRight(PadRight(text.StatusXray(xray), statusCol2)+text.StatusNodes(st.Nodes), statusCol3) +
+			text.StatusForwards(st.Forwards),
+		PadRight(text.StatusSSH(ssh), statusCol3) + text.StatusFirewall(fw),
+		SystemLine(st.System),
+	}
+	if w := ConflictLine(st.System.Conflicts); w != "" {
+		lines = append(lines, c.Warn(w))
+	}
+	return lines
+}
