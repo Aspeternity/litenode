@@ -15,3 +15,8 @@ func (TCP) Label() string { return "TCP" }
 func (TCP) Network() string { return "tcp" }
 
 func (TCP) StreamSettings(node.Node) (string, any, error) { return "", nil, nil }
+
+// ShareParams for raw TCP: type=tcp.
+func (TCP) ShareParams(node.Node) ([]node.Param, error) {
+	return []node.Param{{Key: "type", Value: "tcp"}}, nil
+}
