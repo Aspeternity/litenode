@@ -109,6 +109,7 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 | `/etc/ssh/sshd_config.d/00-litenode.conf` | SSH 配置（drop-in 文件） |
 | `/etc/sysctl.d/99-litenode.conf` | BBR、内核转发等 sysctl 设置 |
 | `/var/log/litenode.log` | LiteNode 自身的操作日志 |
+| `/run/litenode.lock` | 实例锁（`flock`），重启后自动清除 |
 
 ## 4. 代码结构
 
@@ -162,16 +163,20 @@ docs/
 
 **要求**：
 
-- 带 `schema_version` 字段。结构变化时版本号加一，并编写从旧版本到新版本的迁移函数，读取旧文件时自动迁移，迁移前备份。
-- 原子写入：写临时文件 → fsync → rename。权限 600（包含私钥和 UUID）。
-- 文件锁：同一时间只允许一个 LiteNode 实例修改状态，第二个实例提示"另一个 LiteNode 正在运行"并退出。
-- 每个节点、客户端、转发规则、防火墙规则有内部稳定 ID，不重复使用；菜单显示的是连续的序号。
+- 带 `schema_version` 字段。**不兼容的结构变化**（字段改名、改类型、删除）时版本号加一，并编写从旧版本到新版本的迁移函数，读取旧文件时自动迁移，迁移前把原文件备份为 `backups/state-v<旧版本>-<时间>.json`，迁移后立即保存。新增字段且零值即默认值时不加版本号。v0.1.0 发布前版本号保持 1。
+- 字段随功能任务加入：M0-04 只定义顶层结构（`schema_version`、`next_id`、`server`、`xray`），`nodes`、`forwards`、`firewall` 在 M1、M3、M4 的任务中加入。
+- 原子写入：写临时文件 → fsync → rename。权限 600（包含私钥和 UUID）。读写经过 Runner，dry-run 模式下不写入。
+- 文件不存在视为首次使用，使用空状态，第一次修改时才写入。
+- 文件损坏（无法解析）时提示文件路径和备份目录，让用户手动恢复，**不自动覆盖**。`schema_version` 比程序支持的新（程序被降级）时提示更新 LiteNode 并退出。
+- 文件锁：`flock` 锁 `/run/litenode.lock`，菜单会话全程持有，进程退出或被终止时由内核自动释放。第二个实例提示"另一个 LiteNode 正在运行"并退出。`version`、`help` 不加锁；`internal rollback` 不受锁限制（安全机制必须执行，见第 6 节）；`internal resolve` 遇到锁时跳过本轮（见第 11 节）。
+- 每个节点、客户端、转发规则、防火墙规则有内部稳定 ID：全局一个递增计数器 `next_id`，所有类型共用，只增不减，删除后不复用；菜单显示的是连续的序号。
 
 **结构示意**（字段以实现为准，但结构变化必须同步更新本节）：
 
 ```json
 {
   "schema_version": 1,
+  "next_id": 4,
   "server": {
     "share_address": ""
   },
