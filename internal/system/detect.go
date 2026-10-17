@@ -97,19 +97,6 @@ type Virt struct {
 	Container bool
 }
 
-// Known coexisting software that may conflict with LiteNode.
-const (
-	ConflictXUI    = "x-ui"   // x-ui or 3x-ui (both use x-ui.service)
-	ConflictXray   = "xray"   // official Xray install script
-	ConflictDocker = "docker" // rewrites nftables/iptables rules
-)
-
-var conflictUnits = []struct{ unit, name string }{
-	{"x-ui.service", ConflictXUI},
-	{"xray.service", ConflictXray},
-	{"docker.service", ConflictDocker},
-}
-
 // Info is the result of system detection.
 type Info struct {
 	OS         OSRelease
@@ -118,8 +105,6 @@ type Info struct {
 	MemTotalMB int
 	// BBREnabled reports whether BBR is the current TCP congestion control.
 	BBREnabled bool
-	// Conflicts lists detected software from the Conflict* constants.
-	Conflicts []string
 }
 
 // ReadOSRelease reads and parses /etc/os-release.
@@ -147,7 +132,6 @@ func Detect(ctx context.Context, r Runner) (Info, error) {
 	if data, err := r.ReadFile("/proc/meminfo"); err == nil {
 		info.MemTotalMB = ParseMemTotalMB(data)
 	}
-	info.Conflicts = DetectConflicts(ctx, r)
 	return info, nil
 }
 
@@ -184,26 +168,17 @@ func bbrEnabled(r Runner) bool {
 	return err == nil && strings.TrimSpace(string(data)) == "bbr"
 }
 
-// DetectConflicts reports installed software that may conflict with
-// LiteNode, by looking for their systemd unit files.
-func DetectConflicts(ctx context.Context, r Runner) []string {
-	args := []string{"list-unit-files", "--no-legend", "--plain"}
-	for _, c := range conflictUnits {
-		args = append(args, c.unit)
-	}
+// DockerInstalled reports whether docker.service exists. Docker rewrites
+// nftables/iptables rules, so enabling the LiteNode firewall warns about it
+// (DESIGN section 14). Other software is not detected by name: port
+// conflicts are judged by the ports actually in use (D-037).
+func DockerInstalled(ctx context.Context, r Runner) bool {
 	// systemctl exits non-zero when no unit matches; the output is still valid.
-	res, _ := r.Query(ctx, "systemctl", args...)
-	found := map[string]bool{}
+	res, _ := r.Query(ctx, "systemctl", "list-unit-files", "--no-legend", "--plain", "docker.service")
 	for line := range strings.Lines(res.Stdout) {
-		if f := strings.Fields(line); len(f) > 0 {
-			found[f[0]] = true
+		if f := strings.Fields(line); len(f) > 0 && f[0] == "docker.service" {
+			return true
 		}
 	}
-	var out []string
-	for _, c := range conflictUnits {
-		if found[c.unit] {
-			out = append(out, c.name)
-		}
-	}
-	return out
+	return false
 }

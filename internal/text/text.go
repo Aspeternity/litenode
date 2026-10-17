@@ -3,10 +3,7 @@
 // Chinese string literals; see TestNoChineseOutsideText.
 package text
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // DryRunExec describes a command that dry-run mode skipped.
 func DryRunExec(cmdline string) string {
@@ -68,18 +65,9 @@ func BBR(enabled bool) string {
 	return "BBR ✗"
 }
 
-// ConflictXUI is the display name of x-ui or 3x-ui.
-const ConflictXUI = "x-ui/3x-ui"
-
-// ConflictXray is the display name of an Xray service from the official script.
-const ConflictXray = "Xray（官方脚本）"
-
-// ConflictDocker is the display name of Docker.
-const ConflictDocker = "Docker"
-
-// ConflictWarning lists detected software that may conflict with LiteNode.
-func ConflictWarning(names []string) string {
-	return "⚠ 检测到 " + strings.Join(names, "、") + "，可能与 LiteNode 冲突"
+// Warning marks a warning line in a status area.
+func Warning(s string) string {
+	return "⚠ " + s
 }
 
 // AlreadyRunning is shown when another LiteNode instance holds the lock.
