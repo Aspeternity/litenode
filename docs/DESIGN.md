@@ -73,13 +73,15 @@
 - 修改时排除正在修改的这一项自己当前占用的端口（例如修改节点的其他属性时，Xray 正在监听它自己的端口）。
 - SSH 端口检查时排除 sshd 自己当前监听的端口。
 
+**已有的入站拦截规则**（D-044）：LiteNode 防火墙未启用且 ufw 未运行时，添加节点、修改端口、启用节点后检查系统中是否已有入站拦截（如甲骨文云镜像自带的 iptables REJECT 规则）：读取 `nft list ruleset` 中非 LiteNode 的 input 钩子链（Debian 11+ / Ubuntu 22.04+ 的 iptables 规则也在其中），存在 drop 策略或 reject / drop 规则即提示"检测到系统已有入站过滤规则，可能拦截端口 X，可手动放行或启用 LiteNode 防火墙"；系统有 `iptables-legacy` 时一并检查。只做粗略判断、只提示，不修改这些规则。
+
 **与 ufw 共存**（D-038）：
 
 - **适用条件**：ufw 在运行（`ufw status` 显示 `Status: active`）且 **LiteNode 防火墙未启用**。此时 LiteNode 管理的端口自动同步到 ufw，否则 ufw 会挡住新的节点和转发。LiteNode 不安装、不启用、不停用 ufw。
 - **标记**：LiteNode 添加的 ufw 规则都带备注 `litenode:<类型>:<ID>`，ID 为状态文件中的稳定 ID（P-008），如 `litenode:node:3`、`litenode:forward:5`、`litenode:ssh`。只增删带 `litenode:` 标记的规则，**不修改用户的其他 ufw 规则**。
 - **规则内容**：
   - 节点端口：`ufw allow proto <tcp|udp> to any port <端口> comment 'litenode:node:<ID>'`，只为启用的节点添加。
-  - 转发规则：转发在 prerouting 先做 DNAT，经过 ufw 的 forward 链时目的地址已经是落地机，所以写 `ufw route allow proto <协议> to <目标 IP> port <目标端口> comment 'litenode:forward:<ID>'`（`tcp+udp` 两条），只为启用的规则添加。转发流量不需要 `ufw allow` 入站规则。目标是域名时用 `resolved_ip`，重新解析后 IP 变化要同步。
+  - 转发规则：转发在 prerouting 先做 DNAT，经过 ufw 的 forward 链时目的地址已经是落地机，所以写 `ufw route allow proto <协议> to <目标 IP> port <目标端口> comment 'litenode:forward:<ID>'`（`tcp+udp` 两条），只为启用的规则添加。转发流量不需要 `ufw allow` 入站规则。目标是域名时用 `resolved_ipv4` / `resolved_ipv6`（D-046，两种地址分别生成规则），重新解析后 IP 变化要同步。
   - SSH 端口：`ufw allow proto tcp to any port <端口> comment 'litenode:ssh'`，见第 13 节"修改端口"。
 - **不接管用户已有的规则**：ufw 判断规则是否重复时不看备注，对已存在的规则再执行带备注的 `ufw allow` 会把用户规则的备注改掉（"Rule updated"），之后 LiteNode 删除节点时就会误删用户的规则。因此添加前先检查是否已有等价的、不带 `litenode:` 标记的规则：有则不添加、不打标记，以后也不删除。（ufw 的实际行为在 M1-07a 中于测试 VPS 上实测确认。）
 - **整体对账，不逐条增删**：每次同步都根据状态文件计算"应存在的带标记规则"，与 ufw 中实际存在的带标记规则比较，多删少补。这样：
@@ -116,6 +118,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/sc
 - `/usr/local/bin/lnode` 已被其他程序占用（不是指向 `litenode` 的软链接）时不覆盖，提示用户使用 `litenode` 命令，安装照常完成。
 - 只有标准输入和输出都是终端时才在最后执行 `litenode` 进入菜单；否则只提示安装完成。
 
+**无法访问 GitHub 的机器**（D-042）：国内线路机、纯 IPv6 的 VPS（github.com 没有 IPv6 地址）无法下载。第一版不内置镜像或下载代理：install.sh、Xray 下载、更新脚本在下载失败时给出清楚的中文报错，说明可能无法访问 GitHub，并指向 README 中的手动安装说明（在本地下载程序和 `sha256sums.txt`、上传、校验、放到 `/usr/local/bin`）。纯 IPv6 机器在 README 中提示可先开启 WARP 或使用 DNS64。线路机不需要 Xray，只需手动安装 LiteNode 本身。
+
 ### 发布
 
 GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-ldflags "-s -w -X <版本变量>=<标签>"` 编译 `litenode-linux-amd64` 和 `litenode-linux-arm64`，生成 `sha256sums.txt`，发布到 GitHub Releases。每次推送都运行 `go vet` 和 `go test`。
@@ -124,8 +128,8 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 
 **实现细节**：
 
-- `.github/workflows/ci.yml`：每次推送和 PR 运行 gofmt 检查、`go vet`、`go test -race`，并交叉编译 amd64 / arm64。
-- `.github/workflows/release.yml`：推送 `v*` 标签时先运行检查，再编译两个架构，生成 `sha256sums.txt`，用 runner 自带的 `gh release create --verify-tag` 发布。Release 说明取自带注释标签（`git tag -a`）的说明文字。
+- `.github/workflows/ci.yml`：每次推送和 PR 运行 gofmt 检查、`go vet`、`go test -race`，并交叉编译 amd64 / arm64。测试在 amd64（`ubuntu-latest`）和 arm64（GitHub 原生的 `ubuntu-24.04-arm`）上各运行一遍，两者都是 main 的必须通过检查（D-048）。
+- `.github/workflows/release.yml`：推送 `v*` 标签时先运行检查，再编译两个架构，生成 `sha256sums.txt`，用 runner 自带的 `gh release create --verify-tag` 发布。Release 说明取自带注释标签（`git tag -a`）的说明文字。发布前在 amd64 和 arm64 环境中分别运行编译出的程序的 `version`，确认能启动（D-048）。
 - 只使用 GitHub 官方 Action（`actions/checkout`、`actions/setup-go`），按 commit SHA 固定版本；Go 版本读取 `go.mod`。不使用第三方发布 Action。
 - 打标签用 `git tag -a <版本> -m "<发布说明>"`，推送标签前先问用户。
 
@@ -152,7 +156,7 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 | `/etc/sysctl.d/99-litenode.conf` | BBR、内核转发等 sysctl 设置 |
 | `/var/log/litenode.log` | LiteNode 自身的操作日志 |
 | `/run/litenode.lock` | 实例锁（`flock`），重启后自动清除 |
-| `/run/litenode/<类型>.pending` | 限时确认的待确认标记（内容为备份 ID） |
+| `/run/litenode/pending` | 限时确认的待确认标记（内容为备份 ID），同一时间只有一个（D-040） |
 
 **`/etc/litenode` 权限规则**（集中定义在 `internal/state/layout.go`）：
 
@@ -230,6 +234,9 @@ docs/
 - 文件不存在视为首次使用，使用空状态，第一次修改时才写入。
 - 文件损坏（无法解析）时提示文件路径和备份目录，让用户手动恢复，**不自动覆盖**。`schema_version` 比程序支持的新（程序被降级）时提示更新 LiteNode 并退出。
 - 文件锁：`flock` 锁 `/run/litenode.lock`，菜单会话全程持有，进程退出或被终止时由内核自动释放。第二个实例提示"另一个 LiteNode 正在运行"并退出。`version`、`help` 不加锁；`internal rollback` 不受锁限制（安全机制必须执行，见第 6 节）；`internal resolve` 遇到锁时跳过本轮（见第 11 节）。
+- `xray.stopped`：用户在 Xray 菜单中手动停止后为 `true`（D-045，见第 12 节）。
+- 节点的 `share_port`：分享链接使用的端口，`0` 或不写表示与 `port` 相同（NAT 机，D-043）。
+- 转发的 `resolved_ipv4` / `resolved_ipv6`：目标为域名时分别解析的 A / AAAA 记录（D-046，见第 11 节）。
 - `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。
 - **备注**（D-039）：节点备注在所有节点之间唯一；客户端备注即 Xray 的 `email`，在所有节点的所有客户端之间唯一；节点备注和客户端备注互不影响，可以相同。格式：去掉首尾空白后 1～32 个字符（中文算一个字符），不含控制字符；比较时不区分大小写（`LA` 与 `la` 视为重复）。
 - 每个节点、客户端、转发规则、防火墙规则有内部稳定 ID：全局一个递增计数器 `next_id`，所有类型共用，只增不减，删除后不复用；菜单显示的是连续的序号。
@@ -244,7 +251,8 @@ docs/
     "share_address": ""
   },
   "xray": {
-    "version": "v25.x.x"
+    "version": "v25.x.x",
+    "stopped": false
   },
   "nodes": [
     {
@@ -252,6 +260,7 @@ docs/
       "remark": "LA-Reality",
       "enabled": true,
       "port": 443,
+      "share_port": 0,
       "protocol": "vless",
       "transport": "tcp",
       "security": "reality",
@@ -282,7 +291,8 @@ docs/
       "listen_port": "30001",
       "target_host": "la.example.com",
       "target_port": "443",
-      "resolved_ip": "203.0.113.10"
+      "resolved_ipv4": "203.0.113.10",
+      "resolved_ipv6": ""
     }
   ],
   "firewall": {
@@ -305,12 +315,20 @@ docs/
 4. **应用**：写入正式位置，重启或重新加载对应服务，并检查服务确实在运行。
 5. **失败恢复**：校验或应用任一步失败，恢复备份的配置和状态，重新应用旧配置，并向用户显示失败原因。
 
-备份目录只保留每类配置最近 10 份，自动清理更早的。
+备份目录只保留每类配置最近 10 份，自动清理更早的。一份备份包含多类配置时，它在每一类中各算一份；只有在它涉及的每一类中都不属于最新 10 份时才删除（D-040）。
+
+**一次变更包含多类配置**（D-040）：一个操作往往同时涉及多类配置（添加节点：xray + nftables + ufw；SSH 改端口：sshd + nftables / ufw；添加转发：nftables + sysctl + ufw + 解析定时任务），必须作为一个整体：
+
+1. 一份备份，包含本次涉及的所有文件和状态文件。
+2. 先校验所有类型，全部通过才继续。
+3. 按调用方给出的顺序写入文件、保存状态、依次应用各类型。
+4. 任何一步失败：恢复所有文件和状态，再按顺序重新应用所有类型的旧配置。
+5. 没有文件、只有"应用"的类型也可以参加，例如 ufw 对账（第 2 节）。
 
 **实现细节**：
 
-- **配置类型**（kind）：如 `sshd`、`nft`、`xray`，名称只用小写字母。每类定义自己的校验函数和应用函数（重启或重载服务并检查运行状态），登记在注册表中，供回滚子命令在另一个进程中重新应用旧配置。
-- **备份格式**：每次变更一个目录 `backups/<类型>-<时间>/`，内含原样的配置文件、`state.json` 和 `manifest.json`（记录每个文件的原路径、权限、修改前是否存在）。`manifest.json` 最后写入，没有它的目录视为不完整。用户可以直接复制单个文件手动恢复。修改前不存在的文件，恢复时删除。
+- **配置类型**（kind）：如 `sshd`、`nft`、`xray`、`ufw`，名称只用小写字母。每类定义自己的校验函数和应用函数（重启或重载服务并检查运行状态），登记在注册表中，供回滚子命令在另一个进程中重新应用旧配置。**应用函数必须根据磁盘上的实际情况行事**（恢复后可能没有该配置，此时停止服务或删除规则）。
+- **备份格式**：每次变更一个目录 `backups/<类型>[+<类型>...]-<时间>/`（如 `xray+ufw-20261018-120000.000`），内含原样的配置文件、`state.json` 和 `manifest.json`（记录每个文件的原路径、权限、修改前是否存在）。`manifest.json` 最后写入，没有它的目录视为不完整。用户可以直接复制单个文件手动恢复。修改前不存在的文件，恢复时删除。
 - **两种校验方式**：默认先把候选文件写到临时位置校验（在扩展名前插入 `.litenode-new`，如 `xray.litenode-new.json`，保留扩展名是因为 Xray 按扩展名判断配置格式；临时文件权限一律 600）（`xray run -test`、`nft -c`），通过后再写入正式位置，临时文件随即删除。无法单独校验文件的类型（`sshd -t`）标记为"就地校验"：先写入正式位置，立即校验，失败马上恢复，此时还没有重载服务。
 
 **限时确认回滚**（用于 SSH 配置和防火墙中可能影响 SSH 的操作）：
@@ -324,9 +342,10 @@ docs/
 
 **实现细节**：
 
-- 定时任务：`systemd-run --unit=litenode-rollback-<类型> --on-active=60 --timer-property=AccuracySec=1s /usr/local/bin/litenode internal rollback <类型>`。创建前先停止同名定时器并 `reset-failed`，以便重复使用单元名。
+- 同一时间只有一个修改在等待确认（菜单持有实例锁），所以定时任务和标记都是全局唯一的，超时时整体回滚这一次变更涉及的所有类型（D-040）。
+- 定时任务：`systemd-run --unit=litenode-rollback --on-active=60 --timer-property=AccuracySec=1s /usr/local/bin/litenode internal rollback`。创建前先停止同名定时器并 `reset-failed`，以便重复使用单元名。
 - 开始计时的时机：校验通过之后、修改生效之前。计时失败则不应用修改并恢复。应用失败时立即恢复并取消计时。
-- **确认与超时的竞态**：开始计时时写入标记文件 `/run/litenode/<类型>.pending`（内容为本次备份 ID）。用户确认和定时任务都通过 rename 认领这个文件，先认领的一方生效：确认先到则取消定时器，修改保留；定时任务先到则恢复该备份 ID 对应的备份。确认时发现标记已被认领，提示"已超时，配置已自动恢复，请重新修改"，菜单重新读取状态。
+- **确认与超时的竞态**：开始计时时写入标记文件 `/run/litenode/pending`（内容为本次备份 ID）。用户确认和定时任务都通过 rename 认领这个文件，先认领的一方生效：确认先到则取消定时器，修改保留；定时任务先到则恢复该备份 ID 对应的备份。确认时发现标记已被认领，提示"已超时，配置已自动恢复，请重新修改"，菜单重新读取状态。
 - `internal rollback` 不受实例锁限制（见第 5 节）。
 - **已知限制**：等待确认期间如果服务器重启，临时定时器和 `/run` 下的标记都会消失，修改不会被回滚。
 
@@ -372,6 +391,8 @@ docs/
 
 主菜单已由用户确认，保留分组分隔线，是第 7 节"选项区内不加分隔线"规则的唯一例外。
 
+Xray 状态为"● 运行中 / ○ 已停止 / ○ 已停止（手动） / ○ 未安装"；手动停止且有启用的节点时显示警告行，提醒节点当前不可用（D-045）。
+
 状态区中尚未实现的模块显示 `-`（SSH 在 M2、防火墙在 M3 接入真实值）；Xray 在 M1 之前按状态文件显示"○ 未安装"。
 
 系统行依次为：系统名称、虚拟化类型（`systemd-detect-virt` 的结果，物理机显示"物理机"）、内存（小于 1G 显示 `973M`，以上显示 `1.9G`）、BBR 是否已启用。警告行只在 LiteNode 防火墙与 ufw 同时启用时显示（第 2 节"与 ufw 共存"），不再显示共存软件提示（D-037）。
@@ -381,6 +402,7 @@ docs/
 ### 9.1 节点列表菜单
 
 ```
+ 分享地址: 203.0.113.10
  ID  备注        协议               端口   客户端  状态
  1   LA-Reality  VLESS-TCP-Reality  443    2       ● 启用
  2   ss-backup   SS2022             28388  1       ○ 禁用
@@ -389,10 +411,13 @@ docs/
  2. 修改节点
  3. 启用 / 禁用节点
  4. 客户端管理
- 5. 删除节点
+ 5. 分享地址         (修改 / 重新检测)
+ 6. 删除节点
 ──────────────────────────────────────────────
  0. 返回
 ```
+
+- **分享地址**（D-041）：可以输入 IP 或域名，或重新检测（第 9.5 节）；修改后提示"所有节点的分享链接已变化，请重新导出"。
 
 ### 9.2 添加节点
 
@@ -404,13 +429,13 @@ docs/
  0. 返回
 ```
 
-2. 端口：默认 443，被占用时默认随机一个空闲端口。按第 2 节"端口冲突检查"判断是否被占用。
+2. 端口：默认 443，被占用时默认随机一个空闲端口。按第 2 节"端口冲突检查"判断是否被占用。检测到的公网 IP 不在本机网卡上时（可能是 NAT 机），提示"如果这是 NAT 机，请输入商家分配的端口；外部端口与内部端口不同时，添加后在修改节点中设置分享端口"（D-043）。
 3. 目标网站：见第 10 节。
 4. 备注：默认根据协议生成，在所有节点之间唯一。第一个客户端的备注默认与节点备注相同；客户端备注作为 Xray 中客户端的 `email`，在所有节点的所有客户端之间唯一（格式和比较规则见第 5 节）。
-5. 自动生成：x25519 密钥对（使用 Go 标准库 `crypto/ecdh`，格式与 `xray x25519` 输出一致，以单元测试比对）、shortId（8 位十六进制）、第一个客户端的 UUID。指纹默认 `chrome`，流控 `xtls-rprx-vision`。
+5. 自动生成：x25519 密钥对（使用 Go 标准库 `crypto/ecdh`，私钥和公钥都是 43 个字符的 base64url（无填充），与 `xray x25519` 的 `PrivateKey` 和 `Password (PublicKey)` 一致；单元测试用真实 Xray 输出作为测试向量，测试 VPS 上用 `xray x25519 -i <私钥>` 交叉验证，D-047）、shortId（8 位十六进制）、第一个客户端的 UUID。指纹默认 `chrome`，流控 `xtls-rprx-vision`。
 6. 如果 Xray 未安装，自动安装（见第 12 节）。
 7. 应用配置，自动放行端口：LiteNode 防火墙已启用时加入防火墙；未启用且 ufw 在运行时同步到 ufw（第 2 节"与 ufw 共存"）。
-8. 输出第一个客户端的分享链接和终端二维码。
+8. 输出第一个客户端的分享链接和终端二维码，下方固定提示"连不上时，请检查云厂商的安全组或防火墙是否放行了 TCP 端口 X"；按第 2 节检查已有的入站拦截规则并提示（D-044）。
 
 ### 9.3 修改节点
 
@@ -421,13 +446,14 @@ docs/
  2. 目标网站 (SNI)   当前: www.example-a.com
  3. 回落限速         当前: 约 15MB 后限速 1MB/s
  4. 重新生成密钥
- 5. 备注             当前: LA-Reality
+ 5. 分享端口         当前: 同监听端口
+ 6. 备注             当前: LA-Reality
 ──────────────────────────────────────────────
  0. 返回
 ```
 
 - 端口、目标网站、重新生成密钥会让该节点下**所有客户端**的分享链接失效：执行前提示，执行后提供"导出全部客户端的新链接"。
-- 回落限速和备注不影响客户端链接。
+- 回落限速和备注不影响客户端链接。修改分享端口会让该节点所有客户端的链接变化（只影响链接，不影响服务端配置）。
 - 进入"目标网站"时，先对当前目标做一次检测并显示结果，方便排查目标失效的问题。
 - 修改端口时按第 2 节检查端口冲突，并同步 LiteNode 防火墙或 ufw 规则。
 - **启用 / 禁用节点**：启用前重新检查端口冲突（禁用期间端口可能已被其他程序占用）；启用和禁用都同步 LiteNode 防火墙或 ufw 规则（ufw 中只为启用的节点保留规则）。删除节点时同样同步。
@@ -465,7 +491,12 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 - 备注部分进行 URL 编码。IPv6 地址加方括号。
 - 二维码在终端内用字符绘制，不依赖外部工具。
-- 公网地址自动检测。检测到多个地址（如同时有 IPv4 和 IPv6）或检测失败时，生成链接前让用户选择或输入，并保存到状态文件的 `server.share_address`。用户可以填写域名。修改这个地址的入口见第 18 节"待讨论事项"。
+- 链接中的端口为节点的 `share_port`（设置时），否则为监听端口（D-043）。
+- **公网地址检测**（D-041），在第一次生成链接时和用户选择"重新检测"时进行：
+  1. 分别访问 `https://1.1.1.1/cdn-cgi/trace`（IPv4）和 `https://[2606:4700:4700::1111]/cdn-cgi/trace`（IPv6），取 `ip=` 一行，超时 5 秒。直接用 IP 访问，不依赖 DNS；能拿到云厂商 1:1 NAT 之后的真实公网 IP（AWS、GCP、甲骨文等机器的网卡上只有内网地址）。
+  2. 访问失败时使用网卡上的公网地址（排除私有地址、IPv6 链路本地地址等）。
+  3. 只有一个地址时直接使用；同时有 IPv4 和 IPv6 时让用户选择，默认 IPv4；都没有时让用户输入。
+  4. 结果保存到 `server.share_address`。用户可以填写域名。修改入口在节点列表菜单的"分享地址"（第 9.1 节）。
 
 ### 9.6 Xray 配置生成原则
 
@@ -575,10 +606,13 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 **实现要点**：
 
-- **内核转发**：启用第一条规则时写入 `/etc/sysctl.d/99-litenode.conf` 开启 `net.ipv4.ip_forward=1`；目标为 IPv6 时同时开启 `net.ipv6.conf.all.forwarding=1`。
+- **内核转发**：启用第一条规则时写入 `/etc/sysctl.d/99-litenode.conf` 开启 `net.ipv4.ip_forward=1`；存在 IPv6 目标时同时开启 `net.ipv6.conf.all.forwarding=1`。
+- **地址族**（D-046）：nftables 的 DNAT 不能在 IPv4 和 IPv6 之间转换，所以 IPv4 进来的连接只能转发到 IPv4 目标，IPv6 进来的只能转发到 IPv6 目标。
+  - 目标是 IP：只转发同一地址族的连接，列表中标明"仅 IPv4"或"仅 IPv6"。
+  - 目标是域名：分别解析 A 和 AAAA 记录（`resolved_ipv4` / `resolved_ipv6`），IPv4 连接转发到 A 记录、IPv6 连接转发到 AAAA 记录；只有一种记录时只转发那一种。重新解析时两种分别比较、分别更新，ufw 的 `route` 规则也分别生成。
 - **规则结构**：在 `table inet litenode` 中，prerouting 链做 DNAT，postrouting 链对转发流量做 masquerade（否则落地机的回包不会经过线路机），forward 链放行 `ct status dnat` 的流量。
 - **防火墙关系**：转发规则与防火墙共用同一张表，防火墙启用时 forward 链默认丢弃，只放行转发规则产生的流量和已建立的连接；防火墙未启用时转发同样正常工作。
-- **域名目标**：nftables 只能使用 IP。添加时解析域名，保存 `resolved_ip`；同时创建 `litenode-resolve.timer`（默认每 5 分钟），由 `litenode` 的子命令重新解析，IP 变化时重新生成并应用规则。没有域名目标时删除这个 timer。
+- **域名目标**：nftables 只能使用 IP。添加时分别解析 A 和 AAAA 记录，保存 `resolved_ipv4` / `resolved_ipv6`（D-046）；同时创建 `litenode-resolve.timer`（默认每 5 分钟），由 `litenode` 的子命令重新解析，IP 变化时重新生成并应用规则。没有域名目标时删除这个 timer。
 - **开机加载**：规则写入 `/etc/litenode/nftables.nft`，由 `litenode-nft.service`（oneshot）开机加载。不修改系统的 `/etc/nftables.conf`。
 - **与 ufw 同步**：LiteNode 防火墙未启用且 ufw 在运行时，规则的添加、修改、删除、启用 / 禁用以及域名重新解析（IP 变化时）都同步 `ufw route allow` 规则（写落地机的目标 IP 和端口，见第 2 节"与 ufw 共存"）。重新解析由 `litenode internal resolve` 执行，菜单正在运行（持有实例锁）时跳过本轮，下一轮再同步。
 - **测试目标连通性**：从 VPS 对目标 TCP 端口发起连接，显示是否连通和延迟。UDP 无法可靠测试，只提示。
@@ -607,6 +641,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
   - 安装**不启动服务**：没有启用的节点时 Xray 停止并取消开机启动，不占内存；有启用的节点时才启动（在 M1-07 接入）。
   - 程序本身不走第 6 节的变更流程（体积大，不保留 10 份备份），见下方"更新"。
 - **服务**：`litenode-xray.service`，以专用系统用户 `litenode-xray` 运行，通过 `AmbientCapabilities=CAP_NET_BIND_SERVICE` 允许绑定 443 等低端口（`CapabilityBoundingSet` 也只保留这一项），另加 `NoNewPrivileges`、`ProtectSystem=full`、`ProtectHome`、`PrivateTmp`。配置 `/etc/litenode/xray.json` 为 640、属组 `litenode-xray`。
+- **启动 / 停止**（D-045）：Xray 默认按节点自动启停（有启用的节点时运行，否则停止并取消开机启动）。用户在菜单中"停止"时，在状态文件中记为手动停止（`xray.stopped`），停止服务并取消开机启动；之后的配置变更照常写入和校验配置，但不启动 Xray，重启机器后也不启动。"启动"清除这个标记并按节点情况运行；没有启用的节点时提示"没有启用的节点，Xray 无需运行"。
 - **查看日志**：`journalctl -u litenode-xray -f`。
 - **更新**：默认最新版，可以输入指定版本。更新后用当前配置执行 `xray run -test` 校验，失败则回退旧版本。
   - 旧程序先改名为 `xray.bak`，新程序写入后依次检查：`xray version` 报告的版本正确、接受当前配置、服务原本在运行时重启后 2 秒仍在运行。任一项失败就把 `xray.bak` 改回并重启旧程序（重启前先 `systemctl reset-failed`，因为崩溃的新程序会被 systemd 反复拉起而触发启动频率限制）。成功后删除 `xray.bak`。
@@ -793,7 +828,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 | 命令 | 作用 |
 |---|---|
 | `litenode internal resolve` | 重新解析转发目标域名并在 IP 变化时更新规则 |
-| `litenode internal rollback <类型>` | 限时确认超时后执行回滚 |
+| `litenode internal rollback` | 限时确认超时后回滚标记中记录的那次变更 |
 
 后续各模块完成时可以增加对应子命令（如 `litenode node list`、`litenode node link <序号>`），命名在实现前与用户确认。
 
@@ -801,7 +836,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 以下问题尚未确定，实现到相关任务前需要与用户讨论，**确定前不要实现**：
 
-1. **分享地址的修改入口**：`server.share_address` 自动检测和首次选择的逻辑已确定，但用户想把地址改成域名时，菜单上的入口放在哪里尚未确定。
+1. ~~**分享地址的修改入口**~~：已确定，放在节点列表菜单的"分享地址"（第 9.1 节、D-041）。
 2. **TLS 类协议的证书来源**：VLESS + WS + TLS、Trojan + TLS 需要证书，证书从哪里来（自动申请或手动提供）尚未设计。这部分在 M7 之前讨论。
 3. **常用目标网站列表**：列表内容在实施 M1-05 时与用户确认。
 4. ~~**界面语言**~~：已确定，界面文字集中管理（见第 4 节、DECISIONS D-025）。
