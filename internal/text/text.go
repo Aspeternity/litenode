@@ -117,7 +117,7 @@ func RollbackFailed(err error) string {
 
 // UnknownCommand is shown for an unrecognized command line.
 func UnknownCommand(args string) string {
-	return "未知命令：" + args
+	return "未知命令：" + args + "\n运行 litenode help 查看用法。"
 }
 
 // Menu option 0 labels.
@@ -175,3 +175,24 @@ const BusyInterrupt = "正在执行操作，完成后退出……"
 func ActionFailed(err error) string {
 	return "操作失败：" + err.Error()
 }
+
+// Version is printed by "litenode version".
+func Version(version, platform string) string {
+	return fmt.Sprintf("LiteNode %s (%s)", version, platform)
+}
+
+// Help is printed by "litenode help". Internal subcommands are not listed.
+const Help = `LiteNode：轻量的 VPS 节点部署与管理工具
+
+用法：
+  litenode              进入主菜单（快捷命令 lnode）
+  litenode --dry-run    以 dry-run 模式进入主菜单：只打印将要执行的修改，不实际执行
+  litenode version      显示版本（也可用 -v、--version）
+  litenode help         显示本帮助（也可用 -h、--help）
+
+需要 root 权限运行（version 和 help 除外）。
+项目主页：https://github.com/Aspeternity/litenode
+`
+
+// DryRunBanner is shown when the menu starts in dry-run mode.
+const DryRunBanner = "[dry-run] 当前为 dry-run 模式：所有修改操作只打印，不会实际执行。"

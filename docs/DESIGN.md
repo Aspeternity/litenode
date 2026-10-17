@@ -705,6 +705,11 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 | `litenode help` | 显示帮助 |
 | `litenode --dry-run` | 以 dry-run 模式进入菜单，所有系统操作只打印不执行 |
 
+- `version` 也可写作 `-v`、`--version`，输出 `LiteNode <版本> (<系统>/<架构>)`；`help` 也可写作 `-h`、`--help`。这两个命令不需要 root、不检测系统、不加锁。帮助中只列 `version` 和 `help` 两种写法。
+- `--dry-run` 与正常模式走相同流程，同样要求 root、检测系统、加实例锁，只把修改操作换成打印（只读操作照常执行，见 D-026），进入菜单时顶部显示 dry-run 提示。
+- 版本号通过 `-ldflags "-X main.version=<标签>"` 注入，未注入时为 `dev`。
+- 无法识别的命令提示"未知命令"和"运行 litenode help 查看用法"，退出码 2。
+
 内部使用的子命令（供 systemd 调用，不在帮助中展示给普通用户）：
 
 | 命令 | 作用 |

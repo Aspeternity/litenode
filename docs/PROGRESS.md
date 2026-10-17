@@ -5,12 +5,12 @@
 ## 当前状态
 
 - **阶段**：M0 项目骨架。
-- **当前任务**：无（M0-06 已完成）。
-- **下一个任务**：M0-07 子命令框架。
+- **当前任务**：无（M0-07 已完成）。
+- **下一个任务**：M0-08 GitHub Actions。
 
 ## 下次会话从这里开始
 
-1. 开始 M0-07。版本号变量已在 `cmd/litenode/main.go` 中声明为 `var version = "dev"`，M0-07 用 `-ldflags -X main.version=...` 注入；`internal rollback` 的临时路由在 `app.Run` 开头，改为正式结构。
+1. 开始 M0-08。发布编译参数：`CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=<标签>" ./cmd/litenode`。验收需要推送代码和测试标签，推送和打标签前先问用户。`cmd/litenode/main_test.go` 会调用 `go build`，CI 中需要 Go 工具链（`-short` 可跳过）。
 2. 提议条目中 P-006、P-008、P-010 已确认；其余 P-001 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
 ## 未解决的问题
@@ -32,7 +32,7 @@
 - 迁移前的备份写在 `/etc/litenode/backups/state-v<N>-<时间>.json`，不参与按类型的数量清理。
 - 配置变更：`change.Manager.Apply(ctx, change.Change{Kind, Files, State})`；需要限时确认的用 `change.Confirmer.Apply`，然后询问用户，确认时调 `Disarm`（返回 `change.ErrRolledBack` 表示已超时回滚，菜单需重新加载状态）。各功能的 `change.Kind` 在对应任务中定义，并在 `cmd/litenode/main.go` 的 `Kinds` 注册表中登记（目前为空）。
 - Runner 新增 `ReadDir`（只读）、`RemoveAll`、`Rename`（修改操作）。`Rename` 对不存在的源文件返回 `fs.ErrNotExist`，用于原子认领。
-- `internal rollback <类型>` 目前在 `app.Run` 中做了最小路由，M0-07 改为正式的子命令结构。
+- 子命令路由在 `app.Run`（`internal/app/app.go`）；`internal` 子命令在 `runInternal` 中添加（M4-02 加 `resolve`）。Runner 在 `runMenu` 中按是否 dry-run 选择，Store、Confirmer 由 app 根据所选 Runner 构造。
 - 能力探测注册在 `internal/system/probe.go` 的 `probes`，目前只有 BBR；swap、sysctl、nftables 在对应任务中加入。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。
 
@@ -48,4 +48,4 @@
 ## 最近一次会话
 
 - **日期**：2026-10-18
-- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）、M0-06（菜单细节见 D-030；在测试 VPS 上验证了菜单显示、非法输入、颜色、SIGINT/SIGHUP 退出）。
+- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）、M0-06（菜单细节见 D-030；在测试 VPS 上验证了菜单显示、非法输入、颜色、SIGINT/SIGHUP 退出）、M0-07（子命令细节见 D-031）。
