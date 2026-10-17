@@ -15,14 +15,14 @@
 
 完成后：可以编译、发布、通过一行命令安装，进入一个结构完整但功能为占位的主菜单。
 
-### M0-01 仓库基础结构 `未开始`
+### M0-01 仓库基础结构 `已完成`
 
 - 初始化 Go 模块 `github.com/Aspeternity/litenode`，按 DESIGN 第 4 节建立目录。
 - 添加 `README.md` 初版：项目简介、开发中状态、协议。
 - 验收：
-  - [ ] `go build ./...`、`go vet ./...`、`gofmt -l .` 均通过且无输出。
-  - [ ] 目录结构与 DESIGN 第 4 节一致。
-  - [ ] `.gitattributes`、`.gitignore`、`.claude/settings.json` 已在仓库中。
+  - [x] `go build ./...`、`go vet ./...`、`gofmt -l .` 均通过且无输出。
+  - [x] 目录结构与 DESIGN 第 4 节一致。
+  - [x] `.gitattributes`、`.gitignore`、`.claude/settings.json` 已在仓库中。
 
 ### M0-02 命令执行抽象和 dry-run `未开始`
 
