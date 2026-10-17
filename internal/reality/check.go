@@ -1,0 +1,223 @@
+// Package reality checks and scans REALITY target websites (DESIGN
+// section 10).
+package reality
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// LargeHomepage is the homepage size above which a target gets a warning:
+// half of the default fallback limit (10 MiB). A homepage near the limit
+// would get normal visitors throttled, which reveals that the VPS is not
+// the real site (D-051).
+const LargeHomepage = 5 << 20
+
+// maxHomepage bounds how much of a homepage is read.
+const maxHomepage = 20 << 20
+
+// Result is the outcome of checking one target (DESIGN section 10.2).
+type Result struct {
+	// Target is "host:port".
+	Target string
+	Host   string
+	// Err is set when the site could not be reached at all.
+	Err     error
+	TLS13   bool
+	H2      bool
+	X25519  bool
+	CertOK  bool
+	CertErr error
+	// Latency is the TCP connect plus TLS handshake time.
+	Latency time.Duration
+	// HomepageSize is the size of the homepage body in bytes, -1 if it
+	// could not be fetched.
+	HomepageSize int64
+	// Keyword is the high-risk keyword in the domain, "" if none.
+	Keyword string
+}
+
+// Usable reports whether the target meets the REALITY requirements.
+// High-risk keywords and large homepages are warnings, not failures.
+func (r Result) Usable() bool {
+	return r.Err == nil && r.TLS13 && r.H2 && r.X25519 && r.CertOK
+}
+
+// LargeHomepage reports whether the homepage is large enough to warn.
+func (r Result) LargeHomepage() bool {
+	return r.HomepageSize > LargeHomepage
+}
+
+// Checker checks targets. The zero value uses the system resolver and
+// root certificates.
+type Checker struct {
+	// Timeout bounds each connection; 0 means 5 seconds.
+	Timeout time.Duration
+	// Roots overrides the system root certificates (tests).
+	Roots *x509.CertPool
+	// Dial overrides how "host:port" is dialed (tests).
+	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+}
+
+func (c *Checker) timeout() time.Duration {
+	if c.Timeout > 0 {
+		return c.Timeout
+	}
+	return 5 * time.Second
+}
+
+func (c *Checker) dial(ctx context.Context, addr string) (net.Conn, error) {
+	if c.Dial != nil {
+		return c.Dial(ctx, "tcp", addr)
+	}
+	d := net.Dialer{Timeout: c.timeout()}
+	return d.DialContext(ctx, "tcp", addr)
+}
+
+// handshake connects and performs a TLS handshake offering only the given
+// curves. Certificate problems do not fail the handshake; they are
+// returned separately so the other properties can still be reported.
+func (c *Checker) handshake(ctx context.Context, target, host string, curves []tls.CurveID) (tls.ConnectionState, time.Duration, error, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout())
+	defer cancel()
+	start := time.Now()
+	raw, err := c.dial(ctx, target)
+	if err != nil {
+		return tls.ConnectionState{}, 0, nil, err
+	}
+	defer raw.Close()
+	var certErr error
+	conn := tls.Client(raw, &tls.Config{
+		ServerName:         host,
+		NextProtos:         []string{"h2", "http/1.1"},
+		MinVersion:         tls.VersionTLS12,
+		CurvePreferences:   curves,
+		InsecureSkipVerify: true, // verified below, without aborting the handshake
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			certErr = verifyCert(cs, host, c.Roots)
+			return nil
+		},
+	})
+	if err := conn.HandshakeContext(ctx); err != nil {
+		return tls.ConnectionState{}, 0, nil, err
+	}
+	return conn.ConnectionState(), time.Since(start), certErr, nil
+}
+
+func verifyCert(cs tls.ConnectionState, host string, roots *x509.CertPool) error {
+	if len(cs.PeerCertificates) == 0 {
+		return errors.New("no certificate")
+	}
+	opts := x509.VerifyOptions{DNSName: host, Roots: roots, Intermediates: x509.NewCertPool()}
+	for _, ic := range cs.PeerCertificates[1:] {
+		opts.Intermediates.AddCert(ic)
+	}
+	_, err := cs.PeerCertificates[0].Verify(opts)
+	return err
+}
+
+// Check checks one target, "host" or "host:port" (default port 443).
+func (c *Checker) Check(ctx context.Context, target string) Result {
+	host, port, err := SplitTarget(target)
+	res := Result{Target: net.JoinHostPort(host, port), Host: host, HomepageSize: -1, Keyword: RiskyKeyword(host)}
+	if err != nil {
+		res.Err = err
+		return res
+	}
+
+	// Offer only X25519: success proves the server supports it.
+	cs, latency, certErr, err := c.handshake(ctx, res.Target, host, []tls.CurveID{tls.X25519})
+	if err == nil {
+		res.X25519 = true
+	} else {
+		// Retry with the default curves to report the other properties.
+		cs, latency, certErr, err = c.handshake(ctx, res.Target, host, nil)
+		if err != nil {
+			res.Err = err
+			return res
+		}
+	}
+	res.TLS13 = cs.Version == tls.VersionTLS13
+	res.H2 = cs.NegotiatedProtocol == "h2"
+	res.CertOK = certErr == nil
+	res.CertErr = certErr
+	res.Latency = latency
+	res.HomepageSize = c.homepageSize(ctx, res.Target, host)
+	return res
+}
+
+// homepageSize requests "/" once, without following redirects, and
+// returns the body size, or -1 on failure.
+func (c *Checker) homepageSize(ctx context.Context, target, host string) int64 {
+	ctx, cancel := context.WithTimeout(ctx, 2*c.timeout())
+	defer cancel()
+	tr := &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return c.dial(ctx, target)
+		},
+		TLSClientConfig:   &tls.Config{ServerName: host, RootCAs: c.Roots, InsecureSkipVerify: true},
+		ForceAttemptHTTP2: true,
+	}
+	defer tr.CloseIdleConnections()
+	client := &http.Client{
+		Transport:     tr,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+host+"/", nil)
+	if err != nil {
+		return -1
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36")
+	resp, err := client.Do(req)
+	if err != nil {
+		return -1
+	}
+	defer resp.Body.Close()
+	n, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxHomepage))
+	if err != nil && n == 0 {
+		return -1
+	}
+	return n
+}
+
+// SplitTarget parses "host" or "host:port" (default port 443). The host
+// must be a domain name: REALITY needs it for serverNames.
+func SplitTarget(s string) (host, port string, err error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	host, port = s, "443"
+	if h, p, err := net.SplitHostPort(s); err == nil {
+		host, port = h, p
+	}
+	if !validDomain(host) {
+		return host, port, fmt.Errorf("%q is not a domain name", host)
+	}
+	if n, err := net.LookupPort("tcp", port); err != nil || n < 1 || n > 65535 || fmt.Sprint(n) != port {
+		return host, port, fmt.Errorf("invalid port %q", port)
+	}
+	return host, port, nil
+}
+
+func validDomain(h string) bool {
+	if len(h) == 0 || len(h) > 253 || net.ParseIP(h) != nil || !strings.Contains(h, ".") {
+		return false
+	}
+	for _, label := range strings.Split(h, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+				return false
+			}
+		}
+	}
+	return true
+}
