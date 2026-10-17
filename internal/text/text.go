@@ -74,3 +74,28 @@ func ConflictWarning(names []string) string {
 
 // MenuInDevelopment is shown until the main menu is implemented.
 const MenuInDevelopment = "主菜单开发中。"
+
+// AlreadyRunning is shown when another LiteNode instance holds the lock.
+const AlreadyRunning = "另一个 LiteNode 正在运行。请先退出另一个窗口中的 LiteNode，再重新执行。"
+
+// LockFailed is shown when the lock file cannot be created.
+func LockFailed(err error) string {
+	return fmt.Sprintf("无法创建锁文件：%v", err)
+}
+
+// StateCorrupt is shown when the state file cannot be parsed.
+func StateCorrupt(path, backupDir string, err error) string {
+	return fmt.Sprintf("状态文件 %s 已损坏，无法读取：%v\n"+
+		"LiteNode 不会自动覆盖它。请从备份目录 %s 中选择一份复制回 %s，再重新执行。", path, err, backupDir, path)
+}
+
+// StateTooNew is shown when the state file was written by a newer LiteNode.
+func StateTooNew(path string) string {
+	return fmt.Sprintf("状态文件 %s 由更新版本的 LiteNode 生成，当前程序无法读取。\n"+
+		"请更新 LiteNode 后重新执行。", path)
+}
+
+// StateLoadFailed is shown for other errors while loading the state file.
+func StateLoadFailed(err error) string {
+	return fmt.Sprintf("无法读取状态文件：%v", err)
+}
