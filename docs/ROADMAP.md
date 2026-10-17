@@ -97,12 +97,12 @@
   - [x] 主菜单不再显示共存软件提示，golden file 与 DESIGN 第 8 节一致。
   - [x] 启动时不再查询 `x-ui.service`、`xray.service`。
 
-### M0-11 CI 增加 arm64 `未开始`
+### M0-11 CI 增加 arm64 `已完成`
 
 - D-048：`ci.yml` 在 `ubuntu-24.04-arm` 上也运行全部测试；`release.yml` 发布前在 amd64 和 arm64 上运行编译出的程序的 `version`；Ruleset 的必须通过检查加上 arm64 的任务。
 - 验收：
-  - [ ] PR 的 CI 在 amd64 和 arm64 上都通过，两者都是必须通过的检查。
-  - [ ] release.yml 的修改在下一次发布时验证（在 PR 中说明）。
+  - [x] PR 的 CI 在 amd64 和 arm64 上都通过，两者都是必须通过的检查。
+  - [x] release.yml 的修改在下一次发布时验证（在 PR 中说明）。
 
 ---
 
