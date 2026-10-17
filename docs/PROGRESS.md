@@ -5,12 +5,12 @@
 ## 当前状态
 
 - **阶段**：M1 节点管理。
-- **当前任务**：无（M1-02 已完成）。
-- **下一个任务**：M0-11 CI 增加 arm64，然后 M1-00 多类配置的整体变更，再 M1-03 Xray 配置生成。
+- **当前任务**：无（M0-11 已完成）。
+- **下一个任务**：M1-00 多类配置的整体变更，然后 M1-03 Xray 配置生成。
 
 ## 下次会话从这里开始
 
-1. 按顺序做 M0-11（`chore/M0-11-ci-arm64`）→ M1-00（`refactor/M1-00-multi-kind-change`）→ M1-03（`feat/M1-03-xray-config`），每个任务一个分支（D-036）。M0-11 合并前需要先更新 Ruleset 的必须通过检查（加入 arm64 任务），先问用户。P-009（回落限速档位）在做到 M1-07 修改节点菜单时确认。
+1. 按顺序做 M1-00（`refactor/M1-00-multi-kind-change`）→ M1-03（`feat/M1-03-xray-config`），每个任务一个分支（D-036）。release.yml 的拆分（build → 两架构 smoke → publish）在下一次发布时验证。P-009（回落限速档位）在做到 M1-07 修改节点菜单时确认。
    - 发布：GitHub 上有正式 Release `v0.0.1`（开发中测试版，`releases/latest` 指向它）。新版本发布时用 `git tag -a`，推送标签前先问用户。M6-02 更新脚本可复用 install.sh 的下载和校验方式（资产名 `litenode-linux-<架构>`，`sha256sums.txt` 为 `sha256sum` 标准格式）。
 2. 提议条目中 P-001、P-002、P-006、P-008、P-010 已确认；其余 P-003 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
@@ -42,6 +42,7 @@
 - Runner 新增 `Chmod`。
 - 共存检测已移除（M0-10）：`system.Info` 不再有 `Conflicts`；Docker 检测用 `system.DockerInstalled`（M3-02 启用防火墙时用）；主菜单警告行用 `ui.MainStatus.Warnings`（M3 用于"LiteNode 防火墙与 ufw 同时启用"）。
 - 节点模型（M1-02）：`node.Node` / `node.Client` / `node.Reality` 存在 `state.State.Nodes`；组件、兼容性表、预设在 `internal/node/builtin` 显式注册（`builtin.Registry()`）；`Registry.CheckNode` 检查组合和流控；备注用 `node.NormalizeRemark`、`CheckNodeRemark`、`CheckClientRemark`（错误为 `ErrRemark*`，菜单映射为中文）。组件接口目前只有 `Name` / `Label`，M1-03 加生成 inbound 配置的方法。
+- CI：main 的必须通过检查为 `test`（amd64）和 `test-arm64`（GitHub 原生 arm64），两个任务 ID 不要改名，否则 Ruleset 会卡住合并。
 - 能力探测注册在 `internal/system/probe.go` 的 `probes`，目前只有 BBR；swap、sysctl、nftables 在对应任务中加入。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。
 
