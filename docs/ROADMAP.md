@@ -90,12 +90,12 @@
   - [x] [VPS] 在 Debian 12 测试 VPS 上一行命令安装成功，`litenode` 和 `lnode` 都能打开主菜单。
   - [x] [VPS] 校验值不匹配时安装中止，不留下文件。
 
-### M0-10 移除代理面板共存检测 `未开始`
+### M0-10 移除代理面板共存检测 `已完成`
 
 - 设计变更 D-037：删除 M0-03 / M0-06 实现的 x-ui / 3x-ui / 官方 xray 检测和主菜单警告行。保留 Docker 检测的能力供 M3-02 使用；主菜单警告行的渲染保留，改为 M3 使用（LiteNode 防火墙与 ufw 同时启用）。
 - 验收：
-  - [ ] 主菜单不再显示共存软件提示，golden file 与 DESIGN 第 8 节一致。
-  - [ ] 启动时不再查询 `x-ui.service`、`xray.service`。
+  - [x] 主菜单不再显示共存软件提示，golden file 与 DESIGN 第 8 节一致。
+  - [x] 启动时不再查询 `x-ui.service`、`xray.service`。
 
 ---
 

@@ -37,13 +37,11 @@ func TestRenderMainMenu(t *testing.T) {
 		OS:         system.OSRelease{ID: "debian", VersionID: "12"},
 		Virt:       system.Virt{Type: "kvm"},
 		MemTotalMB: 512, BBREnabled: true,
-		Conflicts: []string{system.ConflictXUI, system.ConflictDocker},
 	}
 	status := []string{
 		PadRight(PadRight("Xray: ● 运行中", statusCol2)+text.StatusNodes(2), statusCol3) + text.StatusForwards(3),
 		PadRight(text.StatusSSH("22222 / 仅密钥"), statusCol3) + text.StatusFirewall("● 已启用"),
 		SystemLine(info),
-		ConflictLine(info.Conflicts),
 	}
 	if got := mainMenuFixture(status).Render(); got != string(want) {
 		t.Errorf("main menu mismatch\ngot:\n%s\nwant:\n%s", got, want)
@@ -117,7 +115,7 @@ func TestWidth(t *testing.T) {
 		"（LXC）":                7,
 		"● 运行中":                8,
 		"\x1b[32m● 运行中\x1b[0m": 8,
-		"x-ui/3x-ui、Docker":    18,
+		"ufw、Docker":           11,
 	}
 	for s, want := range tests {
 		if got := Width(s); got != want {

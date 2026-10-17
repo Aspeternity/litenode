@@ -32,13 +32,13 @@ func TestSystemLine(t *testing.T) {
 	}
 }
 
-func TestConflictLine(t *testing.T) {
-	if got := ConflictLine(nil); got != "" {
-		t.Errorf("no conflicts: got %q", got)
+func TestMainStatusWarnings(t *testing.T) {
+	info := system.Info{OS: system.OSRelease{ID: "debian", VersionID: "12"}, Virt: system.Virt{Type: "kvm"}}
+	if got := MainStatusLines(MainStatus{System: info}, Colors{}); len(got) != 3 {
+		t.Errorf("no warnings: got %d lines, want 3", len(got))
 	}
-	got := ConflictLine([]string{system.ConflictXUI, system.ConflictXray, system.ConflictDocker})
-	want := "⚠ 检测到 x-ui/3x-ui、Xray（官方脚本）、Docker，可能与 LiteNode 冲突"
-	if got != want {
-		t.Errorf("got %q, want %q", got, want)
+	got := MainStatusLines(MainStatus{System: info, Warnings: []string{"a", "b"}}, Colors{})
+	if len(got) != 5 || got[3] != "⚠ a" || got[4] != "⚠ b" {
+		t.Errorf("got %q", got)
 	}
 }

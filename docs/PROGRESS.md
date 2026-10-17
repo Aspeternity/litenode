@@ -6,11 +6,11 @@
 
 - **阶段**：M1 节点管理。
 - **当前任务**：无（M1-01 已完成）。
-- **下一个任务**：M0-10 移除代理面板共存检测，然后 M1-02 节点数据模型和注册表。
+- **下一个任务**：M1-02 节点数据模型和注册表。
 
 ## 下次会话从这里开始
 
-1. 先做 M0-10（移除代理面板共存检测，D-037），再做 M1-02。从这个任务起使用分支开发（D-036，见 CLAUDE.md「Git 约定」）：先 `git checkout -b feat/M1-02-node-model`。
+1. 开始 M1-02。使用分支开发（D-036，见 CLAUDE.md「Git 约定」）：先 `git checkout -b feat/M1-02-node-model`。
    - 发布：GitHub 上有正式 Release `v0.0.1`（开发中测试版，`releases/latest` 指向它）。新版本发布时用 `git tag -a`，推送标签前先问用户。M6-02 更新脚本可复用 install.sh 的下载和校验方式（资产名 `litenode-linux-<架构>`，`sha256sums.txt` 为 `sha256sum` 标准格式）。
 2. 提议条目中 P-001、P-002、P-006、P-008、P-010 已确认；其余 P-003 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
@@ -39,6 +39,7 @@
 - M1-03 / M1-07 定义 `xray` 配置类型（`change.Kind`）时：`xray.json` 用 `change.File{Mode: state.GroupFileMode, Group: xray.User}`；校验 `xray run -test -c <临时文件>`（临时文件名保留 `.json` 扩展名）；**Apply 必须根据磁盘上的实际情况行事**（恢复后可能没有配置，此时停止服务），可参考 `internal/xray/vps_test.go` 中的写法。
 - 权限：`/etc/litenode` 下的目录用 `system.EnsureDir`，文件只能 600 或 640+属组（D-034），`change.Manager` 会拒绝其他权限。
 - Runner 新增 `Chmod`。
+- 共存检测已移除（M0-10）：`system.Info` 不再有 `Conflicts`；Docker 检测用 `system.DockerInstalled`（M3-02 启用防火墙时用）；主菜单警告行用 `ui.MainStatus.Warnings`（M3 用于"LiteNode 防火墙与 ufw 同时启用"）。
 - 能力探测注册在 `internal/system/probe.go` 的 `probes`，目前只有 BBR；swap、sysctl、nftables 在对应任务中加入。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。
 

@@ -80,13 +80,11 @@ func TestRunShowsMainMenu(t *testing.T) {
 	f := supported()
 	f.Files["/proc/meminfo"] = []byte("MemTotal:         996720 kB\n")
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "kvm\n"}}, "systemd-detect-virt")
-	f.Respond(systemtest.Response{Result: system.Result{Stdout: "docker.service enabled enabled\n"}},
-		"systemctl", "list-unit-files", "--no-legend", "--plain", "x-ui.service", "xray.service", "docker.service")
 	r := run(t, f, 0, "1\n0\n")
 	if r.code != 0 || r.stderr != "" {
 		t.Fatalf("%+v", r)
 	}
-	for _, want := range []string{"LiteNode 节点管理  dev", "Debian 12 | KVM | 973M | BBR ✗", "Docker", text.InDevelopment, " 0. 退出"} {
+	for _, want := range []string{"LiteNode 节点管理  dev", "Debian 12 | KVM | 973M | BBR ✗", text.InDevelopment, " 0. 退出"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("stdout missing %q:\n%s", want, r.stdout)
 		}
