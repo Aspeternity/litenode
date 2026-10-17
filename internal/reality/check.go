@@ -30,12 +30,18 @@ type Result struct {
 	Target string
 	Host   string
 	// Err is set when the site could not be reached at all.
-	Err     error
-	TLS13   bool
-	H2      bool
-	X25519  bool
-	CertOK  bool
-	CertErr error
+	Err    error
+	TLS13  bool
+	H2     bool
+	X25519 bool
+	// MLKEM is set when the target picks X25519MLKEM768 over X25519, as it
+	// would for a browser-like client. REALITY servers before Xray v26.9.8
+	// then fail the handshake (D-054).
+	MLKEM bool
+	// MLKEMSupported copies Checker.MLKEMSupported.
+	MLKEMSupported bool
+	CertOK         bool
+	CertErr        error
 	// Latency is the TCP connect plus TLS handshake time.
 	Latency time.Duration
 	// HomepageSize is the size of the homepage body in bytes, -1 if it
@@ -48,7 +54,7 @@ type Result struct {
 // Usable reports whether the target meets the REALITY requirements.
 // High-risk keywords and large homepages are warnings, not failures.
 func (r Result) Usable() bool {
-	return r.Err == nil && r.TLS13 && r.H2 && r.X25519 && r.CertOK
+	return r.Err == nil && r.TLS13 && r.H2 && r.X25519 && r.CertOK && (!r.MLKEM || r.MLKEMSupported)
 }
 
 // LargeHomepage reports whether the homepage is large enough to warn.
@@ -65,7 +71,14 @@ type Checker struct {
 	Roots *x509.CertPool
 	// Dial overrides how "host:port" is dialed (tests).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// MLKEMSupported tells whether the Xray in use handles targets that
+	// pick X25519MLKEM768 (xray.SupportsMLKEMTargets).
+	MLKEMSupported bool
 }
+
+// SetMLKEMSupported records whether the Xray in use handles targets that
+// negotiate X25519MLKEM768.
+func (c *Checker) SetMLKEMSupported(ok bool) { c.MLKEMSupported = ok }
 
 func (c *Checker) timeout() time.Duration {
 	if c.Timeout > 0 {
@@ -127,23 +140,31 @@ func verifyCert(cs tls.ConnectionState, host string, roots *x509.CertPool) error
 // Check checks one target, "host" or "host:port" (default port 443).
 func (c *Checker) Check(ctx context.Context, target string) Result {
 	host, port, err := SplitTarget(target)
-	res := Result{Target: net.JoinHostPort(host, port), Host: host, HomepageSize: -1, Keyword: RiskyKeyword(host)}
+	res := Result{Target: net.JoinHostPort(host, port), Host: host, HomepageSize: -1, Keyword: RiskyKeyword(host),
+		MLKEMSupported: c.MLKEMSupported}
 	if err != nil {
 		res.Err = err
 		return res
 	}
 
-	// Offer only X25519: success proves the server supports it.
-	cs, latency, certErr, err := c.handshake(ctx, res.Target, host, []tls.CurveID{tls.X25519})
-	if err == nil {
-		res.X25519 = true
-	} else {
+	// Offer what a browser offers, ML-KEM hybrid first: the choice tells
+	// whether the target negotiates X25519MLKEM768 (D-054).
+	cs, latency, certErr, err := c.handshake(ctx, res.Target, host, []tls.CurveID{tls.X25519MLKEM768, tls.X25519})
+	if err != nil {
 		// Retry with the default curves to report the other properties.
 		cs, latency, certErr, err = c.handshake(ctx, res.Target, host, nil)
 		if err != nil {
 			res.Err = err
 			return res
 		}
+	}
+	res.MLKEM = cs.CurveID == tls.X25519MLKEM768
+	if cs.CurveID == tls.X25519 {
+		res.X25519 = true
+	} else {
+		// Offer only X25519: success proves the server supports it.
+		_, _, _, err := c.handshake(ctx, res.Target, host, []tls.CurveID{tls.X25519})
+		res.X25519 = err == nil
 	}
 	res.TLS13 = cs.Version == tls.VersionTLS13
 	res.H2 = cs.NegotiatedProtocol == "h2"

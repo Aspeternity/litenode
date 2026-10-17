@@ -170,10 +170,15 @@ func Range(protos string, from, to int) []Key {
 }
 
 // RandomFree picks a free TCP port in 10000-60000 for a new node when the
-// default is taken. It gives up after many tries and returns 0.
+// default is taken. It gives up after many tries and returns 0. A nil rng
+// uses the global source.
 func (c Checker) RandomFree(rng *rand.Rand) int {
+	intN := rand.IntN
+	if rng != nil {
+		intN = rng.IntN
+	}
 	for range 1000 {
-		p := 10000 + rng.IntN(50001)
+		p := 10000 + intN(50001)
 		if len(c.Check([]Key{{TCP, p}}, "", nil)) == 0 {
 			return p
 		}

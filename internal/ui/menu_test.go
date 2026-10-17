@@ -60,7 +60,7 @@ func TestMainStatusLines(t *testing.T) {
 		t.Errorf("got\n%q\nwant\n%q", got, want)
 	}
 
-	got = MainStatusLines(MainStatus{XrayInstalled: true, Nodes: 2, Forwards: 3,
+	got = MainStatusLines(MainStatus{Xray: "● 已安装", Nodes: 2, Forwards: 3,
 		SSH: "22222 / 仅密钥", Firewall: "● 已启用", System: info}, Colors{})
 	if got[0] != "Xray: ● 已安装   节点: 2      转发规则: 3" ||
 		got[1] != "SSH: 22222 / 仅密钥           防火墙: ● 已启用" {

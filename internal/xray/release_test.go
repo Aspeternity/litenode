@@ -92,3 +92,56 @@ func TestUnitGolden(t *testing.T) {
 		t.Errorf("unit mismatch\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+func TestCompareVersions(t *testing.T) {
+	for _, tt := range []struct {
+		a, b string
+		want int
+	}{
+		{"v26.9.8", "v26.9.8", 0}, {"v26.10.17", "v26.9.8", 1}, {"v26.3.27", "v26.9.8", -1},
+		{"v26.9.30", "v26.9.8", 1}, {"v27.1.1", "v26.12.31", 1}, {"v26.9.8-beta.1", "v26.9.8", 0},
+	} {
+		if got := CompareVersions(tt.a, tt.b); got != tt.want {
+			t.Errorf("CompareVersions(%s, %s) = %d, want %d", tt.a, tt.b, got, tt.want)
+		}
+	}
+	for v, want := range map[string]bool{"v26.9.8": true, "v26.10.17": true, "v26.7.28": false, "v26.3.27": false, "": false} {
+		if SupportsMLKEMTargets(v) != want {
+			t.Errorf("SupportsMLKEMTargets(%q) = %v", v, !want)
+		}
+	}
+}
+
+func TestPickDefault(t *testing.T) {
+	releases := []Release{
+		{Tag: "v26.10.17", Prerelease: true}, {Tag: "v26.10.10", Prerelease: true},
+		{Tag: "v26.7.28", Prerelease: true}, {Tag: "v26.3.27"}, {Tag: "v26.11.1", Draft: true},
+	}
+	// Today: stable is too old, so the newest qualifying pre-release.
+	if got := PickDefault("v26.3.27", releases); got != "v26.10.17" {
+		t.Errorf("got %s, want v26.10.17", got)
+	}
+	// Once a qualifying stable exists, stable wins.
+	if got := PickDefault("v26.12.1", releases); got != "v26.12.1" {
+		t.Errorf("got %s, want stable v26.12.1", got)
+	}
+	// Nothing qualifies: stable.
+	if got := PickDefault("v26.3.27", []Release{{Tag: "v26.7.28", Prerelease: true}}); got != "v26.3.27" {
+		t.Errorf("got %s, want v26.3.27", got)
+	}
+}
+
+func TestDefaultVersionUsesReleaseList(t *testing.T) {
+	f := fakeFetcher{
+		LatestReleaseURL: []byte(`{"tag_name": "v26.3.27"}`),
+		ReleasesURL:      []byte(`[{"tag_name": "v26.10.17", "prerelease": true}, {"tag_name": "v26.3.27"}]`),
+	}
+	in := &Installer{Fetcher: f}
+	if v, err := in.DefaultVersion(t.Context()); err != nil || v != "v26.10.17" {
+		t.Errorf("DefaultVersion = (%q, %v)", v, err)
+	}
+	delete(f, ReleasesURL) // list unavailable: fall back to stable
+	if v, err := in.DefaultVersion(t.Context()); err != nil || v != "v26.3.27" {
+		t.Errorf("fallback = (%q, %v)", v, err)
+	}
+}

@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/Aspeternity/litenode/internal/app"
-	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/ui"
@@ -39,7 +38,6 @@ func main() {
 		Version:    version,
 		Executable: exe,
 		LockPath:   state.DefaultLockPath,
-		Kinds:      change.Registry{},
 		Session:    session,
 	}))
 }

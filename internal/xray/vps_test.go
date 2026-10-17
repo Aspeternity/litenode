@@ -73,14 +73,19 @@ func TestVPS(t *testing.T) {
 	latest, prev := stableVersions(t, real)
 	t.Logf("latest stable %s, previous stable %s", latest, prev)
 
-	step(t, "install latest", func() error {
+	step(t, "install default version", func() error {
+		want, err := in.DefaultVersion(ctx)
+		if err != nil {
+			return err
+		}
 		v, err := in.Install(ctx, "")
 		if err != nil {
 			return err
 		}
-		if v != latest {
-			return fmt.Errorf("installed %s, want %s", v, latest)
+		if v != want {
+			return fmt.Errorf("installed %s, want %s", v, want)
 		}
+		t.Logf("    default version %s (D-054)", v)
 		if _, err := user.Lookup(User); err != nil {
 			return fmt.Errorf("user %s missing: %w", User, err)
 		}
