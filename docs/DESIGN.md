@@ -83,7 +83,8 @@
   - 节点端口：`ufw allow proto <tcp|udp> to any port <端口> comment 'litenode:node:<ID>'`，只为启用的节点添加。
   - 转发规则：转发在 prerouting 先做 DNAT，经过 ufw 的 forward 链时目的地址已经是落地机，所以写 `ufw route allow proto <协议> to <目标 IP> port <目标端口> comment 'litenode:forward:<ID>'`（`tcp+udp` 两条），只为启用的规则添加。转发流量不需要 `ufw allow` 入站规则。目标是域名时用 `resolved_ipv4` / `resolved_ipv6`（D-046，两种地址分别生成规则），重新解析后 IP 变化要同步。
   - SSH 端口：`ufw allow proto tcp to any port <端口> comment 'litenode:ssh'`，见第 13 节"修改端口"。
-- **不接管用户已有的规则**：ufw 判断规则是否重复时不看备注，对已存在的规则再执行带备注的 `ufw allow` 会把用户规则的备注改掉（"Rule updated"），之后 LiteNode 删除节点时就会误删用户的规则。因此添加前先检查是否已有等价的、不带 `litenode:` 标记的规则：有则不添加、不打标记，以后也不删除。（ufw 的实际行为在 M1-07a 中于测试 VPS 上实测确认。）
+- **不接管用户已有的规则**：ufw 判断规则是否重复时不看备注，对已存在的规则再执行带备注的 `ufw allow` 会把用户规则的备注改掉（"Rule updated"），之后 LiteNode 删除节点时就会误删用户的规则。因此添加前先检查是否已有等价的、不带 `litenode:` 标记的规则：有则不添加、不打标记，以后也不删除。
+- **实测确认的 ufw 行为**（ufw 0.36.2，M1-07a）：上一条的改写确实会发生；规则读取 `/etc/ufw/user.rules` 和 `user6.rules` 中的 `### tuple ###` 行（备注为十六进制，`allow tcp 443` 与 `allow proto tcp to any port 443` 是同一条）；按内容删除时不需要带备注，IPv4 和 IPv6 一起删；删除不存在的规则只提示不报错；ufw 停用时也能增删规则。删除命令为 `ufw delete allow proto <p> to any port <n>`、`ufw route delete allow proto <p> to <IP> port <n>`。
 - **整体对账，不逐条增删**：每次同步都根据状态文件计算"应存在的带标记规则"，与 ufw 中实际存在的带标记规则比较，多删少补。这样：
   - 限时确认超时回滚（在另一个进程中恢复文件和状态）后，对应配置类型的应用步骤再对账一次，即可删掉回滚前加的规则，不需要额外记录"刚才加了哪条"；
   - 用户在添加节点之后才启用 ufw，也能在下次对账时补齐；
@@ -187,7 +188,9 @@ internal/
   share/               分享链接、终端二维码、公网地址检测
   reality/             目标网站检测与扫描
   nft/                 nftables 规则生成（防火墙和端口转发共用一张表）
-  firewall/            防火墙功能
+  ports/               端口占用检查（/proc/net + 状态文件）
+  ufw/                 与用户自己的 ufw 同步（带 litenode: 标记的规则）
+  firewall/            防火墙功能；检测其他软件的入站拦截规则
   forward/             端口转发功能
   ssh/                 sshd 配置、公钥、确认回滚
   sysopt/              BBR、swap、IP 优先级、DNS、时区
