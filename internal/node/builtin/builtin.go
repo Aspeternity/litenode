@@ -36,6 +36,7 @@ func Registry() (*node.Registry, error) {
 				Label:       "VLESS + TCP + Reality (Vision)",
 				Combo:       node.Combo{Protocol: "vless", Transport: "tcp", Security: "reality", Flow: node.FlowVision},
 				Recommended: true,
+				Build:       buildVLESSRealityVision,
 			})
 		},
 	}
