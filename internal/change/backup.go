@@ -20,13 +20,15 @@ const (
 	timeLayout = "20060102-150405.000"
 )
 
-// Backup is one backup directory: <BackupDir>/<kind>-<time>/. It holds the
-// original files under their base names, state.json, and manifest.json.
-// The manifest is written last, so a directory without one is incomplete
-// and ignored. Users can restore a single file by copying it back.
+// Backup is one backup directory: <BackupDir>/<kind>[+<kind>...]-<time>/.
+// It holds the original files under their base names, state.json, and
+// manifest.json. The manifest is written last, so a directory without one
+// is incomplete and ignored. Users can restore a single file by copying it
+// back.
 type Backup struct {
-	ID           string        `json:"id"`
-	Kind         string        `json:"kind"`
+	ID string `json:"id"`
+	// Kinds are the kinds of the change, in apply order.
+	Kinds        []string      `json:"kinds"`
 	Files        []BackupEntry `json:"files"`
 	StateExisted bool          `json:"state_existed"`
 	Dir          string        `json:"-"`
@@ -34,6 +36,7 @@ type Backup struct {
 
 // BackupEntry records one managed file as it was before the change.
 type BackupEntry struct {
+	Kind    string      `json:"kind"`
 	Path    string      `json:"path"`
 	Name    string      `json:"name,omitempty"`
 	Mode    fs.FileMode `json:"mode"`
@@ -41,9 +44,35 @@ type BackupEntry struct {
 	Existed bool        `json:"existed"`
 }
 
+// backupID names a backup by its kinds and time, e.g.
+// "xray+ufw-20261018-120000.000".
+func backupID(kinds []string, t string) string {
+	return strings.Join(kinds, "+") + "-" + t
+}
+
+// parseBackupID splits a backup ID into its kinds and time. ok is false
+// for names that are not change backups (e.g. state migration backups).
+func parseBackupID(id string) (kinds []string, t string, ok bool) {
+	head, t, found := strings.Cut(id, "-")
+	if !found || t == "" || strings.HasSuffix(id, ".json") {
+		return nil, "", false
+	}
+	kinds = strings.Split(head, "+")
+	for _, k := range kinds {
+		if !kindName.MatchString(k) {
+			return nil, "", false
+		}
+	}
+	return kinds, t, true
+}
+
 func (m *Manager) backup(c Change) (*Backup, error) {
-	id := c.Kind.Name + "-" + m.Now().Format(timeLayout)
-	b := &Backup{ID: id, Kind: c.Kind.Name, Dir: filepath.Join(m.BackupDir, id)}
+	var kinds []string
+	for _, p := range c.Parts {
+		kinds = append(kinds, p.Kind.Name)
+	}
+	id := backupID(kinds, m.Now().Format(timeLayout))
+	b := &Backup{ID: id, Kinds: kinds, Dir: filepath.Join(m.BackupDir, id)}
 	// Backups hold copies of private keys: directories 0700, files 0600,
 	// whatever the original file's mode was.
 	if err := system.EnsureDir(m.Runner, m.BackupDir, state.PrivateDirMode); err != nil {
@@ -54,21 +83,23 @@ func (m *Manager) backup(c Change) (*Backup, error) {
 	}
 
 	used := map[string]bool{manifestName: true, stateName: true}
-	for _, f := range c.Files {
-		e := BackupEntry{Path: f.Path, Mode: f.Mode, Group: f.Group}
-		data, err := m.Runner.ReadFile(f.Path)
-		switch {
-		case errors.Is(err, fs.ErrNotExist):
-		case err != nil:
-			return nil, fmt.Errorf("read %s: %w", f.Path, err)
-		default:
-			e.Existed = true
-			e.Name = uniqueName(filepath.Base(f.Path), used)
-			if err := m.Runner.WriteFile(filepath.Join(b.Dir, e.Name), data, state.PrivateFileMode); err != nil {
-				return nil, fmt.Errorf("back up %s: %w", f.Path, err)
+	for _, p := range c.Parts {
+		for _, f := range p.Files {
+			e := BackupEntry{Kind: p.Kind.Name, Path: f.Path, Mode: f.Mode, Group: f.Group}
+			data, err := m.Runner.ReadFile(f.Path)
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+			case err != nil:
+				return nil, fmt.Errorf("read %s: %w", f.Path, err)
+			default:
+				e.Existed = true
+				e.Name = uniqueName(filepath.Base(f.Path), used)
+				if err := m.Runner.WriteFile(filepath.Join(b.Dir, e.Name), data, state.PrivateFileMode); err != nil {
+					return nil, fmt.Errorf("back up %s: %w", f.Path, err)
+				}
 			}
+			b.Files = append(b.Files, e)
 		}
-		b.Files = append(b.Files, e)
 	}
 
 	data, err := m.Runner.ReadFile(m.Store.Path)
@@ -117,8 +148,29 @@ func (m *Manager) LoadBackup(id string) (*Backup, error) {
 	return &b, nil
 }
 
-// Backups returns the IDs of the backups of a kind, oldest first.
+// Backups returns the IDs of the backups that include kind, oldest first.
 func (m *Manager) Backups(kind string) ([]string, error) {
+	all, err := m.allBackups()
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, b := range all {
+		if slices.Contains(b.kinds, kind) {
+			ids = append(ids, b.id)
+		}
+	}
+	return ids, nil
+}
+
+type backupName struct {
+	id    string
+	kinds []string
+	time  string
+}
+
+// allBackups lists change backups, oldest first.
+func (m *Manager) allBackups() ([]backupName, error) {
 	names, err := m.Runner.ReadDir(m.BackupDir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -126,24 +178,38 @@ func (m *Manager) Backups(kind string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list backups: %w", err)
 	}
-	var ids []string
+	var out []backupName
 	for _, n := range names {
-		if strings.HasPrefix(n, kind+"-") {
-			ids = append(ids, n)
+		if kinds, t, ok := parseBackupID(n); ok {
+			out = append(out, backupName{id: n, kinds: kinds, time: t})
 		}
 	}
-	slices.Sort(ids)
-	return ids, nil
+	slices.SortStableFunc(out, func(a, b backupName) int { return strings.Compare(a.time, b.time) })
+	return out, nil
 }
 
-// prune removes the oldest backups of a kind beyond Keep. Failures are
+// prune keeps, for every kind, its Keep newest backups. A backup that
+// covers several kinds counts once for each, and is removed only when it
+// is outside the newest Keep of every kind it covers (D-040). Failures are
 // ignored: an extra backup is harmless.
-func (m *Manager) prune(kind string) {
-	ids, err := m.Backups(kind)
-	if err != nil || len(ids) <= m.Keep {
+func (m *Manager) prune() {
+	all, err := m.allBackups()
+	if err != nil {
 		return
 	}
-	for _, id := range ids[:len(ids)-m.Keep] {
-		m.Runner.RemoveAll(filepath.Join(m.BackupDir, id))
+	keep := map[string]bool{}
+	count := map[string]int{}
+	for i := len(all) - 1; i >= 0; i-- {
+		for _, k := range all[i].kinds {
+			if count[k] < m.Keep {
+				count[k]++
+				keep[all[i].id] = true
+			}
+		}
+	}
+	for _, b := range all {
+		if !keep[b.id] {
+			m.Runner.RemoveAll(filepath.Join(m.BackupDir, b.id))
+		}
 	}
 }

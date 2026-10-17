@@ -15,6 +15,8 @@ func newConfirmer(fx *fixture) *Confirmer {
 	return &Confirmer{Manager: fx.m, Executable: "/usr/local/bin/litenode", PendingDir: "/run/litenode", Seconds: 60}
 }
 
+const sshdConf = "/etc/ssh/sshd_config.d/00-litenode.conf"
+
 func sshdKind() *Kind {
 	return &Kind{
 		Name:            "sshd",
@@ -30,33 +32,39 @@ func sshdKind() *Kind {
 	}
 }
 
-const sshdConf = "/etc/ssh/sshd_config.d/00-litenode.conf"
-
-func sshdChange() Change {
-	return Change{Kind: sshdKind(), Files: []File{{Path: sshdConf, Data: []byte("Port 2222\n"), Mode: 0o644}}}
+// sshPortChange is "change the SSH port": sshd + nft.
+func sshPortChange() Change {
+	return Change{Parts: []Part{
+		{Kind: sshdKind(), Files: []File{{Path: sshdConf, Data: []byte("Port 2222\n"), Mode: 0o644}}},
+		nftPart("rules-2222"),
+	}}
 }
+
+func registry() Registry {
+	return Registry{"sshd": sshdKind(), "nft": nftKind()}
+}
+
+const armCmd = "systemd-run --unit=litenode-rollback --on-active=60 --timer-property=AccuracySec=1s " +
+	"/usr/local/bin/litenode internal rollback"
 
 func TestConfirmArmsBeforeApplying(t *testing.T) {
 	fx := newFixture(t)
 	fx.f.Files[sshdConf] = []byte("Port 22\n")
-	c := newConfirmer(fx)
-
-	id, err := c.Apply(context.Background(), sshdChange())
+	id, err := newConfirmer(fx).Apply(context.Background(), sshPortChange())
 	if err != nil {
 		t.Fatal(err)
 	}
-	execs := fx.f.Execs()
 	want := []string{
-		"systemctl stop litenode-rollback-sshd.timer",
-		"systemctl reset-failed litenode-rollback-sshd.service",
-		"systemd-run --unit=litenode-rollback-sshd --on-active=60 --timer-property=AccuracySec=1s " +
-			"/usr/local/bin/litenode internal rollback sshd",
+		"systemctl stop litenode-rollback.timer",
+		"systemctl reset-failed litenode-rollback.service",
+		armCmd,
 		"systemctl reload ssh.service",
+		"nft -f /etc/litenode/nftables.nft",
 	}
-	if !slices.Equal(execs, want) {
-		t.Errorf("execs =\n%s\nwant\n%s", strings.Join(execs, "\n"), strings.Join(want, "\n"))
+	if got := fx.f.Execs(); !slices.Equal(got, want) {
+		t.Errorf("execs =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if got := strings.TrimSpace(string(fx.f.Files["/run/litenode/sshd.pending"])); got != id {
+	if got := strings.TrimSpace(string(fx.f.Files["/run/litenode/pending"])); got != id {
 		t.Errorf("pending marker = %q, want backup id %q", got, id)
 	}
 }
@@ -64,70 +72,85 @@ func TestConfirmArmsBeforeApplying(t *testing.T) {
 func TestConfirmDisarmCancelsTimer(t *testing.T) {
 	fx := newFixture(t)
 	c := newConfirmer(fx)
-	if _, err := c.Apply(context.Background(), sshdChange()); err != nil {
+	if _, err := c.Apply(context.Background(), sshPortChange()); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Disarm(context.Background(), "sshd"); err != nil {
+	if err := c.Disarm(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	execs := fx.f.Execs()
-	if last := execs[len(execs)-1]; last != "systemctl stop litenode-rollback-sshd.timer" {
+	if last := execs[len(execs)-1]; last != "systemctl stop litenode-rollback.timer" {
 		t.Errorf("last exec = %q, want timer stop", last)
 	}
-	if _, ok := fx.f.Files["/run/litenode/sshd.pending"]; ok {
+	if _, ok := fx.f.Files["/run/litenode/pending"]; ok {
 		t.Error("pending marker left after confirmation")
-	}
-	if string(fx.f.Files[sshdConf]) != "Port 2222\n" {
-		t.Error("confirmed change was reverted")
 	}
 
 	// A timer firing after confirmation must do nothing.
-	done, err := c.Rollback(context.Background(), Registry{"sshd": sshdKind()}, "sshd")
+	done, err := c.Rollback(context.Background(), registry())
 	if err != nil || done {
 		t.Errorf("late rollback = (%v, %v), want (false, nil)", done, err)
 	}
-	if string(fx.f.Files[sshdConf]) != "Port 2222\n" {
+	if string(fx.f.Files[sshdConf]) != "Port 2222\n" || string(fx.f.Files[nftPath]) != "rules-2222" {
 		t.Error("late rollback reverted a confirmed change")
 	}
 }
 
-func TestConfirmTimeoutRollsBack(t *testing.T) {
+func TestConfirmTimeoutRollsBackAllKinds(t *testing.T) {
 	fx := newFixture(t)
 	fx.f.Files[sshdConf] = []byte("Port 22\n")
 	c := newConfirmer(fx)
-	if _, err := c.Apply(context.Background(), sshdChange()); err != nil {
+	if _, err := c.Apply(context.Background(), sshPortChange()); err != nil {
 		t.Fatal(err)
 	}
 
-	done, err := c.Rollback(context.Background(), Registry{"sshd": sshdKind()}, "sshd")
+	done, err := c.Rollback(context.Background(), registry())
 	if err != nil || !done {
 		t.Fatalf("rollback = (%v, %v), want (true, nil)", done, err)
 	}
-	if string(fx.f.Files[sshdConf]) != "Port 22\n" {
-		t.Errorf("config = %q, want restored", fx.f.Files[sshdConf])
+	if string(fx.f.Files[sshdConf]) != "Port 22\n" || string(fx.f.Files[nftPath]) != "old-rules" {
+		t.Errorf("not every kind restored: sshd %q nft %q", fx.f.Files[sshdConf], fx.f.Files[nftPath])
 	}
-	if last := fx.f.Execs()[len(fx.f.Execs())-1]; last != "systemctl reload ssh.service" {
-		t.Errorf("old config not reapplied, last exec %q", last)
+	execs := fx.f.Execs()
+	tail := execs[len(execs)-2:]
+	if want := []string{"systemctl reload ssh.service", "nft -f /etc/litenode/nftables.nft"}; !slices.Equal(tail, want) {
+		t.Errorf("old configuration not reapplied in order: %q", tail)
 	}
 
 	// The user confirms too late.
-	if err := c.Disarm(context.Background(), "sshd"); !errors.Is(err, ErrRolledBack) {
+	if err := c.Disarm(context.Background()); !errors.Is(err, ErrRolledBack) {
 		t.Errorf("late confirm err = %v, want ErrRolledBack", err)
+	}
+}
+
+func TestRollbackUnknownKindStillRestoresFiles(t *testing.T) {
+	fx := newFixture(t)
+	fx.f.Files[sshdConf] = []byte("Port 22\n")
+	c := newConfirmer(fx)
+	if _, err := c.Apply(context.Background(), sshPortChange()); err != nil {
+		t.Fatal(err)
+	}
+	done, err := c.Rollback(context.Background(), Registry{"sshd": sshdKind()}) // nft not registered
+	if !done || err == nil || !strings.Contains(err.Error(), `unknown kind "nft"`) {
+		t.Errorf("rollback = (%v, %v)", done, err)
+	}
+	if string(fx.f.Files[sshdConf]) != "Port 22\n" || string(fx.f.Files[nftPath]) != "old-rules" {
+		t.Error("files not restored")
 	}
 }
 
 func TestConfirmFailedApplyCancelsTimer(t *testing.T) {
 	fx := newFixture(t)
-	fx.f.Respond(systemtest.Response{Result: system.Result{ExitCode: 1}}, "systemctl", "reload", "ssh.service")
+	fx.f.Respond(systemtest.Response{Result: system.Result{ExitCode: 1}}, "nft", "-f", nftPath)
 	c := newConfirmer(fx)
-	if _, err := c.Apply(context.Background(), sshdChange()); err == nil {
+	if _, err := c.Apply(context.Background(), sshPortChange()); err == nil {
 		t.Fatal("want error")
 	}
-	if _, ok := fx.f.Files["/run/litenode/sshd.pending"]; ok {
+	if _, ok := fx.f.Files["/run/litenode/pending"]; ok {
 		t.Error("pending marker left after failed change")
 	}
 	execs := fx.f.Execs()
-	if last := execs[len(execs)-1]; last != "systemctl stop litenode-rollback-sshd.timer" {
+	if last := execs[len(execs)-1]; last != "systemctl stop litenode-rollback.timer" {
 		t.Errorf("timer not cancelled, last exec %q", last)
 	}
 }
@@ -136,10 +159,9 @@ func TestConfirmArmFailureRestores(t *testing.T) {
 	fx := newFixture(t)
 	fx.f.Files[sshdConf] = []byte("Port 22\n")
 	fx.f.Respond(systemtest.Response{Err: errors.New("systemd-run missing")},
-		"systemd-run", "--unit=litenode-rollback-sshd", "--on-active=60", "--timer-property=AccuracySec=1s",
-		"/usr/local/bin/litenode", "internal", "rollback", "sshd")
-	c := newConfirmer(fx)
-	_, err := c.Apply(context.Background(), sshdChange())
+		"systemd-run", "--unit=litenode-rollback", "--on-active=60", "--timer-property=AccuracySec=1s",
+		"/usr/local/bin/litenode", "internal", "rollback")
+	_, err := newConfirmer(fx).Apply(context.Background(), sshPortChange())
 	var ce *Error
 	if !errors.As(err, &ce) || ce.Stage != StageConfirm {
 		t.Fatalf("err = %v, want StageConfirm", err)
@@ -147,21 +169,14 @@ func TestConfirmArmFailureRestores(t *testing.T) {
 	if string(fx.f.Files[sshdConf]) != "Port 22\n" {
 		t.Error("config not restored when the rollback could not be scheduled")
 	}
-	if _, ok := fx.f.Files["/run/litenode/sshd.pending"]; ok {
+	if _, ok := fx.f.Files["/run/litenode/pending"]; ok {
 		t.Error("pending marker left when the rollback could not be scheduled")
-	}
-}
-
-func TestRollbackUnknownKind(t *testing.T) {
-	fx := newFixture(t)
-	if _, err := newConfirmer(fx).Rollback(context.Background(), Registry{}, "nope"); err == nil {
-		t.Error("want error for unknown kind")
 	}
 }
 
 func TestRegistryRejectsBadNames(t *testing.T) {
 	reg := Registry{}
-	for _, name := range []string{"", "ssh-d", "SSHD", "ssh1"} {
+	for _, name := range []string{"", "ssh-d", "SSHD", "ssh1", "a+b"} {
 		if err := reg.Register(&Kind{Name: name}); err == nil {
 			t.Errorf("Register(%q) succeeded", name)
 		}

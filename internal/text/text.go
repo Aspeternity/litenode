@@ -96,9 +96,7 @@ func StateLoadFailed(err error) string {
 }
 
 // RollbackDone is printed by the rollback subcommand after a timeout.
-func RollbackDone(kind string) string {
-	return fmt.Sprintf("未在限时内确认，已恢复修改前的 %s 配置。", kind)
-}
+const RollbackDone = "未在限时内确认，已恢复修改前的配置。"
 
 // RollbackNotNeeded is printed when the change was confirmed in time.
 const RollbackNotNeeded = "修改已确认，无需恢复。"

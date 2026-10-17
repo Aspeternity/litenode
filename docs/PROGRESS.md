@@ -5,12 +5,12 @@
 ## 当前状态
 
 - **阶段**：M1 节点管理。
-- **当前任务**：无（M0-11 已完成）。
-- **下一个任务**：M1-00 多类配置的整体变更，然后 M1-03 Xray 配置生成。
+- **当前任务**：无（M1-00 已完成）。
+- **下一个任务**：M1-03 Xray 配置生成。
 
 ## 下次会话从这里开始
 
-1. 按顺序做 M1-00（`refactor/M1-00-multi-kind-change`）→ M1-03（`feat/M1-03-xray-config`），每个任务一个分支（D-036）。release.yml 的拆分（build → 两架构 smoke → publish）在下一次发布时验证。P-009（回落限速档位）在做到 M1-07 修改节点菜单时确认。
+1. 做 M1-03（`feat/M1-03-xray-config`，D-036）。release.yml 的拆分（build → 两架构 smoke → publish）在下一次发布时验证。P-009（回落限速档位）在做到 M1-07 修改节点菜单时确认。
    - 发布：GitHub 上有正式 Release `v0.0.1`（开发中测试版，`releases/latest` 指向它）。新版本发布时用 `git tag -a`，推送标签前先问用户。M6-02 更新脚本可复用 install.sh 的下载和校验方式（资产名 `litenode-linux-<架构>`，`sha256sums.txt` 为 `sha256sum` 标准格式）。
 2. 提议条目中 P-001、P-002、P-006、P-008、P-010 已确认；其余 P-003 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
@@ -33,7 +33,7 @@
 - 菜单渲染测试用 golden file（`internal/ui/testdata/main_menu.golden`，与 DESIGN 第 8 节一致）。
 - 状态文件：`state.Store` 的 `Load` / `Save` 经过 Runner；新 ID 用 `State.AllocID()`；迁移函数登记在 `internal/state/migrate.go` 的 `migrations`（目前为空）。功能任务新增字段时同步更新 DESIGN 第 5 节的结构示意。
 - 迁移前的备份写在 `/etc/litenode/backups/state-v<N>-<时间>.json`，不参与按类型的数量清理。
-- 配置变更：`change.Manager.Apply(ctx, change.Change{Kind, Files, State})`；需要限时确认的用 `change.Confirmer.Apply`，然后询问用户，确认时调 `Disarm`（返回 `change.ErrRolledBack` 表示已超时回滚，菜单需重新加载状态）。各功能的 `change.Kind` 在对应任务中定义，并在 `cmd/litenode/main.go` 的 `Kinds` 注册表中登记（目前为空）。
+- 配置变更（D-040，M1-00）：`change.Manager.Apply(ctx, change.Change{Parts: []change.Part{{Kind, Files}, ...}, State})`，一次变更可包含多类配置，按 Parts 顺序校验和应用，失败整体恢复；没有文件的类型（如 ufw 对账）只给 Kind。需要限时确认的用 `change.Confirmer.Apply`，然后询问用户，确认时调 `Disarm()`（返回 `change.ErrRolledBack` 表示已超时回滚，菜单需重新加载状态）。各功能的 `change.Kind` 在对应任务中定义，并在 `cmd/litenode/main.go` 的 `Kinds` 注册表中登记（目前为空，所以测试机上 `internal rollback` 会报告 unknown kind，属预期）。
 - Runner 新增 `ReadDir`（只读）、`RemoveAll`、`Rename`（修改操作）。`Rename` 对不存在的源文件返回 `fs.ErrNotExist`，用于原子认领。
 - 子命令路由在 `app.Run`（`internal/app/app.go`）；`internal` 子命令在 `runInternal` 中添加（M4-02 加 `resolve`）。Runner 在 `runMenu` 中按是否 dry-run 选择，Store、Confirmer 由 app 根据所选 Runner 构造。
 - Xray：`xray.Installer`（`Install` / `Update` / `Uninstall` / `Installed` / `Latest`），路径常量在 `internal/xray/release.go`。安装不启动服务；M1-07 负责"有启用节点时 enable + start，没有时 stop + disable"。
@@ -58,4 +58,4 @@
 ## 最近一次会话
 
 - **日期**：2026-10-18
-- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）、M0-06（菜单细节见 D-030；在测试 VPS 上验证了菜单显示、非法输入、颜色、SIGINT/SIGHUP 退出）、M0-07（子命令细节见 D-031）、M0-08（D-032；CI 通过，v0.0.1 已发布，校验值在本机和测试机上核对一致）、M0-09（D-033；用户在测试机上确认一行命令安装、litenode / lnode 打开菜单、终端中安装后自动进入菜单）。M0 全部完成。M1-01 已完成（确认 P-001、P-002；D-034 权限规则、D-035；集成测试结果经用户确认）；改用分支开发（D-036）；端口冲突与 ufw 同步的设计变更（D-037、D-038）；M0-10 移除共存检测；M1-02 节点模型（D-039）；集成测试发现并修复：查询最新版本时响应大小上限过小、校验用临时文件名导致 Xray 无法识别格式、回退时被 systemd 启动频率限制拦住、恢复 xray.json 时丢失属组。
+- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）、M0-06（菜单细节见 D-030；在测试 VPS 上验证了菜单显示、非法输入、颜色、SIGINT/SIGHUP 退出）、M0-07（子命令细节见 D-031）、M0-08（D-032；CI 通过，v0.0.1 已发布，校验值在本机和测试机上核对一致）、M0-09（D-033；用户在测试机上确认一行命令安装、litenode / lnode 打开菜单、终端中安装后自动进入菜单）。M0 全部完成。M1-01 已完成（确认 P-001、P-002；D-034 权限规则、D-035；集成测试结果经用户确认）；改用分支开发（D-036）；端口冲突与 ufw 同步的设计变更（D-037、D-038）；M0-10 移除共存检测；M1-02 节点模型（D-039）；方案审查（D-040 ~ D-048）；M0-11 CI arm64；M1-00 多类整体变更；集成测试发现并修复：查询最新版本时响应大小上限过小、校验用临时文件名导致 Xray 无法识别格式、回退时被 systemd 启动频率限制拦住、恢复 xray.json 时丢失属组。
