@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
+	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
@@ -23,11 +25,25 @@ type Env struct {
 	LockPath string
 	// Store loads and saves the state file.
 	Store *state.Store
+	// Args are the command-line arguments without the program name.
+	Args []string
+	// Confirmer schedules and performs confirm-or-rollback.
+	Confirmer *change.Confirmer
+	// Kinds lists the configuration kinds the rollback subcommand handles.
+	Kinds change.Registry
 }
 
 // Run checks the environment and starts LiteNode. It returns the process
 // exit code.
 func Run(ctx context.Context, env Env) int {
+	// Minimal routing until the subcommand framework (M0-07).
+	if len(env.Args) > 0 {
+		if len(env.Args) == 3 && env.Args[0] == "internal" && env.Args[1] == "rollback" {
+			return rollback(ctx, env, env.Args[2])
+		}
+		fmt.Fprintln(env.Stderr, text.UnknownCommand(strings.Join(env.Args, " ")))
+		return 2
+	}
 	info, code := startupCheck(ctx, env)
 	if code != 0 {
 		return code
@@ -94,4 +110,26 @@ func loadState(env Env) (*state.State, int) {
 		fmt.Fprintln(env.Stderr, text.StateLoadFailed(err))
 	}
 	return nil, 1
+}
+
+// rollback is run by the systemd timer when a change was not confirmed in
+// time. It deliberately ignores the instance lock: the menu that made the
+// change is usually still running (or hung after SSH dropped), and the
+// rollback must happen regardless.
+func rollback(ctx context.Context, env Env, kind string) int {
+	if env.Euid != 0 {
+		fmt.Fprintln(env.Stderr, text.NotRoot)
+		return 1
+	}
+	done, err := env.Confirmer.Rollback(ctx, env.Kinds, kind)
+	switch {
+	case err != nil:
+		fmt.Fprintln(env.Stderr, text.RollbackFailed(err))
+		return 1
+	case done:
+		fmt.Fprintln(env.Stdout, text.RollbackDone(kind))
+	default:
+		fmt.Fprintln(env.Stdout, text.RollbackNotNeeded)
+	}
+	return 0
 }

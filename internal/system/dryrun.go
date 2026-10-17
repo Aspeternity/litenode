@@ -35,6 +35,20 @@ func (d *DryRun) ReadFile(path string) ([]byte, error) {
 	return d.Inner.ReadFile(path)
 }
 
+func (d *DryRun) ReadDir(path string) ([]string, error) {
+	return d.Inner.ReadDir(path)
+}
+
+func (d *DryRun) RemoveAll(path string) error {
+	fmt.Fprintln(d.Out, text.DryRunRemove(path))
+	return nil
+}
+
+func (d *DryRun) Rename(oldPath, newPath string) error {
+	fmt.Fprintln(d.Out, text.DryRunRename(oldPath, newPath))
+	return nil
+}
+
 func (d *DryRun) WriteFile(path string, data []byte, perm fs.FileMode) error {
 	fmt.Fprintln(d.Out, text.DryRunWriteFile(path, len(data), fmt.Sprintf("%04o", perm)))
 	return nil

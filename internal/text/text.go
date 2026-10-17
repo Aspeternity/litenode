@@ -23,6 +23,11 @@ func DryRunRemove(path string) string {
 	return "[dry-run] 删除文件：" + path
 }
 
+// DryRunRename describes a rename that dry-run mode skipped.
+func DryRunRename(oldPath, newPath string) string {
+	return fmt.Sprintf("[dry-run] 重命名：%s → %s", oldPath, newPath)
+}
+
 // DryRunMkdir describes a directory creation that dry-run mode skipped.
 func DryRunMkdir(path, mode string) string {
 	return fmt.Sprintf("[dry-run] 创建目录：%s（权限 %s）", path, mode)
@@ -98,4 +103,22 @@ func StateTooNew(path string) string {
 // StateLoadFailed is shown for other errors while loading the state file.
 func StateLoadFailed(err error) string {
 	return fmt.Sprintf("无法读取状态文件：%v", err)
+}
+
+// RollbackDone is printed by the rollback subcommand after a timeout.
+func RollbackDone(kind string) string {
+	return fmt.Sprintf("未在限时内确认，已恢复修改前的 %s 配置。", kind)
+}
+
+// RollbackNotNeeded is printed when the change was confirmed in time.
+const RollbackNotNeeded = "修改已确认，无需恢复。"
+
+// RollbackFailed is printed when the rollback itself fails.
+func RollbackFailed(err error) string {
+	return fmt.Sprintf("自动恢复失败：%v\n请通过 VNC 控制台登录，从 /etc/litenode/backups/ 中手动恢复。", err)
+}
+
+// UnknownCommand is shown for an unrecognized command line.
+func UnknownCommand(args string) string {
+	return "未知命令：" + args
 }
