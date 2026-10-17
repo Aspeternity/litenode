@@ -1,0 +1,10 @@
+# 所有文本文件统一使用 LF 换行，防止在 Windows 上编辑后脚本在 Linux 上无法运行
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.go   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.nft  text eol=lf
