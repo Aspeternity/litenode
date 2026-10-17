@@ -32,27 +32,6 @@ func SystemLine(info system.Info) string {
 	return strings.Join(parts, " | ")
 }
 
-// ConflictLine renders the warning about coexisting software, or "" if none.
-func ConflictLine(conflicts []string) string {
-	if len(conflicts) == 0 {
-		return ""
-	}
-	names := make([]string, 0, len(conflicts))
-	for _, c := range conflicts {
-		switch c {
-		case system.ConflictXUI:
-			names = append(names, text.ConflictXUI)
-		case system.ConflictXray:
-			names = append(names, text.ConflictXray)
-		case system.ConflictDocker:
-			names = append(names, text.ConflictDocker)
-		default:
-			names = append(names, c)
-		}
-	}
-	return text.ConflictWarning(names)
-}
-
 func osName(o system.OSRelease) string {
 	if n := o.ShortName(); n != "" {
 		return n
@@ -97,6 +76,9 @@ type MainStatus struct {
 	SSH      string
 	Firewall string
 	System   system.Info
+	// Warnings are shown below the system line, e.g. when the LiteNode
+	// firewall and ufw are both active (DESIGN section 2).
+	Warnings []string
 }
 
 // MainStatusLines renders the main menu status area.
@@ -118,8 +100,8 @@ func MainStatusLines(st MainStatus, c Colors) []string {
 		PadRight(text.StatusSSH(ssh), statusCol3) + text.StatusFirewall(fw),
 		SystemLine(st.System),
 	}
-	if w := ConflictLine(st.System.Conflicts); w != "" {
-		lines = append(lines, c.Warn(w))
+	for _, w := range st.Warnings {
+		lines = append(lines, c.Warn(text.Warning(w)))
 	}
 	return lines
 }

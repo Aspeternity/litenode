@@ -3,7 +3,7 @@ package system_test
 import (
 	"context"
 	"errors"
-	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/system"
@@ -93,22 +93,30 @@ func TestParseMemTotalMB(t *testing.T) {
 	}
 }
 
-func TestDetectConflicts(t *testing.T) {
-	args := []string{"list-unit-files", "--no-legend", "--plain", "x-ui.service", "xray.service", "docker.service"}
-
+func TestDockerInstalled(t *testing.T) {
+	args := []string{"list-unit-files", "--no-legend", "--plain", "docker.service"}
 	f := systemtest.New()
-	f.Respond(systemtest.Response{Result: system.Result{
-		Stdout: "docker.service enabled enabled\nx-ui.service enabled enabled\n",
-	}}, "systemctl", args...)
-	want := []string{system.ConflictXUI, system.ConflictDocker}
-	if got := system.DetectConflicts(context.Background(), f); !slices.Equal(got, want) {
-		t.Errorf("got %q, want %q", got, want)
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "docker.service enabled enabled\n"}}, "systemctl", args...)
+	if !system.DockerInstalled(context.Background(), f) {
+		t.Error("docker.service listed: want true")
 	}
-
 	none := systemtest.New()
 	none.Respond(systemtest.Response{Result: system.Result{ExitCode: 1}}, "systemctl", args...)
-	if got := system.DetectConflicts(context.Background(), none); len(got) != 0 {
-		t.Errorf("got %q, want none", got)
+	if system.DockerInstalled(context.Background(), none) {
+		t.Error("no unit: want false")
+	}
+}
+
+func TestDetectDoesNotProbeOtherSoftware(t *testing.T) {
+	f := systemtest.New()
+	f.Files["/etc/os-release"] = []byte(debian12)
+	if _, err := system.Detect(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range f.Calls() {
+		if strings.Contains(c.Command, "x-ui") || strings.Contains(c.Command, "xray.service") || strings.Contains(c.Command, "list-unit-files") {
+			t.Errorf("detection probes software by name (D-037): %s", c.Command)
+		}
 	}
 }
 
