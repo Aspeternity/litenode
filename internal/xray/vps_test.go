@@ -4,7 +4,7 @@
 // Xray on the real system, so it is excluded from normal builds:
 //
 //	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o xray-vps.test ./internal/xray
-//	./xray-vps.test -test.v -test.run TestVPS -test.timeout 15m   (as root, on the test VPS)
+//	./xray-vps.test -test.v -test.run 'TestVPS' -test.timeout 15m   (as root, on the test VPS)
 package xray
 
 import (
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/node/builtin"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 )
@@ -256,4 +257,64 @@ func stableVersions(t *testing.T, f Fetcher) (latest, prev string) {
 		t.Fatalf("need two stable releases, got %v", stable)
 	}
 	return stable[0], stable[1]
+}
+
+// TestVPSGeneratedConfig checks that GenerateConfig's output passes
+// "xray run -test" and runs as a service (M1-03).
+func TestVPSGeneratedConfig(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("run as root on the test VPS")
+	}
+	ctx := context.Background()
+	r := system.NewReal(system.NewOpLog(system.DefaultLogPath))
+	in := NewInstaller(r, NewHTTPFetcher(), runtime.GOARCH)
+	_, statErr := os.Stat(state.ConfigDir)
+	createdConfigDir := errors.Is(statErr, os.ErrNotExist)
+	in.Uninstall(ctx)
+	t.Cleanup(func() {
+		in.Uninstall(ctx)
+		if createdConfigDir {
+			os.RemoveAll(state.ConfigDir)
+		}
+	})
+
+	step(t, "install latest", func() error {
+		_, err := in.Install(ctx, "")
+		return err
+	})
+	reg, err := builtin.Registry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := GenerateConfig(reg, goldenNodes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := change.NewManager(r, state.NewStore(r))
+	kind := &change.Kind{
+		Name: "xray",
+		Validate: func(ctx context.Context, r system.Runner, paths map[string]string) error {
+			res, err := r.Query(ctx, BinPath, "run", "-test", "-c", paths[ConfigPath])
+			t.Logf("    xray run -test: %s", strings.TrimSpace(res.Stdout))
+			return err
+		},
+		Apply: func(ctx context.Context, r system.Runner) error { return in.restartAndCheck(ctx) },
+	}
+	step(t, "generated config passes xray run -test and runs", func() error {
+		_, err := m.Apply(ctx, change.Change{Parts: []change.Part{{Kind: kind, Files: []change.File{
+			{Path: ConfigPath, Data: data, Mode: state.GroupFileMode, Group: User},
+		}}}})
+		return err
+	})
+	step(t, "listening on 443 and 2053 (IPv4 and IPv6)", func() error {
+		for range 10 {
+			out, _ := r.Query(ctx, "ss", "-ltnH")
+			if strings.Contains(out.Stdout, "*:443") && strings.Contains(out.Stdout, "*:2053") {
+				return nil
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		out, _ := r.Query(ctx, "ss", "-ltnH")
+		return fmt.Errorf("not listening on all addresses:\n%s", out.Stdout)
+	})
 }

@@ -6,10 +6,15 @@ import (
 	"testing"
 )
 
+// fake implements every component interface with empty settings.
 type fake struct{ name string }
 
-func (f fake) Name() string  { return f.name }
-func (f fake) Label() string { return f.name }
+func (f fake) Name() string                                     { return f.name }
+func (f fake) Label() string                                    { return f.name }
+func (f fake) InboundSettings(Node) (any, error)                { return nil, nil }
+func (f fake) Network() string                                  { return f.name }
+func (f fake) StreamSettings(Node) (string, any, error)         { return "", nil, nil }
+func (f fake) StreamSecurity(Node) (string, string, any, error) { return f.name, "", nil, nil }
 
 // testRegistry has vless/trojan, tcp/xhttp, reality/tls/none and a small
 // compatibility table, independent of the built-in components.
