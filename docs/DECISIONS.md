@@ -187,6 +187,18 @@
 - **原因**：安装脚本可以兼作"修复/重装程序"，校验失败时旧程序保持不变；不破坏用户已有的其他程序。
 - **否决**：已安装时直接进入菜单（程序损坏时无法用安装脚本修复）；`lnode` 冲突时中止安装或覆盖。
 
+### D-034 `/etc/litenode` 下的权限统一显式设置
+
+- **内容**：`/etc/litenode` 711，其下子目录 700、文件 600（包括备份中的 `xray.json` 副本、`nftables.nft`、校验用临时文件），唯一例外是 `/etc/litenode/xray.json` 640 属组 `litenode-xray`。规则集中定义在 `internal/state/layout.go`，所有目录用 `EnsureDir`（创建后显式 chmod），配置变更流程拒绝不符合规则的文件。由测试检查除 `xray.json` 外没有任何文件对 root 以外的用户可读。
+- **原因**：用户补充要求（P-002 把 `/etc/litenode` 改为 711 后，不能依赖默认权限，备份里有私钥）。
+- **实现中发现**：备份恢复 `xray.json` 时原先会丢失属组，导致 Xray 读不到配置；已在备份中记录属组并在恢复时还原。
+
+### D-035 Xray 安装细节：没有节点时不运行；用集成测试在测试 VPS 上验证
+
+- **内容**：安装只装程序、用户和服务文件，不启动；没有启用的节点时 Xray 停止并取消开机启动。M1-01 的 [VPS] 验收用带 `vps` 构建标签的集成测试（`internal/xray/vps_test.go`）在测试机上执行，正常 `go test` 不包含它。
+- **原因**：轻量原则，空跑的 Xray 白占内存；M1-01 没有菜单入口，集成测试不需要为验证增加产品功能。
+- **否决**：用空配置一直运行；把 [VPS] 验收推迟到 M1-09。
+
 ---
 
 ## 提议（待用户确认）
@@ -195,11 +207,13 @@
 
 ### P-001 Xray 安装在独立路径，使用独立服务名
 
+- **状态**：已确认（2026-10-18）。
 - **内容**：Xray 安装到 `/usr/local/lib/litenode/xray`，服务名 `litenode-xray.service`，配置 `/etc/litenode/xray.json`。
 - **原因**：避免与官方安装脚本（`/usr/local/bin/xray`、`xray.service`）或 3x-ui 冲突，卸载时也不会误删别人装的 Xray。
 
 ### P-002 Xray 以非 root 用户运行
 
+- **状态**：已确认（2026-10-18）。使用专用系统用户 `litenode-xray`（否决：`nobody`，被多个程序共用、配置文件无法有效隔离；root 运行）。`/etc/litenode` 改为 711，`xray.json` 640 属组 `litenode-xray`，其余权限规则见 D-034。
 - **内容**：使用 `AmbientCapabilities=CAP_NET_BIND_SERVICE` 绑定低端口。
 - **原因**：减少 Xray 出现漏洞时的影响范围。
 

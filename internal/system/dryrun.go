@@ -59,6 +59,11 @@ func (d *DryRun) Remove(path string) error {
 	return nil
 }
 
+func (d *DryRun) Chmod(path string, perm fs.FileMode) error {
+	fmt.Fprintln(d.Out, text.DryRunChmod(path, fmt.Sprintf("%04o", perm)))
+	return nil
+}
+
 func (d *DryRun) MkdirAll(path string, perm fs.FileMode) error {
 	fmt.Fprintln(d.Out, text.DryRunMkdir(path, fmt.Sprintf("%04o", perm)))
 	return nil

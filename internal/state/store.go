@@ -101,7 +101,8 @@ func (s *Store) Load() (*State, error) {
 	return st, nil
 }
 
-// Save atomically writes st with mode 0600.
+// Save atomically writes st with mode 0600. The state directory is set to
+// ConfigDirMode.
 func (s *Store) Save(st *State) error {
 	st.SchemaVersion = SchemaVersion
 	data, err := json.MarshalIndent(st, "", "  ")
@@ -109,10 +110,10 @@ func (s *Store) Save(st *State) error {
 		return fmt.Errorf("encode state: %w", err)
 	}
 	data = append(data, '\n')
-	if err := s.Runner.MkdirAll(filepath.Dir(s.Path), 0o700); err != nil {
-		return fmt.Errorf("create state directory: %w", err)
+	if err := system.EnsureDir(s.Runner, filepath.Dir(s.Path), ConfigDirMode); err != nil {
+		return err
 	}
-	if err := s.Runner.WriteFile(s.Path, data, 0o600); err != nil {
+	if err := s.Runner.WriteFile(s.Path, data, PrivateFileMode); err != nil {
 		return fmt.Errorf("write state file: %w", err)
 	}
 	return nil
@@ -121,10 +122,10 @@ func (s *Store) Save(st *State) error {
 // backup saves the original file before migration.
 func (s *Store) backup(data []byte, version int) error {
 	name := fmt.Sprintf("state-v%d-%s.json", version, s.Now().Format("20060102-150405"))
-	if err := s.Runner.MkdirAll(s.BackupDir, 0o700); err != nil {
-		return fmt.Errorf("create backup directory: %w", err)
+	if err := system.EnsureDir(s.Runner, s.BackupDir, PrivateDirMode); err != nil {
+		return err
 	}
-	if err := s.Runner.WriteFile(filepath.Join(s.BackupDir, name), data, 0o600); err != nil {
+	if err := s.Runner.WriteFile(filepath.Join(s.BackupDir, name), data, PrivateFileMode); err != nil {
 		return fmt.Errorf("back up state before migration: %w", err)
 	}
 	return nil

@@ -13,8 +13,8 @@ const SchemaVersion = 1
 
 // Default file locations.
 const (
-	DefaultPath      = "/etc/litenode/state.json"
-	DefaultBackupDir = "/etc/litenode/backups"
+	DefaultPath      = ConfigDir + "/state.json"
+	DefaultBackupDir = ConfigDir + "/backups"
 	DefaultLockPath  = "/run/litenode.lock"
 )
 

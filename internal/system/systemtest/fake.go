@@ -30,6 +30,7 @@ const (
 	OpRename Op = "rename"
 	OpRmAll  Op = "remove-all"
 	OpMkdir  Op = "mkdir"
+	OpChmod  Op = "chmod"
 )
 
 // Call is one recorded Runner call. Command is set for query and exec, Path
@@ -60,6 +61,9 @@ type Fake struct {
 	// Dirs holds directories created by MkdirAll. Directories that contain
 	// files exist implicitly.
 	Dirs map[string]bool
+	// Modes holds the last mode set on a path by WriteFile, MkdirAll (for
+	// newly created directories) or Chmod.
+	Modes map[string]fs.FileMode
 	// WriteErr makes WriteFile fail for the given paths.
 	WriteErr map[string]error
 
@@ -73,6 +77,7 @@ func New() *Fake {
 		Responses: map[string]Response{},
 		Files:     map[string][]byte{},
 		Dirs:      map[string]bool{},
+		Modes:     map[string]fs.FileMode{},
 		WriteErr:  map[string]error{},
 	}
 }
@@ -109,7 +114,7 @@ func (f *Fake) Mutations() []Call {
 	var out []Call
 	for _, c := range f.Calls() {
 		switch c.Op {
-		case OpExec, OpWrite, OpRemove, OpRmAll, OpRename, OpMkdir:
+		case OpExec, OpWrite, OpRemove, OpRmAll, OpRename, OpMkdir, OpChmod:
 			out = append(out, c)
 		}
 	}
@@ -169,6 +174,7 @@ func (f *Fake) WriteFile(path string, data []byte, perm fs.FileMode) error {
 		return err
 	}
 	f.Files[path] = data
+	f.Modes[path] = perm
 	return nil
 }
 
@@ -185,8 +191,19 @@ func (f *Fake) MkdirAll(path string, perm fs.FileMode) error {
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, Call{Op: OpMkdir, Path: path, Perm: perm})
 	for p := filepath.Clean(path); p != "/" && p != "."; p = filepath.Dir(p) {
-		f.Dirs[p] = true
+		if !f.Dirs[p] {
+			f.Dirs[p] = true
+			f.Modes[p] = perm
+		}
 	}
+	return nil
+}
+
+func (f *Fake) Chmod(path string, perm fs.FileMode) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, Call{Op: OpChmod, Path: path, Perm: perm})
+	f.Modes[filepath.Clean(path)] = perm
 	return nil
 }
 
