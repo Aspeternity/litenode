@@ -5,12 +5,12 @@
 ## 当前状态
 
 - **阶段**：M1 节点管理。
-- **当前任务**：无（M1-07 已完成）。
+- **当前任务**：M1-08 客户端管理菜单（进行中，分支 `feat/M1-08-client-menu`）。
 - **下一个任务**：M1-08 客户端管理菜单。
 
 ## 下次会话从这里开始
 
-1. 做 M1-08（`feat/M1-08-client-menu`）。之后依次、M1-09、M1-10；M1 全部完成后停下来让用户实机验收（D-050）。
+1. 继续 M1-08（分支 `feat/M1-08-client-menu` 已推送）：`internal/nodemgr/clients.go`（AddClient / SetClientRemark / ResetClientUUID / SetClientEnabled / DeleteClient，D-056 待写入 DECISIONS：默认客户端备注 `<节点备注>-<n>`、新客户端沿用节点流控）和 `text` 中的客户端文字已写好；**还没做**：客户端菜单（`internal/app`，节点列表第 4 项接入）、单元测试、VPS 验证、文档、PR。之后依次、M1-09、M1-10；M1 全部完成后停下来让用户实机验收（D-050）。
    - 发布：GitHub 上有正式 Release `v0.0.1`（开发中测试版，`releases/latest` 指向它）。新版本发布时用 `git tag -a`，推送标签前先问用户。M6-02 更新脚本可复用 install.sh 的下载和校验方式（资产名 `litenode-linux-<架构>`，`sha256sums.txt` 为 `sha256sum` 标准格式）。
 2. 提议条目中 P-001、P-002、P-006、P-008、P-010 已确认；其余 P-003 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
