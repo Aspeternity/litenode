@@ -14,16 +14,15 @@ import (
 	"github.com/Aspeternity/litenode/internal/ui"
 )
 
-// version is set at build time with -ldflags (M0-07).
+// version is set at build time: -ldflags "-X main.version=v0.1.0".
 var version = "dev"
 
 func main() {
-	r := system.NewReal(system.NewOpLog(system.DefaultLogPath))
-	store := state.NewStore(r)
 	exe, err := os.Executable()
 	if err != nil {
 		exe = "/usr/local/bin/litenode"
 	}
+
 	// Interrupts are handled by the menu session: they quit at a prompt and
 	// are deferred while an operation runs. SIGHUP covers a dropped SSH
 	// connection.
@@ -32,16 +31,15 @@ func main() {
 	session := ui.NewSession(os.Stdin, os.Stdout, sigs, ui.NewColors(os.Getenv("NO_COLOR")))
 
 	os.Exit(app.Run(context.Background(), app.Env{
-		Runner:    r,
-		Euid:      os.Geteuid(),
-		Stdout:    os.Stdout,
-		Stderr:    os.Stderr,
-		LockPath:  state.DefaultLockPath,
-		Store:     store,
-		Args:      os.Args[1:],
-		Confirmer: change.NewConfirmer(change.NewManager(r, store), exe),
-		Kinds:     change.Registry{},
-		Version:   version,
-		Session:   session,
+		Runner:     system.NewReal(system.NewOpLog(system.DefaultLogPath)),
+		Euid:       os.Geteuid(),
+		Stdout:     os.Stdout,
+		Stderr:     os.Stderr,
+		Args:       os.Args[1:],
+		Version:    version,
+		Executable: exe,
+		LockPath:   state.DefaultLockPath,
+		Kinds:      change.Registry{},
+		Session:    session,
 	}))
 }

@@ -66,13 +66,13 @@
   - [x] 非法输入提示后重新输入；Ctrl+C 干净退出。
   - [x] 渲染逻辑有单元测试（给定菜单定义，输出与预期文本一致）。
 
-### M0-07 子命令框架 `未开始`
+### M0-07 子命令框架 `已完成`
 
 - `litenode`、`version`、`help`、`--dry-run`，以及 `internal` 子命令的路由结构。
 - 版本号通过 `-ldflags -X` 注入。
 - 验收：
-  - [ ] `litenode version` 显示注入的版本号，未注入时显示 `dev`。
-  - [ ] `litenode help` 不显示 `internal` 子命令。
+  - [x] `litenode version` 显示注入的版本号，未注入时显示 `dev`。
+  - [x] `litenode help` 不显示 `internal` 子命令。
 
 ### M0-08 GitHub Actions `未开始`
 
