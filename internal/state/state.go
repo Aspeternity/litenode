@@ -5,6 +5,8 @@
 // configuration, nftables rules and firewall rules are all generated from it.
 package state
 
+import "github.com/Aspeternity/litenode/internal/node"
+
 // SchemaVersion is the current state file format. Bump it only for
 // incompatible changes (renaming, retyping or removing a field) and add a
 // migration from the previous version. Adding a field whose zero value is
@@ -24,9 +26,10 @@ type State struct {
 	SchemaVersion int `json:"schema_version"`
 	// NextID is the next stable ID to hand out. It is shared by all kinds
 	// of items and never decreases, so IDs are unique and never reused.
-	NextID int64  `json:"next_id"`
-	Server Server `json:"server"`
-	Xray   Xray   `json:"xray"`
+	NextID int64       `json:"next_id"`
+	Server Server      `json:"server"`
+	Xray   Xray        `json:"xray"`
+	Nodes  []node.Node `json:"nodes"`
 }
 
 // Server holds server-wide settings.
@@ -43,7 +46,7 @@ type Xray struct {
 
 // New returns the state used when no state file exists yet.
 func New() *State {
-	return &State{SchemaVersion: SchemaVersion, NextID: 1}
+	return &State{SchemaVersion: SchemaVersion, NextID: 1, Nodes: []node.Node{}}
 }
 
 // AllocID returns a new stable ID.
