@@ -9,10 +9,13 @@ package node
 
 // Node is one inbound, as stored in the state file.
 type Node struct {
-	ID        int64  `json:"id"`
-	Remark    string `json:"remark"`
-	Enabled   bool   `json:"enabled"`
-	Port      int    `json:"port"`
+	ID      int64  `json:"id"`
+	Remark  string `json:"remark"`
+	Enabled bool   `json:"enabled"`
+	Port    int    `json:"port"`
+	// SharePort is the port put in share links when it differs from Port
+	// (NAT machines, D-043). 0 means Port.
+	SharePort int    `json:"share_port,omitempty"`
 	Protocol  string `json:"protocol"`
 	Transport string `json:"transport"`
 	Security  string `json:"security"`

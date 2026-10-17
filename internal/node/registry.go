@@ -7,8 +7,13 @@ import (
 	"slices"
 )
 
-// Component is a protocol, transport or security layer. Methods for share
-// links are added by M1-06.
+// Param is one query parameter of a share link. Links keep the order in
+// which components add their parameters.
+type Param struct {
+	Key, Value string
+}
+
+// Component is a protocol, transport or security layer.
 type Component interface {
 	// Name is the identifier stored in the state file, e.g. "vless".
 	Name() string
@@ -22,6 +27,10 @@ type Protocol interface {
 	// InboundSettings returns the "settings" object of the node's Xray
 	// inbound. Only enabled clients are included.
 	InboundSettings(n Node) (any, error)
+	// ShareLink builds a client's share link from the address, port,
+	// the protocol's own parameters followed by params from the security
+	// layer and transport, and the remark as the URL fragment.
+	ShareLink(n Node, c Client, host string, port int, params []Param) (string, error)
 }
 
 // Transport is a transport such as raw TCP or XHTTP.
@@ -32,6 +41,8 @@ type Transport interface {
 	// StreamSettings returns the transport's object in streamSettings and
 	// its key (e.g. "xhttpSettings"), or key "" if it needs none.
 	StreamSettings(n Node) (key string, settings any, err error)
+	// ShareParams returns the transport's share link parameters.
+	ShareParams(n Node) ([]Param, error)
 }
 
 // Security is a security layer such as REALITY, TLS or none.
@@ -41,6 +52,8 @@ type Security interface {
 	// settings object with its key (e.g. "realitySettings"), or key "" if
 	// it needs none.
 	StreamSecurity(n Node) (security, key string, settings any, err error)
+	// ShareParams returns the security layer's share link parameters.
+	ShareParams(n Node) ([]Param, error)
 }
 
 // Combo is a protocol + transport + security combination with a flow.

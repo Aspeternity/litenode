@@ -235,7 +235,7 @@ docs/
 - 文件损坏（无法解析）时提示文件路径和备份目录，让用户手动恢复，**不自动覆盖**。`schema_version` 比程序支持的新（程序被降级）时提示更新 LiteNode 并退出。
 - 文件锁：`flock` 锁 `/run/litenode.lock`，菜单会话全程持有，进程退出或被终止时由内核自动释放。第二个实例提示"另一个 LiteNode 正在运行"并退出。`version`、`help` 不加锁；`internal rollback` 不受锁限制（安全机制必须执行，见第 6 节）；`internal resolve` 遇到锁时跳过本轮（见第 11 节）。
 - `xray.stopped`：用户在 Xray 菜单中手动停止后为 `true`（D-045，见第 12 节）。
-- 节点的 `share_port`：分享链接使用的端口，`0` 或不写表示与 `port` 相同（NAT 机，D-043）。
+- 节点的 `share_port`：分享链接使用的端口，不写（或 0）表示与 `port` 相同（NAT 机，D-043）。
 - 转发的 `resolved_ipv4` / `resolved_ipv6`：目标为域名时分别解析的 A / AAAA 记录（D-046，见第 11 节）。
 - `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。
 - **备注**（D-039）：节点备注在所有节点之间唯一；客户端备注即 Xray 的 `email`，在所有节点的所有客户端之间唯一；节点备注和客户端备注互不影响，可以相同。格式：去掉首尾空白后 1～32 个字符（中文算一个字符），不含控制字符；比较时不区分大小写（`LA` 与 `la` 视为重复）。
@@ -260,7 +260,7 @@ docs/
       "remark": "LA-Reality",
       "enabled": true,
       "port": 443,
-      "share_port": 0,
+      "share_port": 30001,
       "protocol": "vless",
       "transport": "tcp",
       "security": "reality",
@@ -489,8 +489,8 @@ VLESS + TCP + Reality 的链接格式：
 vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=reality&sni=<sni>&fp=chrome&pbk=<公钥>&sid=<shortId>&type=tcp#<备注>
 ```
 
-- 备注部分进行 URL 编码。IPv6 地址加方括号。
-- 二维码在终端内用字符绘制，不依赖外部工具。
+- 备注部分进行 URL 编码（空格编码为 `%20`）。IPv6 地址加方括号。链接参数顺序：协议（`encryption`、`flow`）→ 安全层（`security`、`sni`、`fp`、`pbk`、`sid`）→ 传输（`type`）；没有流控时不写 `flow`。`sni` 取第一个 serverName，`sid` 取第一个 shortId。
+- 二维码在终端内用字符绘制，不依赖外部工具（D-052）：用 `rsc.io/qr` 编码（纠错等级 L），每行字符表示上下两行模块（`▀▄█`），四周留 2 格空白。有颜色时用明确的黑字白底绘制，深色和浅色终端都能扫；设置 `NO_COLOR` 时按深色背景终端绘制（浅色模块画成方块）。典型链接的二维码不超过 65 列。
 - 链接中的端口为节点的 `share_port`（设置时），否则为监听端口（D-043）。
 - **公网地址检测**（D-041），在第一次生成链接时和用户选择"重新检测"时进行：
   1. 分别访问 `https://1.1.1.1/cdn-cgi/trace`（IPv4）和 `https://[2606:4700:4700::1111]/cdn-cgi/trace`（IPv6），取 `ip=` 一行，超时 5 秒。直接用 IP 访问，不依赖 DNS；能拿到云厂商 1:1 NAT 之后的真实公网 IP（AWS、GCP、甲骨文等机器的网卡上只有内网地址）。

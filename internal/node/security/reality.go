@@ -51,3 +51,23 @@ func (Reality) StreamSecurity(n node.Node) (string, string, any, error) {
 	}
 	return "reality", "realitySettings", s, nil
 }
+
+// ShareParams gives the client side of REALITY: the first server name as
+// SNI, fingerprint, public key and the first shortId.
+func (Reality) ShareParams(n node.Node) ([]node.Param, error) {
+	r := n.Reality
+	if r == nil || len(r.ServerNames) == 0 || len(r.ShortIDs) == 0 {
+		return nil, errors.New("reality settings incomplete")
+	}
+	fp := r.Fingerprint
+	if fp == "" {
+		fp = node.DefaultFingerprint
+	}
+	return []node.Param{
+		{Key: "security", Value: "reality"},
+		{Key: "sni", Value: r.ServerNames[0]},
+		{Key: "fp", Value: fp},
+		{Key: "pbk", Value: r.PublicKey},
+		{Key: "sid", Value: r.ShortIDs[0]},
+	}, nil
+}
