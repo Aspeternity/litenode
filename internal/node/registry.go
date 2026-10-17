@@ -6,9 +6,8 @@ import (
 	"slices"
 )
 
-// Component is a protocol, transport or security layer. Methods for
-// generating Xray configuration (M1-03) and share links (M1-06) are added
-// by those tasks.
+// Component is a protocol, transport or security layer. Methods for share
+// links are added by M1-06.
 type Component interface {
 	// Name is the identifier stored in the state file, e.g. "vless".
 	Name() string
@@ -17,13 +16,31 @@ type Component interface {
 }
 
 // Protocol is a proxy protocol such as VLESS.
-type Protocol interface{ Component }
+type Protocol interface {
+	Component
+	// InboundSettings returns the "settings" object of the node's Xray
+	// inbound. Only enabled clients are included.
+	InboundSettings(n Node) (any, error)
+}
 
 // Transport is a transport such as raw TCP or XHTTP.
-type Transport interface{ Component }
+type Transport interface {
+	Component
+	// Network is the value of streamSettings.network.
+	Network() string
+	// StreamSettings returns the transport's object in streamSettings and
+	// its key (e.g. "xhttpSettings"), or key "" if it needs none.
+	StreamSettings(n Node) (key string, settings any, err error)
+}
 
 // Security is a security layer such as REALITY, TLS or none.
-type Security interface{ Component }
+type Security interface {
+	Component
+	// StreamSecurity returns streamSettings.security and the layer's
+	// settings object with its key (e.g. "realitySettings"), or key "" if
+	// it needs none.
+	StreamSecurity(n Node) (security, key string, settings any, err error)
+}
 
 // Combo is a protocol + transport + security combination with a flow.
 type Combo struct {

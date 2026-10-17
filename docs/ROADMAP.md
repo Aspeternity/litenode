@@ -136,12 +136,13 @@
   - [x] [VPS] 重跑 M0-05 的 systemd-run 定时器验证和 M1-01 的集成测试。
   - 验证方式：`go test -c -tags vps ./internal/change`，在测试机上以 root 运行 `LITENODE_BIN=<litenode 路径> ./change-vps.test -test.v -test.run TestVPS`。
 
-### M1-03 Xray 配置生成 `未开始`
+### M1-03 Xray 配置生成 `已完成`
 
 - 按 DESIGN 第 9.6 节生成最小配置，包含回落限速默认值。
 - 验收：
-  - [ ] golden file 测试：给定状态，生成的配置与预期文件逐字一致。
-  - [ ] [VPS] 生成的配置通过 `xray run -test`。
+  - [x] golden file 测试：给定状态，生成的配置与预期文件逐字一致。
+  - [x] [VPS] 生成的配置通过 `xray run -test`。
+  - 验证方式：xray 集成测试 `TestVPSGeneratedConfig`（同时启动服务并确认 IPv4 / IPv6 都在监听）。
 
 ### M1-04 VLESS + TCP + Reality 预设 `未开始`
 
