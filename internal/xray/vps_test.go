@@ -9,6 +9,7 @@ package xray
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
+	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 )
@@ -316,5 +318,55 @@ func TestVPSGeneratedConfig(t *testing.T) {
 		}
 		out, _ := r.Query(ctx, "ss", "-ltnH")
 		return fmt.Errorf("not listening on all addresses:\n%s", out.Stdout)
+	})
+}
+
+// TestVPSKeysMatchXray checks LiteNode's x25519 keys against the real
+// "xray x25519 -i <private key>" (M1-04, D-047).
+func TestVPSKeysMatchXray(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("run as root on the test VPS")
+	}
+	ctx := context.Background()
+	r := system.NewReal(nil)
+	in := NewInstaller(r, NewHTTPFetcher(), runtime.GOARCH)
+	_, statErr := os.Stat(state.ConfigDir)
+	createdConfigDir := errors.Is(statErr, os.ErrNotExist)
+	in.Uninstall(ctx)
+	t.Cleanup(func() {
+		in.Uninstall(ctx)
+		if createdConfigDir {
+			os.RemoveAll(state.ConfigDir)
+		}
+	})
+	step(t, "install latest", func() error {
+		_, err := in.Install(ctx, "")
+		return err
+	})
+	step(t, "20 generated key pairs match xray x25519 -i", func() error {
+		for range 20 {
+			priv, pub, err := security.NewX25519(cryptorand.Reader)
+			if err != nil {
+				return err
+			}
+			out, err := r.Query(ctx, BinPath, "x25519", "-i", priv)
+			if err != nil {
+				return err
+			}
+			var gotPriv, gotPub string
+			for line := range strings.Lines(out.Stdout) {
+				k, v, _ := strings.Cut(strings.TrimSpace(line), ": ")
+				switch k {
+				case "PrivateKey":
+					gotPriv = v
+				case "Password (PublicKey)", "Public key":
+					gotPub = v
+				}
+			}
+			if gotPriv != priv || gotPub != pub {
+				return fmt.Errorf("xray says %q / %q, LiteNode %q / %q", gotPriv, gotPub, priv, pub)
+			}
+		}
+		return nil
 	})
 }

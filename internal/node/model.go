@@ -53,3 +53,10 @@ type Client struct {
 
 // FlowVision is the XTLS Vision flow.
 const FlowVision = "xtls-rprx-vision"
+
+// DefaultFallbackLimit is the fallback throttle from the Xray docs example
+// (DESIGN section 10.4): about 15 MB, then 1 MB/s.
+var DefaultFallbackLimit = FallbackLimit{AfterBytes: 10 << 20, BytesPerSec: 1 << 20, BurstBytesPerSec: 5 << 20}
+
+// DefaultFingerprint is the uTLS fingerprint put in share links.
+const DefaultFingerprint = "chrome"
