@@ -44,7 +44,7 @@ type Env struct {
 //	litenode [--dry-run]           main menu
 //	litenode version | -v | --version
 //	litenode help | -h | --help
-//	litenode internal rollback <kind>   (called by systemd; not in help)
+//	litenode internal rollback   (called by systemd; not in help)
 func Run(ctx context.Context, env Env) int {
 	args := env.Args
 	switch {
@@ -68,8 +68,8 @@ func Run(ctx context.Context, env Env) int {
 // runInternal handles subcommands that systemd units call. They are not
 // listed in help.
 func runInternal(ctx context.Context, env Env, args []string) int {
-	if len(args) == 2 && args[0] == "rollback" {
-		return rollback(ctx, env, args[1])
+	if len(args) == 1 && args[0] == "rollback" {
+		return rollback(ctx, env)
 	}
 	fmt.Fprintln(env.Stderr, text.UnknownCommand(strings.Join(append([]string{"internal"}, args...), " ")))
 	return 2
@@ -161,20 +161,20 @@ func loadState(store *state.Store, stderr io.Writer) (*state.State, int) {
 // time. It deliberately ignores the instance lock: the menu that made the
 // change is usually still running (or hung after SSH dropped), and the
 // rollback must happen regardless.
-func rollback(ctx context.Context, env Env, kind string) int {
+func rollback(ctx context.Context, env Env) int {
 	if env.Euid != 0 {
 		fmt.Fprintln(env.Stderr, text.NotRoot)
 		return 1
 	}
 	store := state.NewStore(env.Runner)
 	confirmer := change.NewConfirmer(change.NewManager(env.Runner, store), env.Executable)
-	done, err := confirmer.Rollback(ctx, env.Kinds, kind)
+	done, err := confirmer.Rollback(ctx, env.Kinds)
 	switch {
 	case err != nil:
 		fmt.Fprintln(env.Stderr, text.RollbackFailed(err))
 		return 1
 	case done:
-		fmt.Fprintln(env.Stdout, text.RollbackDone(kind))
+		fmt.Fprintln(env.Stdout, text.RollbackDone)
 	default:
 		fmt.Fprintln(env.Stdout, text.RollbackNotNeeded)
 	}

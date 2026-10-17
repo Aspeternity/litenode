@@ -102,9 +102,9 @@ func TestVPS(t *testing.T) {
 		},
 	}
 	step(t, "start service as non-root on port 443", func() error {
-		_, err := m.Apply(ctx, change.Change{Kind: kind, Files: []change.File{
+		_, err := m.Apply(ctx, change.Change{Parts: []change.Part{{Kind: kind, Files: []change.File{
 			{Path: ConfigPath, Data: []byte(testConfig), Mode: state.GroupFileMode, Group: User},
-		}})
+		}}}})
 		if err != nil {
 			return err
 		}

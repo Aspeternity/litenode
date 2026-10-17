@@ -1,10 +1,11 @@
 // Package change implements the unified configuration change flow: backup,
 // generate, validate, apply and rollback on failure.
 //
-// Callers generate the new files (logic layer) and hand them to
-// Manager.Apply together with the new state. Apply backs up the current
-// files and state, validates and applies the new ones, and restores the
-// backup if anything fails.
+// One user operation often touches several kinds of configuration (adding
+// a node: xray + nftables + ufw). A Change groups them so they succeed or
+// fail together (D-040): one backup, validate everything, then write, save
+// the state and apply each kind in order; on any failure every file and
+// the state are restored and the old configuration is reapplied.
 package change
 
 import (
@@ -38,22 +39,26 @@ func StagedPath(path string) string {
 }
 
 // Kind describes one category of managed configuration, such as "sshd",
-// "nft" or "xray". Backups are grouped and pruned per kind.
+// "nft", "xray" or "ufw". Backups are pruned per kind.
 type Kind struct {
-	// Name is lowercase letters only, so backup names "<name>-<time>" of
-	// different kinds never share a prefix.
+	// Name is lowercase letters only, so backup names "<a>+<b>-<time>"
+	// can be split back into kinds.
 	Name string
 	// Validate checks candidate files. paths maps each managed path to the
 	// file to check: a staged copy, or the real path if ValidateInPlace.
-	// Nil means no validation.
+	// It is not called when the part writes no files. Nil means no
+	// validation.
 	Validate func(ctx context.Context, r system.Runner, paths map[string]string) error
 	// ValidateInPlace writes files to their real paths before validating,
 	// for tools that cannot check a file elsewhere (sshd -t). Services are
 	// not reloaded until validation passes.
 	ValidateInPlace bool
-	// Apply makes services pick up the files now in place and checks that
-	// they are running. It is also called after a restore to reapply the
-	// old configuration. Nil means nothing to do.
+	// Apply makes services pick up what is now on disk and in the state
+	// file and checks that they work. It is also called after a restore,
+	// so it must act on the actual situation: after a restore the
+	// configuration may be gone, and then the service is stopped or the
+	// rules removed. A kind without files (ufw reconciliation) has only
+	// Apply. Nil means nothing to do.
 	Apply func(ctx context.Context, r system.Runner) error
 }
 
@@ -86,16 +91,31 @@ type File struct {
 	Remove bool
 }
 
-// Change is one configuration change.
-type Change struct {
+// Part is the share of one kind in a change.
+type Part struct {
 	Kind  *Kind
 	Files []File
+}
+
+// Change is one configuration change. Parts are validated and applied in
+// order; each kind appears at most once.
+type Change struct {
+	Parts []Part
 	// State is the new state to save. Nil leaves the state file unchanged.
 	State *state.State
 	// BeforeApply runs after validation and before anything takes effect,
 	// with the ID of the backup that undoes the change. Confirmer uses it
 	// to schedule the rollback. Nil means nothing to do.
 	BeforeApply func(ctx context.Context, backupID string) error
+}
+
+// Kinds returns the kinds of the change in order.
+func (c Change) Kinds() []*Kind {
+	ks := make([]*Kind, len(c.Parts))
+	for i, p := range c.Parts {
+		ks[i] = p.Kind
+	}
+	return ks
 }
 
 // Stage identifies the step of the flow that failed.
@@ -111,13 +131,18 @@ const (
 // Error reports a failed change. If RestoreErr is nil, the previous
 // configuration and state are back in place.
 type Error struct {
-	Stage      Stage
+	Stage Stage
+	// Kind is the kind whose step failed, "" if not specific to one.
+	Kind       string
 	Err        error
 	RestoreErr error
 }
 
 func (e *Error) Error() string {
 	msg := fmt.Sprintf("%s failed: %v", e.Stage, e.Err)
+	if e.Kind != "" {
+		msg = fmt.Sprintf("%s %s failed: %v", e.Kind, e.Stage, e.Err)
+	}
 	if e.RestoreErr != nil {
 		msg += fmt.Sprintf("; restore also failed: %v", e.RestoreErr)
 	}
@@ -140,59 +165,86 @@ func NewManager(r system.Runner, store *state.Store) *Manager {
 	return &Manager{Runner: r, Store: store, BackupDir: store.BackupDir, Keep: DefaultKeep, Now: time.Now}
 }
 
+// check rejects malformed changes before anything is touched.
+func (m *Manager) check(c Change) error {
+	if len(c.Parts) == 0 {
+		return errors.New("change has no parts")
+	}
+	seen := map[string]bool{}
+	for _, p := range c.Parts {
+		if p.Kind == nil || !kindName.MatchString(p.Kind.Name) {
+			return errors.New("change part without a valid kind")
+		}
+		if seen[p.Kind.Name] {
+			return fmt.Errorf("kind %s appears twice in one change", p.Kind.Name)
+		}
+		seen[p.Kind.Name] = true
+		for _, f := range p.Files {
+			if f.Remove {
+				continue
+			}
+			if err := state.CheckFileMode(m.configDir(), f.Path, f.Mode, f.Group); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Apply runs the change flow and returns the ID of the backup it made.
 // On failure the backup is restored and an *Error is returned.
 func (m *Manager) Apply(ctx context.Context, c Change) (string, error) {
-	for _, f := range c.Files {
-		if f.Remove {
-			continue
-		}
-		if err := state.CheckFileMode(m.configDir(), f.Path, f.Mode, f.Group); err != nil {
-			return "", &Error{Stage: StageBackup, Err: err}
-		}
+	if err := m.check(c); err != nil {
+		return "", &Error{Stage: StageBackup, Err: err}
 	}
 	b, err := m.backup(c)
 	if err != nil {
 		return "", &Error{Stage: StageBackup, Err: err}
 	}
-	fail := func(stage Stage, err error) (string, error) {
-		return b.ID, &Error{Stage: stage, Err: err, RestoreErr: m.restore(ctx, c.Kind, b)}
+	fail := func(stage Stage, kind string, err error) (string, error) {
+		return b.ID, &Error{Stage: stage, Kind: kind, Err: err, RestoreErr: m.restore(ctx, c.Kinds(), b)}
 	}
 
-	if err := m.validate(ctx, c); err != nil {
-		return fail(StageValidate, err)
+	for _, p := range c.Parts {
+		if err := m.validate(ctx, p); err != nil {
+			return fail(StageValidate, p.Kind.Name, err)
+		}
 	}
 	if c.BeforeApply != nil {
 		if err := c.BeforeApply(ctx, b.ID); err != nil {
-			return fail(StageConfirm, err)
+			return fail(StageConfirm, "", err)
 		}
 	}
-	if !c.Kind.ValidateInPlace {
-		if err := m.writeFiles(c.Files); err != nil {
-			return fail(StageApply, err)
+	for _, p := range c.Parts {
+		if !p.Kind.ValidateInPlace {
+			if err := m.writeFiles(p.Files); err != nil {
+				return fail(StageApply, p.Kind.Name, err)
+			}
 		}
 	}
 	if c.State != nil {
 		if err := m.Store.Save(c.State); err != nil {
-			return fail(StageApply, err)
+			return fail(StageApply, "", err)
 		}
 	}
-	if c.Kind.Apply != nil {
-		if err := c.Kind.Apply(ctx, m.Runner); err != nil {
-			return fail(StageApply, err)
+	for _, p := range c.Parts {
+		if p.Kind.Apply != nil {
+			if err := p.Kind.Apply(ctx, m.Runner); err != nil {
+				return fail(StageApply, p.Kind.Name, err)
+			}
 		}
 	}
-	m.prune(c.Kind.Name)
+	m.prune()
 	return b.ID, nil
 }
 
-func (m *Manager) validate(ctx context.Context, c Change) error {
+func (m *Manager) validate(ctx context.Context, p Part) error {
 	paths := map[string]string{}
-	if c.Kind.ValidateInPlace {
-		if err := m.writeFiles(c.Files); err != nil {
+	if p.Kind.ValidateInPlace {
+		if err := m.writeFiles(p.Files); err != nil {
 			return err
 		}
-		for _, f := range c.Files {
+		for _, f := range p.Files {
 			if !f.Remove {
 				paths[f.Path] = f.Path
 			}
@@ -203,7 +255,7 @@ func (m *Manager) validate(ctx context.Context, c Change) error {
 				m.Runner.Remove(staged)
 			}
 		}()
-		for _, f := range c.Files {
+		for _, f := range p.Files {
 			if f.Remove {
 				continue
 			}
@@ -215,10 +267,10 @@ func (m *Manager) validate(ctx context.Context, c Change) error {
 			}
 		}
 	}
-	if c.Kind.Validate == nil || len(paths) == 0 {
+	if p.Kind.Validate == nil || len(paths) == 0 {
 		return nil
 	}
-	return c.Kind.Validate(ctx, m.Runner, paths)
+	return p.Kind.Validate(ctx, m.Runner, paths)
 }
 
 func (m *Manager) writeFiles(files []File) error {
@@ -255,8 +307,10 @@ func (m *Manager) configDir() string {
 	return filepath.Dir(m.Store.Path)
 }
 
-// restore puts back the files and state from b and reapplies them.
-func (m *Manager) restore(ctx context.Context, k *Kind, b *Backup) error {
+// restore puts back every file and the state from b, then reapplies the
+// kinds in order. Unknown kinds (nil) are skipped after the files are
+// restored, and reported.
+func (m *Manager) restore(ctx context.Context, kinds []*Kind, b *Backup) error {
 	var errs []error
 	for _, e := range b.Files {
 		if !e.Existed {
@@ -276,9 +330,15 @@ func (m *Manager) restore(ctx context.Context, k *Kind, b *Backup) error {
 	if err := m.restoreState(b); err != nil {
 		errs = append(errs, err)
 	}
-	if k != nil && k.Apply != nil {
-		if err := k.Apply(ctx, m.Runner); err != nil {
-			errs = append(errs, fmt.Errorf("reapply previous configuration: %w", err))
+	for i, k := range kinds {
+		if k == nil {
+			errs = append(errs, fmt.Errorf("cannot reapply unknown kind %q", b.Kinds[i]))
+			continue
+		}
+		if k.Apply != nil {
+			if err := k.Apply(ctx, m.Runner); err != nil {
+				errs = append(errs, fmt.Errorf("reapply previous %s configuration: %w", k.Name, err))
+			}
 		}
 	}
 	return errors.Join(errs...)

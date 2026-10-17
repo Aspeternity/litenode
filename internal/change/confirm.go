@@ -16,15 +16,20 @@ import (
 // DefaultConfirmSeconds is how long the user has to confirm (P-006).
 const DefaultConfirmSeconds = 60
 
-// DefaultPendingDir holds pending-rollback markers. It is on tmpfs.
+// DefaultPendingDir holds the pending-rollback marker. It is on tmpfs.
 const DefaultPendingDir = "/run/litenode"
+
+// TimerUnit is the transient systemd unit that rolls back an unconfirmed
+// change. Only one change can await confirmation at a time (the menu
+// holds the instance lock), so there is a single unit and marker (D-040).
+const TimerUnit = "litenode-rollback"
 
 // ErrRolledBack means the confirmation came too late: the rollback timer
 // already fired and restored the previous configuration.
 var ErrRolledBack = errors.New("confirmation timed out; previous configuration restored")
 
-// Confirmer implements confirm-or-rollback: before a risky change is
-// applied, Arm schedules a rollback with systemd-run, which survives the
+// Confirmer implements confirm-or-rollback: before a risky change takes
+// effect, Arm schedules a rollback with systemd-run, which survives the
 // LiteNode process being killed when SSH drops. Disarm cancels it once the
 // user confirms.
 //
@@ -44,36 +49,30 @@ func NewConfirmer(m *Manager, executable string) *Confirmer {
 	return &Confirmer{Manager: m, Executable: executable, PendingDir: DefaultPendingDir, Seconds: DefaultConfirmSeconds}
 }
 
-// TimerUnit is the transient unit name for a kind's rollback.
-func TimerUnit(kind string) string {
-	return "litenode-rollback-" + kind
-}
-
-func (c *Confirmer) pendingPath(kind string) string {
-	return filepath.Join(c.PendingDir, kind+".pending")
+func (c *Confirmer) pendingPath() string {
+	return filepath.Join(c.PendingDir, "pending")
 }
 
 // Arm records backupID as pending and schedules its rollback.
-func (c *Confirmer) Arm(ctx context.Context, kind, backupID string) error {
+func (c *Confirmer) Arm(ctx context.Context, backupID string) error {
 	r := c.Manager.Runner
-	unit := TimerUnit(kind)
 	// Clear leftovers of an earlier run so systemd-run can reuse the name.
-	r.Exec(ctx, "systemctl", "stop", unit+".timer")
-	r.Exec(ctx, "systemctl", "reset-failed", unit+".service")
+	r.Exec(ctx, "systemctl", "stop", TimerUnit+".timer")
+	r.Exec(ctx, "systemctl", "reset-failed", TimerUnit+".service")
 
 	if err := system.EnsureDir(r, c.PendingDir, state.PrivateDirMode); err != nil {
 		return err
 	}
-	if err := r.WriteFile(c.pendingPath(kind), []byte(backupID+"\n"), state.PrivateFileMode); err != nil {
+	if err := r.WriteFile(c.pendingPath(), []byte(backupID+"\n"), state.PrivateFileMode); err != nil {
 		return fmt.Errorf("write pending marker: %w", err)
 	}
 	_, err := r.Exec(ctx, "systemd-run",
-		"--unit="+unit,
+		"--unit="+TimerUnit,
 		"--on-active="+strconv.Itoa(c.Seconds),
 		"--timer-property=AccuracySec=1s",
-		c.Executable, "internal", "rollback", kind)
+		c.Executable, "internal", "rollback")
 	if err != nil {
-		r.Remove(c.pendingPath(kind))
+		r.Remove(c.pendingPath())
 		return fmt.Errorf("schedule rollback: %w", err)
 	}
 	return nil
@@ -81,9 +80,9 @@ func (c *Confirmer) Arm(ctx context.Context, kind, backupID string) error {
 
 // Disarm keeps the change. It returns ErrRolledBack if the timer already
 // claimed the marker and restored the previous configuration.
-func (c *Confirmer) Disarm(ctx context.Context, kind string) error {
+func (c *Confirmer) Disarm(ctx context.Context) error {
 	r := c.Manager.Runner
-	pending := c.pendingPath(kind)
+	pending := c.pendingPath()
 	err := r.Rename(pending, pending+".confirmed")
 	if errors.Is(err, fs.ErrNotExist) {
 		return ErrRolledBack
@@ -94,7 +93,7 @@ func (c *Confirmer) Disarm(ctx context.Context, kind string) error {
 	r.Remove(pending + ".confirmed")
 	// The marker is gone, so even if stopping the timer fails, a late
 	// firing finds nothing to do.
-	r.Exec(ctx, "systemctl", "stop", TimerUnit(kind)+".timer")
+	r.Exec(ctx, "systemctl", "stop", TimerUnit+".timer")
 	return nil
 }
 
@@ -106,7 +105,7 @@ func (c *Confirmer) Disarm(ctx context.Context, kind string) error {
 func (c *Confirmer) Apply(ctx context.Context, ch Change) (string, error) {
 	armed := false
 	ch.BeforeApply = func(ctx context.Context, backupID string) error {
-		if err := c.Arm(ctx, ch.Kind.Name, backupID); err != nil {
+		if err := c.Arm(ctx, backupID); err != nil {
 			return err
 		}
 		armed = true
@@ -114,21 +113,17 @@ func (c *Confirmer) Apply(ctx context.Context, ch Change) (string, error) {
 	}
 	id, err := c.Manager.Apply(ctx, ch)
 	if err != nil && armed {
-		c.Disarm(ctx, ch.Kind.Name)
+		c.Disarm(ctx)
 	}
 	return id, err
 }
 
-// Rollback is run by the timer (litenode internal rollback <kind>). It
-// restores the pending backup unless the user confirmed first. It reports
-// whether a rollback happened.
-func (c *Confirmer) Rollback(ctx context.Context, reg Registry, kind string) (bool, error) {
-	k, ok := reg[kind]
-	if !ok {
-		return false, fmt.Errorf("unknown kind %q", kind)
-	}
+// Rollback is run by the timer (litenode internal rollback). It restores
+// the pending change, all of its kinds, unless the user confirmed first.
+// It reports whether a rollback happened.
+func (c *Confirmer) Rollback(ctx context.Context, reg Registry) (bool, error) {
 	r := c.Manager.Runner
-	pending := c.pendingPath(kind)
+	pending := c.pendingPath()
 	claimed := pending + ".rollback"
 	err := r.Rename(pending, claimed)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -147,7 +142,11 @@ func (c *Confirmer) Rollback(ctx context.Context, reg Registry, kind string) (bo
 	if err != nil {
 		return false, err
 	}
-	if err := c.Manager.restore(ctx, k, b); err != nil {
+	kinds := make([]*Kind, len(b.Kinds))
+	for i, name := range b.Kinds {
+		kinds[i] = reg[name] // nil if unknown: files are restored, reapply is reported
+	}
+	if err := c.Manager.restore(ctx, kinds, b); err != nil {
 		return true, fmt.Errorf("rollback %s: %w", b.ID, err)
 	}
 	return true, nil
