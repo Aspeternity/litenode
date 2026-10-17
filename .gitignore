@@ -1,0 +1,24 @@
+# Build output
+/bin/
+/dist/
+/litenode
+/lnode
+
+# Go test and coverage
+*.test
+*.out
+coverage.*
+
+# Local Claude Code settings (personal, not shared)
+.claude/settings.local.json
+
+# Editor and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local secrets
+.env
+.env.*
