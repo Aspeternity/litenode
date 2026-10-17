@@ -19,7 +19,7 @@ LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web �
 ## 会话开始时
 
 1. 读 `docs/PROGRESS.md` 和 `docs/ROADMAP.md`。
-2. 运行 `git log --oneline -15` 和 `git status`，确认最近完成了什么、有没有未提交的改动。
+2. 运行 `git log --oneline -15`、`git status`、`git branch -a` 和 `gh pr list`，确认最近完成了什么、当前在哪个分支、有没有未提交的改动或未合并的 PR。
 3. 如果 PROGRESS 记录的状态和 git 记录不一致，以 git 为准，先告诉用户哪里不一致，再继续。
 4. 向用户说明本次准备做的任务编号和内容，等用户确认后再开始。
 
@@ -66,7 +66,13 @@ LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web �
 - **提交信息和 PR 描述中不要加入任何 AI 署名**：不加 `Co-Authored-By`，不加 "Generated with Claude Code" 之类的文字。
 - **提交作者邮箱必须是 GitHub 隐私邮箱** `192451861+Aspeternity@users.noreply.github.com`，不能暴露真实邮箱。每次提交前用 `git config user.email` 检查，不一致时停止并告诉用户，不要自行修改用户的 git 配置。
 - 不要强制推送 main 分支，不要改写已推送的历史。
-- 推送和打版本标签（tag）前先问用户。
+- **分支开发**（D-036）：
+  - 每个任务一个分支，从最新的 main 切出：`git checkout main && git pull --ff-only && git checkout -b <type>/<任务编号>-<英文简述>`，例如 `feat/M1-02-node-model`。不属于任何任务的文档修改用 `docs/<英文简述>`。
+  - 代码和文档都提交在任务分支上。分支可以随时推送到远程（`git push -u origin <分支>`），不需要逐次询问。
+  - 验收全部通过后开 PR：`gh pr create`，标题 `<type>(<任务编号>): <简述>`，描述列出验收结果（需要 VPS 验证的写明验证方式和结果）。等 CI 通过，把 PR 链接和验收结果告诉用户。
+  - **用户确认后才合并**：`gh pr merge --squash --delete-branch`，然后 `git checkout main && git pull --ff-only`。main 上每个任务一个提交。
+  - main 受 GitHub Ruleset 保护：不能直接推送、强制推送或删除，必须经过 PR 且 CI 通过才能合并。
+- 合并 PR 到 main、打版本标签（tag）前先问用户。标签打在合并后的 main 上。
 
 ## 开发环境
 
