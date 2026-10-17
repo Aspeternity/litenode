@@ -24,13 +24,13 @@
   - [x] 目录结构与 DESIGN 第 4 节一致。
   - [x] `.gitattributes`、`.gitignore`、`.claude/settings.json` 已在仓库中。
 
-### M0-02 命令执行抽象和 dry-run `未开始`
+### M0-02 命令执行抽象和 dry-run `已完成`
 
 - `internal/system` 的 Runner 接口：执行命令、写文件、管理 systemd 服务。真实实现 + dry-run 实现 + 测试用假实现。
 - 操作日志写入 `/var/log/litenode.log`。
 - 验收：
-  - [ ] 单元测试使用假 Runner，能断言执行了哪些命令。
-  - [ ] dry-run 模式下打印将执行的操作，不产生任何系统改动。
+  - [x] 单元测试使用假 Runner，能断言执行了哪些命令。
+  - [x] dry-run 模式下打印将执行的操作，不产生任何系统改动。
 
 ### M0-03 系统检测和能力探测 `未开始`
 
