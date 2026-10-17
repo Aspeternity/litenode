@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Aspeternity/litenode/internal/state"
@@ -23,9 +24,18 @@ import (
 // DefaultKeep is how many backups are kept for each kind (P-006).
 const DefaultKeep = 10
 
-// stagedSuffix is appended to a path to stage a candidate file for
-// validation before it replaces the real one.
-const stagedSuffix = ".litenode-new"
+// stagedMarker is inserted before a path's extension to stage a candidate
+// file for validation before it replaces the real one. The extension is
+// kept because some tools pick the format from it (xray: "Failed to get
+// format").
+const stagedMarker = ".litenode-new"
+
+// StagedPath returns where the candidate for path is validated:
+// /etc/litenode/xray.json -> /etc/litenode/xray.litenode-new.json.
+func StagedPath(path string) string {
+	ext := filepath.Ext(path)
+	return strings.TrimSuffix(path, ext) + stagedMarker + ext
+}
 
 // Kind describes one category of managed configuration, such as "sshd",
 // "nft" or "xray". Backups are grouped and pruned per kind.
@@ -63,10 +73,16 @@ func (reg Registry) Register(k *Kind) error {
 }
 
 // File is a managed file in its new form. Remove deletes it instead.
+//
+// Files under the config directory must follow state.CheckFileMode: 0600,
+// or 0640 with Group set (Apply rejects anything else).
 type File struct {
-	Path   string
-	Data   []byte
-	Mode   fs.FileMode
+	Path string
+	Data []byte
+	Mode fs.FileMode
+	// Group, if set, is given to the file (LiteNode runs as root, so the
+	// owner is root), for a service that runs as its own user.
+	Group  string
 	Remove bool
 }
 
@@ -127,6 +143,14 @@ func NewManager(r system.Runner, store *state.Store) *Manager {
 // Apply runs the change flow and returns the ID of the backup it made.
 // On failure the backup is restored and an *Error is returned.
 func (m *Manager) Apply(ctx context.Context, c Change) (string, error) {
+	for _, f := range c.Files {
+		if f.Remove {
+			continue
+		}
+		if err := state.CheckFileMode(m.configDir(), f.Path, f.Mode, f.Group); err != nil {
+			return "", &Error{Stage: StageBackup, Err: err}
+		}
+	}
 	b, err := m.backup(c)
 	if err != nil {
 		return "", &Error{Stage: StageBackup, Err: err}
@@ -183,9 +207,10 @@ func (m *Manager) validate(ctx context.Context, c Change) error {
 			if f.Remove {
 				continue
 			}
-			staged := f.Path + stagedSuffix
+			// Validators run as root, so the staged copy is always private.
+			staged := StagedPath(f.Path)
 			paths[f.Path] = staged
-			if err := m.Runner.WriteFile(staged, f.Data, f.Mode); err != nil {
+			if err := m.Runner.WriteFile(staged, f.Data, state.PrivateFileMode); err != nil {
 				return fmt.Errorf("stage %s: %w", f.Path, err)
 			}
 		}
@@ -204,11 +229,30 @@ func (m *Manager) writeFiles(files []File) error {
 			}
 			continue
 		}
-		if err := m.Runner.WriteFile(f.Path, f.Data, f.Mode); err != nil {
-			return fmt.Errorf("write %s: %w", f.Path, err)
+		if err := m.writeFile(f.Path, f.Data, f.Mode, f.Group); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// writeFile writes atomically and then sets the file's group. Until the
+// chgrp the group is root's, which is only more restrictive.
+func (m *Manager) writeFile(path string, data []byte, mode fs.FileMode, group string) error {
+	if err := m.Runner.WriteFile(path, data, mode); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if group != "" {
+		if _, err := m.Runner.Exec(context.Background(), "chgrp", group, path); err != nil {
+			return fmt.Errorf("chgrp %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+// configDir is the directory whose permissions LiteNode controls.
+func (m *Manager) configDir() string {
+	return filepath.Dir(m.Store.Path)
 }
 
 // restore puts back the files and state from b and reapplies them.
@@ -223,7 +267,7 @@ func (m *Manager) restore(ctx context.Context, k *Kind, b *Backup) error {
 		}
 		data, err := m.Runner.ReadFile(filepath.Join(b.Dir, e.Name))
 		if err == nil {
-			err = m.Runner.WriteFile(e.Path, data, e.Mode)
+			err = m.writeFile(e.Path, data, e.Mode, e.Group)
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("restore %s: %w", e.Path, err))
@@ -249,7 +293,7 @@ func (m *Manager) restoreState(b *Backup) error {
 	}
 	data, err := m.Runner.ReadFile(filepath.Join(b.Dir, stateName))
 	if err == nil {
-		err = m.Runner.WriteFile(m.Store.Path, data, 0o600)
+		err = m.Runner.WriteFile(m.Store.Path, data, state.PrivateFileMode)
 	}
 	if err != nil {
 		return fmt.Errorf("restore state file: %w", err)

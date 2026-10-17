@@ -73,6 +73,12 @@ func (r *Real) Remove(path string) error {
 	return err
 }
 
+func (r *Real) Chmod(path string, perm fs.FileMode) error {
+	err := os.Chmod(path, perm)
+	r.Log.Record(fmt.Sprintf("chmod %s %04o", path, perm), err)
+	return err
+}
+
 func (r *Real) MkdirAll(path string, perm fs.FileMode) error {
 	err := os.MkdirAll(path, perm)
 	r.Log.Record(fmt.Sprintf("mkdir %s (mode %04o)", path, perm), err)

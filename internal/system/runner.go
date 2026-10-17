@@ -4,8 +4,8 @@
 // Every system command, file write and service change goes through a Runner.
 // Read-only operations (Query, ReadFile) always execute, including in dry-run
 // mode, so menus can show the real system state. Mutating operations (Exec,
-// WriteFile, Remove, RemoveAll, Rename, MkdirAll) are only printed in
-// dry-run mode.
+// WriteFile, Remove, RemoveAll, Rename, MkdirAll, Chmod) are only printed
+// in dry-run mode.
 package system
 
 import (
@@ -42,8 +42,11 @@ type Runner interface {
 	// Rename atomically renames a file. Unlike Remove, a missing source is
 	// an error (fs.ErrNotExist), which makes it usable as an atomic claim.
 	Rename(oldPath, newPath string) error
-	// MkdirAll creates a directory and any missing parents.
+	// MkdirAll creates a directory and any missing parents. It does not
+	// change the mode of existing directories; use EnsureDir for that.
 	MkdirAll(path string, perm fs.FileMode) error
+	// Chmod sets the permission bits of a file or directory.
+	Chmod(path string, perm fs.FileMode) error
 }
 
 // CommandError is returned when a command cannot be started or exits non-zero.

@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -242,4 +244,32 @@ func TestLock(t *testing.T) {
 		t.Fatalf("lock after release: %v", err)
 	}
 	again.Release()
+}
+
+func TestStatePermissions(t *testing.T) {
+	old := syscall.Umask(0)
+	defer syscall.Umask(old)
+	saved := migrations
+	t.Cleanup(func() { migrations = saved })
+	migrations = map[int]Migration{0: func(map[string]any) error { return nil }}
+
+	dir := t.TempDir()
+	backups := filepath.Join(dir, "backups")
+	if err := os.Mkdir(backups, 0o755); err != nil { // pre-existing and too open
+		t.Fatal(err)
+	}
+	s := &Store{Runner: system.NewReal(nil), Path: filepath.Join(dir, "state.json"), BackupDir: backups, Now: time.Now}
+	if err := os.WriteFile(s.Path, []byte(`{}`), 0o644); err != nil { // v0, too open
+		t.Fatal(err)
+	}
+	if _, err := s.Load(); err != nil { // migrates: backup + save
+		t.Fatal(err)
+	}
+	bad, err := AuditPermissions(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bad) > 0 {
+		t.Errorf("readable by others:\n%s", strings.Join(bad, "\n"))
+	}
 }

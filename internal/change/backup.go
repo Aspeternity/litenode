@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/Aspeternity/litenode/internal/state"
+	"github.com/Aspeternity/litenode/internal/system"
 )
 
 const (
@@ -34,19 +37,25 @@ type BackupEntry struct {
 	Path    string      `json:"path"`
 	Name    string      `json:"name,omitempty"`
 	Mode    fs.FileMode `json:"mode"`
+	Group   string      `json:"group,omitempty"`
 	Existed bool        `json:"existed"`
 }
 
 func (m *Manager) backup(c Change) (*Backup, error) {
 	id := c.Kind.Name + "-" + m.Now().Format(timeLayout)
 	b := &Backup{ID: id, Kind: c.Kind.Name, Dir: filepath.Join(m.BackupDir, id)}
-	if err := m.Runner.MkdirAll(b.Dir, 0o700); err != nil {
-		return nil, fmt.Errorf("create backup directory: %w", err)
+	// Backups hold copies of private keys: directories 0700, files 0600,
+	// whatever the original file's mode was.
+	if err := system.EnsureDir(m.Runner, m.BackupDir, state.PrivateDirMode); err != nil {
+		return nil, err
+	}
+	if err := system.EnsureDir(m.Runner, b.Dir, state.PrivateDirMode); err != nil {
+		return nil, err
 	}
 
 	used := map[string]bool{manifestName: true, stateName: true}
 	for _, f := range c.Files {
-		e := BackupEntry{Path: f.Path, Mode: f.Mode}
+		e := BackupEntry{Path: f.Path, Mode: f.Mode, Group: f.Group}
 		data, err := m.Runner.ReadFile(f.Path)
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
@@ -55,7 +64,7 @@ func (m *Manager) backup(c Change) (*Backup, error) {
 		default:
 			e.Existed = true
 			e.Name = uniqueName(filepath.Base(f.Path), used)
-			if err := m.Runner.WriteFile(filepath.Join(b.Dir, e.Name), data, 0o600); err != nil {
+			if err := m.Runner.WriteFile(filepath.Join(b.Dir, e.Name), data, state.PrivateFileMode); err != nil {
 				return nil, fmt.Errorf("back up %s: %w", f.Path, err)
 			}
 		}
@@ -69,7 +78,7 @@ func (m *Manager) backup(c Change) (*Backup, error) {
 		return nil, fmt.Errorf("read state file: %w", err)
 	default:
 		b.StateExisted = true
-		if err := m.Runner.WriteFile(filepath.Join(b.Dir, stateName), data, 0o600); err != nil {
+		if err := m.Runner.WriteFile(filepath.Join(b.Dir, stateName), data, state.PrivateFileMode); err != nil {
 			return nil, fmt.Errorf("back up state file: %w", err)
 		}
 	}
@@ -78,7 +87,7 @@ func (m *Manager) backup(c Change) (*Backup, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode backup manifest: %w", err)
 	}
-	if err := m.Runner.WriteFile(filepath.Join(b.Dir, manifestName), append(manifest, '\n'), 0o600); err != nil {
+	if err := m.Runner.WriteFile(filepath.Join(b.Dir, manifestName), append(manifest, '\n'), state.PrivateFileMode); err != nil {
 		return nil, fmt.Errorf("write backup manifest: %w", err)
 	}
 	return b, nil

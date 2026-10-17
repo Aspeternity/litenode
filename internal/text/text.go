@@ -28,6 +28,11 @@ func DryRunRename(oldPath, newPath string) string {
 	return fmt.Sprintf("[dry-run] 重命名：%s → %s", oldPath, newPath)
 }
 
+// DryRunChmod describes a permission change that dry-run mode skipped.
+func DryRunChmod(path, mode string) string {
+	return fmt.Sprintf("[dry-run] 修改权限：%s（%s）", path, mode)
+}
+
 // DryRunMkdir describes a directory creation that dry-run mode skipped.
 func DryRunMkdir(path, mode string) string {
 	return fmt.Sprintf("[dry-run] 创建目录：%s（权限 %s）", path, mode)

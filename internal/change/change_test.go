@@ -69,7 +69,7 @@ func (fx *fixture) assertOriginal(t *testing.T) {
 		t.Errorf("state = %q, want restored original", got)
 	}
 	for p := range fx.f.Files {
-		if strings.HasSuffix(p, stagedSuffix) {
+		if strings.Contains(p, stagedMarker) {
 			t.Errorf("staged file left behind: %s", p)
 		}
 	}
@@ -97,7 +97,7 @@ func TestApplySuccess(t *testing.T) {
 			cmds = append(cmds, c.Command)
 		}
 	}
-	want := []string{"xray run -test -c " + confPath + stagedSuffix, "systemctl restart litenode-xray.service"}
+	want := []string{"xray run -test -c /etc/litenode/xray.litenode-new.json", "systemctl restart litenode-xray.service"}
 	if !slices.Equal(cmds, want) {
 		t.Errorf("commands = %q, want %q", cmds, want)
 	}
@@ -118,7 +118,7 @@ func TestValidateFailureRestores(t *testing.T) {
 	for _, inPlace := range []bool{false, true} {
 		t.Run(fmt.Sprintf("inPlace=%v", inPlace), func(t *testing.T) {
 			fx := newFixture(t)
-			validated := confPath + stagedSuffix
+			validated := StagedPath(confPath)
 			if inPlace {
 				validated = confPath
 			}
@@ -237,5 +237,18 @@ func TestBackupKeepsLatestN(t *testing.T) {
 	}
 	if _, ok := fx.f.Files[backupDir+"/sshd-20200101-000000.000/manifest.json"]; !ok {
 		t.Error("backup of another kind was pruned")
+	}
+}
+
+func TestStagedPathKeepsExtension(t *testing.T) {
+	for in, want := range map[string]string{
+		"/etc/litenode/xray.json":                 "/etc/litenode/xray.litenode-new.json",
+		"/etc/litenode/nftables.nft":              "/etc/litenode/nftables.litenode-new.nft",
+		"/etc/ssh/sshd_config.d/00-litenode.conf": "/etc/ssh/sshd_config.d/00-litenode.litenode-new.conf",
+		"/etc/litenode/noext":                     "/etc/litenode/noext.litenode-new",
+	} {
+		if got := StagedPath(in); got != want {
+			t.Errorf("StagedPath(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

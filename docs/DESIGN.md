@@ -113,6 +113,7 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 |---|---|
 | `/usr/local/bin/litenode` | 程序本体 |
 | `/usr/local/bin/lnode` | 软链接 |
+| `/etc/litenode/` | 权限 711（允许 Xray 用户按文件名进入，不能列目录），其下权限见下方"权限规则" |
 | `/etc/litenode/state.json` | 状态文件，唯一数据源，权限 600 |
 | `/etc/litenode/backups/` | 配置变更前的备份 |
 | `/etc/litenode/xray.json` | 由状态文件生成的 Xray 配置，不手动修改 |
@@ -126,6 +127,15 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 | `/var/log/litenode.log` | LiteNode 自身的操作日志 |
 | `/run/litenode.lock` | 实例锁（`flock`），重启后自动清除 |
 | `/run/litenode/<类型>.pending` | 限时确认的待确认标记（内容为备份 ID） |
+
+**`/etc/litenode` 权限规则**（集中定义在 `internal/state/layout.go`）：
+
+- 所有权限都显式设置，不依赖 umask 或已有文件的权限：创建目录用 `system.EnsureDir`（创建后再 chmod，已存在的目录也会被改正），写文件用原子写入（显式 chmod）。
+- `/etc/litenode` 本身 711；其下所有子目录（如 `backups/` 及每次备份的目录）700。
+- 其下所有文件 600（`state.json`、`nftables.nft`、备份中的所有文件、校验用的临时文件等）。备份中有包含私钥的 `xray.json` 副本，同样是 600。
+- 唯一例外：`/etc/litenode/xray.json` 为 640，属组 `litenode-xray`（Xray 服务需要读取）。
+- 配置变更流程（第 6 节）在写入前检查：`/etc/litenode` 下的文件只能是 600，或 640 且指定属组，否则拒绝执行。需要属组的文件写入后用 `chgrp` 设置属组，备份中记录属组，恢复时一并恢复。
+- 单元测试在 umask 为 0、`backups/` 预先为 755 的情况下走完状态保存、迁移备份、配置变更、失败恢复，检查除 `xray.json` 外没有任何文件或目录对 root 以外的用户可读（`state.AuditPermissions`）；测试 VPS 上的集成测试对真实的 `/etc/litenode` 做同样检查。
 
 ## 4. 代码结构
 
@@ -264,7 +274,7 @@ docs/
 
 - **配置类型**（kind）：如 `sshd`、`nft`、`xray`，名称只用小写字母。每类定义自己的校验函数和应用函数（重启或重载服务并检查运行状态），登记在注册表中，供回滚子命令在另一个进程中重新应用旧配置。
 - **备份格式**：每次变更一个目录 `backups/<类型>-<时间>/`，内含原样的配置文件、`state.json` 和 `manifest.json`（记录每个文件的原路径、权限、修改前是否存在）。`manifest.json` 最后写入，没有它的目录视为不完整。用户可以直接复制单个文件手动恢复。修改前不存在的文件，恢复时删除。
-- **两种校验方式**：默认先把候选文件写到 `<路径>.litenode-new` 校验（`xray run -test`、`nft -c`），通过后再写入正式位置，临时文件随即删除。无法单独校验文件的类型（`sshd -t`）标记为"就地校验"：先写入正式位置，立即校验，失败马上恢复，此时还没有重载服务。
+- **两种校验方式**：默认先把候选文件写到临时位置校验（在扩展名前插入 `.litenode-new`，如 `xray.litenode-new.json`，保留扩展名是因为 Xray 按扩展名判断配置格式；临时文件权限一律 600）（`xray run -test`、`nft -c`），通过后再写入正式位置，临时文件随即删除。无法单独校验文件的类型（`sshd -t`）标记为"就地校验"：先写入正式位置，立即校验，失败马上恢复，此时还没有重载服务。
 
 **限时确认回滚**（用于 SSH 配置和防火墙中可能影响 SSH 的操作）：
 
@@ -552,9 +562,17 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 ```
 
 - **安装**：首次添加节点时自动安装。从 `XTLS/Xray-core` 的 GitHub Release 下载对应架构的压缩包，用 Release 中附带的摘要文件（`.dgst`）校验 sha256，安装到 `/usr/local/lib/litenode/xray`。资产文件名以 Release 实际为准。
-- **服务**：`litenode-xray.service`，以非 root 用户运行（如 `nobody` 或专用用户），通过 `AmbientCapabilities=CAP_NET_BIND_SERVICE` 允许绑定 443 等低端口。
+  - 资产名：amd64 为 `Xray-linux-64.zip`，arm64 为 `Xray-linux-arm64-v8a.zip`；`.dgst` 中取 `SHA2-256=` 一行。
+  - "最新版"指 GitHub 的 latest release（正式版，不含预发布版）；指定版本时可以填任意已发布的版本（含预发布版），`26.3.27` 和 `v26.3.27` 都接受。
+  - 压缩包中只安装 `xray` 程序，不安装 geoip / geosite（D-008）。下载和解压在内存中完成。
+  - 安装时创建系统用户 `litenode-xray`（无登录 shell、无主目录），写入 systemd 单元，把 `/etc/litenode` 设为 711。安装后用 `xray version` 确认版本，失败则删除已写入的文件。
+  - 安装**不启动服务**：没有启用的节点时 Xray 停止并取消开机启动，不占内存；有启用的节点时才启动（在 M1-07 接入）。
+  - 程序本身不走第 6 节的变更流程（体积大，不保留 10 份备份），见下方"更新"。
+- **服务**：`litenode-xray.service`，以专用系统用户 `litenode-xray` 运行，通过 `AmbientCapabilities=CAP_NET_BIND_SERVICE` 允许绑定 443 等低端口（`CapabilityBoundingSet` 也只保留这一项），另加 `NoNewPrivileges`、`ProtectSystem=full`、`ProtectHome`、`PrivateTmp`。配置 `/etc/litenode/xray.json` 为 640、属组 `litenode-xray`。
 - **查看日志**：`journalctl -u litenode-xray -f`。
 - **更新**：默认最新版，可以输入指定版本。更新后用当前配置执行 `xray run -test` 校验，失败则回退旧版本。
+  - 旧程序先改名为 `xray.bak`，新程序写入后依次检查：`xray version` 报告的版本正确、接受当前配置、服务原本在运行时重启后 2 秒仍在运行。任一项失败就把 `xray.bak` 改回并重启旧程序（重启前先 `systemctl reset-failed`，因为崩溃的新程序会被 systemd 反复拉起而触发启动频率限制）。成功后删除 `xray.bak`。
+- **卸载（程序部分）**：停止并禁用服务，删除程序、单元文件、`xray.json` 和 `litenode-xray` 用户；`/usr/local/lib/litenode` 为空时一并删除。删除节点和客户端由调用方处理（D-020）。
 - **卸载**：执行前列出将删除的节点数和客户端数，提示可以先在"维护"中导出配置，二次确认后删除 Xray、所有节点和客户端，并清理这些节点对应的防火墙规则。端口转发、SSH 和防火墙的其他设置保持不变。
 
 ## 13. SSH 管理

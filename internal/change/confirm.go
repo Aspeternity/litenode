@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Aspeternity/litenode/internal/state"
+	"github.com/Aspeternity/litenode/internal/system"
 )
 
 // DefaultConfirmSeconds is how long the user has to confirm (P-006).
@@ -58,10 +61,10 @@ func (c *Confirmer) Arm(ctx context.Context, kind, backupID string) error {
 	r.Exec(ctx, "systemctl", "stop", unit+".timer")
 	r.Exec(ctx, "systemctl", "reset-failed", unit+".service")
 
-	if err := r.MkdirAll(c.PendingDir, 0o700); err != nil {
-		return fmt.Errorf("create pending directory: %w", err)
+	if err := system.EnsureDir(r, c.PendingDir, state.PrivateDirMode); err != nil {
+		return err
 	}
-	if err := r.WriteFile(c.pendingPath(kind), []byte(backupID+"\n"), 0o600); err != nil {
+	if err := r.WriteFile(c.pendingPath(kind), []byte(backupID+"\n"), state.PrivateFileMode); err != nil {
 		return fmt.Errorf("write pending marker: %w", err)
 	}
 	_, err := r.Exec(ctx, "systemd-run",
