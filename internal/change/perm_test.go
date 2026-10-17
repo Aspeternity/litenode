@@ -61,13 +61,13 @@ func TestConfigDirPermissions(t *testing.T) {
 	// Several successful changes (exercising pruning) and a failed one
 	// (exercising restore).
 	for range 3 {
-		if _, err := m.Apply(context.Background(), Change{Kind: kind, Files: files, State: state.New()}); err != nil {
+		if _, err := m.Apply(context.Background(), Change{Parts: []Part{{Kind: kind, Files: files}}, State: state.New()}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	failing := *kind
 	failing.Apply = func(context.Context, system.Runner) error { return errors.New("restart failed") }
-	if _, err := m.Apply(context.Background(), Change{Kind: &failing, Files: files, State: state.New()}); err == nil {
+	if _, err := m.Apply(context.Background(), Change{Parts: []Part{{Kind: &failing, Files: files}}, State: state.New()}); err == nil {
 		t.Fatal("want failure")
 	}
 
@@ -98,7 +98,7 @@ func TestApplyRejectsLooseModes(t *testing.T) {
 		{Path: "/etc/litenode/xray.json", Mode: 0o640},                         // no group
 		{Path: "/etc/litenode/xray.json", Mode: 0o644, Group: "litenode-xray"}, // others can read
 	} {
-		_, err := fx.m.Apply(context.Background(), Change{Kind: testKind(false), Files: []File{f}})
+		_, err := fx.m.Apply(context.Background(), Change{Parts: []Part{{Kind: xrayKind(false), Files: []File{f}}}})
 		if err == nil {
 			t.Errorf("mode %04o group %q accepted", f.Mode, f.Group)
 		}
@@ -107,8 +107,8 @@ func TestApplyRejectsLooseModes(t *testing.T) {
 		t.Errorf("rejected change touched the system: %v", m)
 	}
 	// Files outside the config directory keep their own modes.
-	_, err := fx.m.Apply(context.Background(), Change{Kind: testKind(false),
-		Files: []File{{Path: "/etc/systemd/system/x.service", Data: []byte("x"), Mode: 0o644}}})
+	_, err := fx.m.Apply(context.Background(), Change{Parts: []Part{{Kind: xrayKind(false),
+		Files: []File{{Path: "/etc/systemd/system/x.service", Data: []byte("x"), Mode: 0o644}}}}})
 	if err != nil {
 		t.Errorf("unit file rejected: %v", err)
 	}

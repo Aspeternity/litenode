@@ -139,7 +139,7 @@ func TestRunHelp(t *testing.T) {
 }
 
 func TestRunUnknownCommand(t *testing.T) {
-	for _, args := range [][]string{{"bogus"}, {"version", "extra"}, {"internal"}, {"internal", "resolve", "x"}, {"--dry-run", "x"}} {
+	for _, args := range [][]string{{"bogus"}, {"version", "extra"}, {"internal"}, {"internal", "resolve", "x"}, {"internal", "rollback", "sshd"}, {"--dry-run", "x"}} {
 		if r := run(t, supported(), 0, "", args...); r.code != 2 || !strings.Contains(r.stderr, "litenode help") {
 			t.Errorf("%q: %+v", args, r)
 		}
@@ -196,7 +196,7 @@ func TestRunInternalRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	// No lock path: rollback must not take the instance lock.
-	env := Env{Runner: systemtest.New(), Euid: 0, Args: []string{"internal", "rollback", "sshd"}, Kinds: kinds}
+	env := Env{Runner: systemtest.New(), Euid: 0, Args: []string{"internal", "rollback"}, Kinds: kinds}
 	if r := runEnv(t, env, ""); r.code != 0 || !strings.Contains(r.stdout, text.RollbackNotNeeded) {
 		t.Errorf("%+v", r)
 	}
