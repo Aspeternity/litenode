@@ -1,0 +1,55 @@
+// Package node defines the node and client models and the
+// protocol/transport/security registry.
+//
+// A node combines a protocol (vless, ...), a transport (tcp, ...) and a
+// security layer (reality, ...). Each component's own settings live in a
+// typed optional field of Node (D-039), so the state file reads like
+// DESIGN section 5.
+package node
+
+// Node is one inbound, as stored in the state file.
+type Node struct {
+	ID        int64  `json:"id"`
+	Remark    string `json:"remark"`
+	Enabled   bool   `json:"enabled"`
+	Port      int    `json:"port"`
+	Protocol  string `json:"protocol"`
+	Transport string `json:"transport"`
+	Security  string `json:"security"`
+	// Reality is set when Security is "reality".
+	Reality *Reality `json:"reality,omitempty"`
+	Clients []Client `json:"clients"`
+}
+
+// Reality holds the REALITY security settings of a node.
+type Reality struct {
+	// Target is the site unverified connections fall back to, "host:port".
+	Target        string        `json:"target"`
+	ServerNames   []string      `json:"server_names"`
+	PrivateKey    string        `json:"private_key"`
+	PublicKey     string        `json:"public_key"`
+	ShortIDs      []string      `json:"short_ids"`
+	Fingerprint   string        `json:"fingerprint"`
+	FallbackLimit FallbackLimit `json:"fallback_limit"`
+}
+
+// FallbackLimit throttles fallback connections so the VPS cannot be used
+// as a free relay to the target site (DESIGN section 10.4).
+type FallbackLimit struct {
+	AfterBytes       int64 `json:"after_bytes"`
+	BytesPerSec      int64 `json:"bytes_per_sec"`
+	BurstBytesPerSec int64 `json:"burst_bytes_per_sec"`
+}
+
+// Client is one user of a node. Its remark is the Xray "email" and is
+// unique across all clients of all nodes.
+type Client struct {
+	ID      int64  `json:"id"`
+	Remark  string `json:"remark"`
+	UUID    string `json:"uuid"`
+	Flow    string `json:"flow,omitempty"`
+	Enabled bool   `json:"enabled"`
+}
+
+// FlowVision is the XTLS Vision flow.
+const FlowVision = "xtls-rprx-vision"

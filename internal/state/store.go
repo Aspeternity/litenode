@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/system"
 )
 
@@ -105,6 +106,9 @@ func (s *Store) Load() (*State, error) {
 // ConfigDirMode.
 func (s *Store) Save(st *State) error {
 	st.SchemaVersion = SchemaVersion
+	if st.Nodes == nil {
+		st.Nodes = []node.Node{} // "nodes": [] rather than null
+	}
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode state: %w", err)
