@@ -5,12 +5,12 @@
 ## 当前状态
 
 - **阶段**：M0 项目骨架。
-- **当前任务**：无（M0-02 已完成）。
-- **下一个任务**：M0-03 系统检测和能力探测。
+- **当前任务**：无（M0-03 已完成）。
+- **下一个任务**：M0-04 状态文件。
 
 ## 下次会话从这里开始
 
-1. 开始 M0-03。第一个界面提示（非 root、不支持的系统）的文字放进 `internal/text`。
+1. 开始 M0-04。
 2. 提议条目中 P-006、P-010 已确认；其余 P-001 ~ P-005、P-007 ~ P-009 在用到的任务开始前再与用户确认。
 
 ## 未解决的问题
@@ -24,13 +24,20 @@
 - `internal/text` 已创建（M0-02，dry-run 输出文字），`TestNoChineseOutsideText` 扫描其他包的非测试 Go 文件（含注释），发现中文即失败。
 - 执行层用法：只读用 `Query` / `ReadFile`，修改用 `Exec` / `WriteFile` / `Remove` / `MkdirAll`；systemd 操作用 `system.Systemctl`、`DaemonReload`、`ServiceActive`、`ServiceEnabled`。命令执行时设置 `LC_ALL=C`，便于解析输出。
 - 其他包的测试用 `systemtest.New()`：`Respond` 设定命令输出，`Files` 模拟文件，`WriteErr` 模拟写入失败，`Execs()` / `Mutations()` 断言。
+- 启动流程在 `internal/app`：root 检查 → `system.Detect` → 版本判断。主菜单完成前（M0-06）只打印系统行和警告行后退出。
+- 能力探测注册在 `internal/system/probe.go` 的 `probes`，目前只有 BBR；swap、sysctl、nftables 在对应任务中加入。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。
 
 ## 需要用户在测试 VPS 上验证的事项
 
 （暂无）
 
+## 测试 VPS
+
+- Debian 12、KVM、x86_64、内存约 1G，BBR 已启用，已装 nftables，没有 Xray / Docker。
+- 登录信息由用户在会话中提供，**不写入仓库**；用户会不定期重装系统和改密码。
+
 ## 最近一次会话
 
 - **日期**：2026-10-18
-- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）。
+- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）。
