@@ -705,3 +705,13 @@
   - 当前 DNS 显示：LiteNode 设置的值，或系统的值（`resolvectl dns` / resolv.conf 中的 nameserver）。DNS 不进状态文件。
 - **原因**：两种模式都按系统实际使用的文件修改才会生效；事先测试服务器可以避免填错 IP 让系统无法解析。
 - **否决**：在 resolvconf 的 `head` 文件中追加（DHCP 的 DNS 仍在后面，结果不确定）；用 `chattr +i` 锁住 resolv.conf（影响系统工具，用户难以排查）；在 resolved 下修改 `/etc/systemd/resolved.conf` 本身（覆盖用户配置）；应用后解析失败就自动回滚（可能只是暂时网络问题）。
+
+### D-082 时区与时间同步的实现（由 Claude 决定（用户授权））
+
+- **内容**：
+  - 状态读取 `timedatectl show -p Timezone -p NTP -p NTPSynchronized -p CanNTP`；读取失败（部分容器没有 systemd-timedated）时整项隐藏。不进状态文件，也不走变更流程（没有 LiteNode 生成的文件，用户可随时改回）。
+  - **时区**：常用 10 个（UTC、上海、香港、台北、东京、新加坡、洛杉矶、纽约、伦敦、柏林）加手动输入，按 `timedatectl list-timezones` 校验后 `timedatectl set-timezone`。
+  - **时间同步**：`CanNTP=no`（Debian 12 精简镜像没有任何 NTP 服务）时先 `apt-get install -y systemd-timesyncd`，再 `systemctl try-restart systemd-timedated`（实测：正在运行的 timedated 保留启动时的 NTP 服务列表，不重启则 `set-ntp` 报 "NTP not supported"），然后 `timedatectl set-ntp true`；已装 chrony / ntp 时由 `set-ntp` 使用它们，不另装。开启后每 2 秒检查一次，最多 30 秒，未同步只提示稍后查看。
+  - 容器中隐藏"开启时间同步"，状态区不显示同步标记。
+- **原因**：`timedatectl` 是 Debian / Ubuntu 的统一接口，能同时适配 timesyncd 和 chrony；安装 timesyncd 只在没有任何同步服务时进行，避免与用户的 chrony 冲突。
+- **否决**：直接 `systemctl enable --now systemd-timesyncd`（与已有的 chrony 冲突）；用 `ntpdate` 一次性校时（不持续同步）；时区列表全部列出（四百多项，不便选择）。
