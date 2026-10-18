@@ -293,7 +293,7 @@ func TestVPSGeneratedConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := GenerateConfig(reg, goldenNodes())
+	data, err := GenerateConfig(reg, goldenNodes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

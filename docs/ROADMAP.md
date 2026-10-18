@@ -379,14 +379,14 @@
 ### M5-06 系统优化菜单 `已完成`
 - 验收：[x] 菜单与 DESIGN 第 15 节一致，不可用的项隐藏。
 
-### M5-07 节点出站 IP `未开始`
+### M5-07 节点出站 IP `已完成`
 - Xray 服务菜单新增"节点出站 IP"（freedom 出站 `domainStrategy`）：默认（AsIs）、优先 IPv4（UseIPv4v6）、优先 IPv6（UseIPv6v4）、仅 IPv4（ForceIPv4）、仅 IPv6（ForceIPv6）。与系统的 `gai.conf` 优先级互相独立（D-084）。
 - 状态文件 `xray.outbound_ip`；走 Xray 变更流程；选"仅"之前检查本机有对应的公网地址和默认路由，没有则拒绝；Xray 菜单状态区显示当前模式。
 - 系统优化第 3 项改名为"系统 IPv4 / IPv6 优先级"，说明不影响节点出站。
 - 验收：
-  - [ ] 单元测试：五种模式生成的 Xray 配置（golden file）。
-  - [ ] [VPS] Ubuntu：通过节点访问 `https://www.cloudflare.com/cdn-cgi/trace`，五种模式的出口 IP 协议符合预期；同时 VPS 本机 `curl` 的出站不受影响。
-  - [ ] [VPS] 没有 IPv6 的机器（Debian）选"仅 IPv6"被拒绝。
+  - [x] 单元测试：五种模式生成的 Xray 配置（golden file）。
+  - [x] [VPS] Ubuntu：通过节点访问 `https://www.cloudflare.com/cdn-cgi/trace`，五种模式的出口 IP 协议符合预期；同时 VPS 本机 `curl` 的出站不受影响。
+  - [x] [VPS] 没有 IPv6 的机器（Debian）选"仅 IPv6"被拒绝。
 
 ---
 
