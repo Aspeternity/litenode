@@ -197,7 +197,7 @@ func TestArmInstallsBootUnitOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(fx.f.Files[unit])
-	for _, want := range []string{"ConditionPathExists=/run/litenode/pending\n", "ExecStart=/usr/local/bin/litenode internal rollback\n", "WantedBy=multi-user.target\n"} {
+	for _, want := range []string{"ConditionPathExists=/run/litenode/pending\nConditionPathExists=/usr/local/bin/litenode\n", "ExecStart=/usr/local/bin/litenode internal rollback\n", "WantedBy=multi-user.target\n"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("unit missing %q:\n%s", want, got)
 		}

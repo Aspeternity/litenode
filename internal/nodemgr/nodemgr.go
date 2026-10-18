@@ -59,14 +59,28 @@ func (s *Service) Kinds() []*change.Kind {
 	return []*change.Kind{xray.Kind(s.Store, s.Xray), ufw.Kind(s.Store), firewall.SyncKind(s.Store)}
 }
 
+// ErrXrayMissing means the Xray program is gone (e.g. deleted by hand)
+// while st has nodes that need it: install it again first.
+var ErrXrayMissing = errors.New("xray program is missing")
+
 // apply writes the Xray config for st and applies it with the ufw and
-// firewall sync.
+// firewall sync. Without the Xray program the config cannot be checked:
+// that is fine when no node needs Xray (e.g. deleting nodes), otherwise
+// it fails with ErrXrayMissing.
 func (s *Service) apply(ctx context.Context, st *state.State) error {
 	f, err := xray.ConfigFile(s.Registry, st)
 	if err != nil {
 		return err
 	}
 	k := s.Kinds()
+	if _, ok := s.Xray.Installed(ctx); !ok {
+		if xray.Running(st) {
+			return ErrXrayMissing
+		}
+		unchecked := *k[0]
+		unchecked.Validate = nil
+		k[0] = &unchecked
+	}
 	_, err = s.Changes.Apply(ctx, change.Change{
 		Parts: []change.Part{{Kind: k[0], Files: []change.File{f}}, {Kind: k[1]}, {Kind: k[2]}},
 		State: st,
@@ -182,6 +196,19 @@ func (s *Service) EnsureXray(ctx context.Context, st *state.State) error {
 	}
 	st.Xray.Version = v
 	return nil
+}
+
+// ReinstallXray installs Xray again when the program is missing but the
+// state still has nodes, and applies the nodes (D-095).
+func (s *Service) ReinstallXray(ctx context.Context) error {
+	st, err := s.Store.Load()
+	if err != nil {
+		return err
+	}
+	if err := s.EnsureXray(ctx, st); err != nil {
+		return err
+	}
+	return s.apply(ctx, st)
 }
 
 // modify loads the state, lets fn change node id, and applies the result.
