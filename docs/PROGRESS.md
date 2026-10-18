@@ -17,7 +17,7 @@
 
 登录信息由用户在会话中提供，**不写入仓库或记忆**。用户授权两台都可以完全用于测试。
 
-- **Ubuntu 24.04.5**（M2 起的主测试机，D-048）：KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 62.84.164.181，有 IPv6。已用一行命令安装 `v0.0.2`，之后换成 main `75bf986` 的编译版本供用户复验；没有节点、Xray 未安装；root 的 `authorized_keys` 中有从 GitHub 导入的 Aspeternity 公钥（即开发机 WSL 的 `~/.ssh/id_ed25519`），可以用密钥登录，M2-04 关闭密码登录时使用；装有 `litenode-rollback-boot.service`；已安装 `python3`、`zbar-tools`；ufw 未启用。
+- **Ubuntu 24.04.5**（M2 起的主测试机，D-048）：KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 62.84.164.181，有 IPv6。`/usr/local/bin/litenode` 是开发中的分支版本；没有节点、Xray 未安装；root 的 `authorized_keys` 中有从 GitHub 导入的 Aspeternity 公钥（即开发机 WSL 的 `~/.ssh/id_ed25519`），可以用密钥登录，M2-04 关闭密码登录时使用；装有 `litenode-rollback-boot.service`；已安装 `python3`、`zbar-tools`；ufw 未启用。
 - **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234，公网 IP 216.23.88.252。上面有用户验收时添加的节点。
 
 ## 实机测试方法（M1 建立，后续沿用）
