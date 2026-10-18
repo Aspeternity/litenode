@@ -16,6 +16,7 @@ BASE_URL="https://github.com/${REPO}/releases/latest/download"
 BIN_DIR="/usr/local/bin"
 BIN="${BIN_DIR}/litenode"
 LINK="${BIN_DIR}/lnode"
+README_URL="https://github.com/${REPO}#无法访问-github-的机器"
 
 red() { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -63,7 +64,7 @@ detect_arch() {
 download() {
 	local name="$1"
 	if ! curl -fsSL --retry 3 --connect-timeout 15 -o "${tmp_dir}/${name}" "${BASE_URL}/${name}"; then
-		die "下载 ${name} 失败。请检查网络能否访问 GitHub 后重试。"
+		die "下载 ${name} 失败，未做任何修改。这台机器可能无法访问 GitHub，手动安装方法见 ${README_URL}"
 	fi
 }
 

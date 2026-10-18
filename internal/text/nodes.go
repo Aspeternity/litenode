@@ -183,7 +183,7 @@ func ErrRemarkTooLong(max int) string {
 
 // XrayInstallFailed explains a failed Xray download (D-042).
 func XrayInstallFailed(err error) string {
-	return fmt.Sprintf("安装 Xray 失败：%v\n如果这台机器无法访问 GitHub，请参考 README 中的手动安装说明。", err)
+	return fmt.Sprintf("安装 Xray 失败：%v\n如果这台机器无法访问 GitHub，请参考 %s", err, NoGitHubURL)
 }
 
 // ChangeFailed explains a failed configuration change; restored reports
