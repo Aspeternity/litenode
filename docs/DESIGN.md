@@ -138,6 +138,10 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 
 "维护 → 更新脚本"：查询 GitHub 最新 Release → 比较版本 → 下载并校验 sha256 → 原子替换 `/usr/local/bin/litenode`，旧版本保留为 `/usr/local/bin/litenode.bak`。
 
+- 只更新 `/usr/local/bin/litenode`（不论当前运行的是哪个文件）。新程序先写到 `litenode.new`，运行 `litenode.new version` 确认报告的版本正确，再把当前程序复制为 `litenode.bak`，最后 rename 替换；sha256 不符或新程序无法运行时删除 `litenode.new`，不做任何修改。
+- 当前已是最新版本时只提示；未注入版本号的开发版本（`dev`）总是可以更新。更新前显示当前和最新版本并确认。
+- 更新后提示恢复方法（`mv litenode.bak litenode`），并退出 LiteNode：正在运行的仍是旧程序，需要重新运行（D-087）。
+
 ### 文件位置
 
 | 路径 | 用途 |
