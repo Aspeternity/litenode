@@ -18,6 +18,10 @@ import (
 // unwind and exit.
 var ErrQuit = errors.New("quit")
 
+// ErrBack, returned by a menu action, leaves that menu as if the user had
+// chosen 0 (e.g. after deleting the item the menu is about).
+var ErrBack = errors.New("back")
+
 // Session reads user input and handles interrupt signals.
 //
 // An interrupt while waiting for input quits at once. An interrupt while an
@@ -136,6 +140,9 @@ func (s *Session) Run(build func() Menu) error {
 			return nil
 		}
 		if err := items[choice-1].Action(); err != nil {
+			if errors.Is(err, ErrBack) {
+				return nil
+			}
 			if errors.Is(err, ErrQuit) {
 				return err
 			}

@@ -275,3 +275,34 @@ const (
 	XrayStoppedByUser = "○ 已停止（手动）"
 	XrayManualWarning = "Xray 已手动停止，节点当前不可用。在\"Xray 服务\"中启动。"
 )
+
+// Client management (DESIGN section 9.4).
+const (
+	ClientAdd          = "添加客户端"
+	ClientModify       = "修改客户端"
+	ClientModifyHint   = "(备注 / UUID)"
+	ClientToggle       = "启用 / 禁用客户端"
+	ClientLink         = "分享链接 / 二维码"
+	ClientDelete       = "删除客户端"
+	ClientRemark       = "备注"
+	ClientResetUUID    = "重置 UUID"
+	PromptClientNumber = "请输入客户端序号"
+	ClientAdded        = "客户端已添加。"
+	ClientEnabled      = "客户端已启用。"
+	ClientDisabled     = "客户端已禁用。"
+	ClientDeleted      = "客户端已删除。"
+	ClientUUIDReset    = "UUID 已重置，该客户端的旧链接已失效，新链接如下。"
+	ConfirmResetUUID   = "重置后该客户端的旧链接立即失效（其他客户端不受影响），是否继续？"
+	LastClientDelete   = "节点至少需要一个客户端，是否同时删除节点？"
+	ErrClientNotFound  = "客户端不存在。"
+)
+
+// ClientsTitle heads the client menu, e.g. "节点 1: LA (VLESS-TCP-Reality :443)".
+func ClientsTitle(seq int, remark, proto string, port int) string {
+	return fmt.Sprintf("节点 %d: %s (%s :%d)", seq, remark, proto, port)
+}
+
+// ConfirmDeleteClient asks before deleting a client.
+func ConfirmDeleteClient(remark string) string {
+	return fmt.Sprintf("删除客户端 %s？", remark)
+}
