@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -25,6 +26,20 @@ func NewReal(log *OpLog) *Real {
 
 func (r *Real) Query(ctx context.Context, name string, args ...string) (Result, error) {
 	return run(ctx, name, args)
+}
+
+func (r *Real) Stream(ctx context.Context, out io.Writer, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdout, cmd.Stderr = out, out
+	ownProcessGroup(cmd)
+	err := cmd.Run()
+	if ctx.Err() != nil {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", CommandLine(name, args...), err)
+	}
+	return nil
 }
 
 func (r *Real) Exec(ctx context.Context, name string, args ...string) (Result, error) {

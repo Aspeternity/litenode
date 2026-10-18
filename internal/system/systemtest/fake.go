@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -131,6 +132,13 @@ func (f *Fake) Snapshot() map[string][]byte {
 
 func (f *Fake) Query(_ context.Context, name string, args ...string) (system.Result, error) {
 	return f.command(OpQuery, name, args)
+}
+
+// Stream writes the command's response (stdout, then stderr) to out.
+func (f *Fake) Stream(_ context.Context, out io.Writer, name string, args ...string) error {
+	res, err := f.command(OpQuery, name, args)
+	io.WriteString(out, res.Stdout+res.Stderr)
+	return err
 }
 
 func (f *Fake) Exec(_ context.Context, name string, args ...string) (system.Result, error) {

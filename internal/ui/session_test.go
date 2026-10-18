@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -168,5 +169,55 @@ func TestRunErrBackLeavesMenu(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("err = %v, want nil (back)", err)
+	}
+}
+
+func TestFollowInterruptReturnsToMenu(t *testing.T) {
+	s, out, sigs := newTestSession(strings.NewReader("next\n"))
+	err := s.Follow(context.Background(), func(ctx context.Context) error {
+		sigs <- syscall.SIGINT // Ctrl+C while following
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+			return errors.New("not canceled")
+		}
+	})
+	if err != nil {
+		t.Fatalf("Follow = %v", err)
+	}
+	if strings.Contains(out.String(), text.BusyInterrupt) {
+		t.Error("Ctrl+C while following printed the busy notice")
+	}
+	// The session goes on: the next prompt reads input instead of quitting.
+	if line, err := s.Prompt("> "); err != nil || line != "next" {
+		t.Errorf("Prompt = %q, %v", line, err)
+	}
+}
+
+func TestFollowHangupQuits(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	s, _, sigs := newTestSession(pr)
+	err := s.Follow(context.Background(), func(ctx context.Context) error {
+		sigs <- syscall.SIGHUP
+		<-ctx.Done()
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Follow = %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		s.mu.Lock()
+		q := s.quit
+		s.mu.Unlock()
+		if q || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if _, err := s.Prompt("> "); !errors.Is(err, ErrQuit) {
+		t.Errorf("Prompt after SIGHUP = %v, want ErrQuit", err)
 	}
 }

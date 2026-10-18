@@ -280,3 +280,37 @@ func TestClientAddChoosesNode(t *testing.T) {
 		t.Errorf("disabled link:\n%s", r.stdout)
 	}
 }
+
+func TestXrayMenuStateAndLogs(t *testing.T) {
+	f := nodeSystem()
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	show := []string{"show", xray.UnitName, "-p", "ActiveState", "--value"}
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "active\n"}}, "systemctl", show...)
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "log line\n"}}, "journalctl", "-u", xray.UnitName, "-n", "80", "--no-pager", "-o", "short-iso")
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "live line\n"}}, "journalctl", "-u", xray.UnitName, "-f", "-n", "20", "--no-pager", "-o", "short-iso")
+	before := len(f.Execs())
+	// start while running; logs > recent, bad count, 80 lines; live; back.
+	r := runNodes(t, f, "5\n1\n4\n1\n2000\n80\n2\n0\n0\n0\n")
+	for _, want := range []string{
+		"Xray 已在运行，没有重启。",
+		"══ 查看日志 ══", " 1. 最近日志", " 2. 实时日志",
+		"显示行数（最多 1000，0 返回） [50]: ", "请输入 0 到 1000 之间的数字。",
+		"最近 80 行日志：", "log line",
+		"实时日志（按 Ctrl+C 回到菜单）：", "live line",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
+	}
+	if e := f.Execs()[before:]; len(e) != 0 {
+		t.Errorf("start while running changed the system: %v", e)
+	}
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "inactive\n"}}, "systemctl", show...)
+	r = runNodes(t, f, "5\n2\n0\n0\n")
+	if !strings.Contains(r.stdout, "Xray 已经是停止状态。") {
+		t.Errorf("stop while stopped:\n%s", r.stdout)
+	}
+	if st, _ := state.NewStore(f).Load(); st.Xray.Stopped {
+		t.Error("stop while stopped recorded a manual stop")
+	}
+}
