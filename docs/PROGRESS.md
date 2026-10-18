@@ -5,12 +5,12 @@
 ## 当前状态
 
 - **阶段**：M1 节点管理。
-- **当前任务**：M1-08 客户端管理菜单（进行中，分支 `feat/M1-08-client-menu`）。
-- **下一个任务**：M1-08 客户端管理菜单。
+- **当前任务**：无（M1-08 已完成）。
+- **下一个任务**：M1-09 Xray 服务菜单。
 
 ## 下次会话从这里开始
 
-1. 继续 M1-08（分支 `feat/M1-08-client-menu` 已推送）：`internal/nodemgr/clients.go`（AddClient / SetClientRemark / ResetClientUUID / SetClientEnabled / DeleteClient，D-056 待写入 DECISIONS：默认客户端备注 `<节点备注>-<n>`、新客户端沿用节点流控）和 `text` 中的客户端文字已写好；**还没做**：客户端菜单（`internal/app`，节点列表第 4 项接入）、单元测试、VPS 验证、文档、PR。之后依次、M1-09、M1-10；M1 全部完成后停下来让用户实机验收（D-050）。
+1. 做 M1-09（`feat/M1-09-xray-menu`）。之后依次、M1-09、M1-10；M1 全部完成后停下来让用户实机验收（D-050）。
    - 发布：GitHub 上有正式 Release `v0.0.1`（开发中测试版，`releases/latest` 指向它）。新版本发布时用 `git tag -a`，推送标签前先问用户。M6-02 更新脚本可复用 install.sh 的下载和校验方式（资产名 `litenode-linux-<架构>`，`sha256sums.txt` 为 `sha256sum` 标准格式）。
 2. 提议条目中 P-001、P-002、P-006、P-008、P-010 已确认；其余 P-003 ~ P-005、P-007、P-009 在用到的任务开始前再与用户确认。
 
@@ -51,6 +51,7 @@
 - Reality 目标（M1-05）：`reality.Checker{}.Check(ctx, target)` / `CheckAll(ctx, targets, 10)`，`Result.Usable()`、`LargeHomepage()`、`Keyword`；`reality.CommonTargets`；`reality.SplitTarget` 校验手动输入。选择菜单在 M1-07。
 - 分享（M1-06）：`share.Link(reg, node, client, addr)`（端口优先 `share_port`）、`share.QR(text, color)`、`share.NewDetector().Detect(ctx)` → `Detected{IPv4, IPv6, Source}`，`Candidates()` IPv4 在前；`OnInterface(ip)` 为 false 时提示 NAT；`share.ValidAddress` 校验手动输入。测试机已安装 `zbar-tools`（`zbarimg`）用于验证二维码。
 - 端口 / ufw / 已有拦截（M1-07a）：`ports.Listening(r)` + `ports.NodeClaims(nodes)` → `ports.Checker{}.Check(want, self, selfPorts)`，`RandomFree`；`ufw.Desired(nodes)` + `ufw.Reconcile(ctx, r, desired, liteNodeFirewall)`（ufw 未运行或 LiteNode 防火墙启用时不操作；`Sync` 无条件执行）；`firewall.DetectForeignFilter(ctx, r)`。
+- 菜单动作返回 `ui.ErrBack` 可退出当前菜单（如删除节点后离开该节点的子菜单）。
 - 能力探测注册在 `internal/system/probe.go` 的 `probes`，目前只有 BBR；swap、sysctl、nftables 在对应任务中加入。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。
 
@@ -66,4 +67,4 @@
 ## 最近一次会话
 
 - **日期**：2026-10-18
-- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）、M0-06（菜单细节见 D-030；在测试 VPS 上验证了菜单显示、非法输入、颜色、SIGINT/SIGHUP 退出）、M0-07（子命令细节见 D-031）、M0-08（D-032；CI 通过，v0.0.1 已发布，校验值在本机和测试机上核对一致）、M0-09（D-033；用户在测试机上确认一行命令安装、litenode / lnode 打开菜单、终端中安装后自动进入菜单）。M0 全部完成。M1-01 已完成（确认 P-001、P-002；D-034 权限规则、D-035；集成测试结果经用户确认）；改用分支开发（D-036）；端口冲突与 ufw 同步的设计变更（D-037、D-038）；M0-10 移除共存检测；M1-02 节点模型（D-039）；方案审查（D-040 ~ D-048）；M0-11 CI arm64；M1-00 多类整体变更；M1-03 Xray 配置生成（D-049）；M1-04 Reality 预设；M1-05 目标检测（D-051）；M1-06 分享链接和二维码（D-052）；M1-07a 端口 / ufw / 已有拦截检测；M1-07 节点菜单（D-053；实机发现并解决 ML-KEM 问题 D-054、常用列表重选 D-055）；集成测试发现并修复：查询最新版本时响应大小上限过小、校验用临时文件名导致 Xray 无法识别格式、回退时被 systemd 启动频率限制拦住、恢复 xray.json 时丢失属组。
+- **内容**：确认 P-006、P-010；确定界面文字集中管理（D-025）；完成 M0-01、M0-02（dry-run 和日志细节见 D-026）、M0-03（系统检测细节见 D-027，VPS 验证已通过）、M0-04（状态文件细节见 D-028，确认 P-008）、M0-05（变更流程细节见 D-029；在测试 VPS 上验证了 systemd-run 定时器触发、同名重用和取消）、M0-06（菜单细节见 D-030；在测试 VPS 上验证了菜单显示、非法输入、颜色、SIGINT/SIGHUP 退出）、M0-07（子命令细节见 D-031）、M0-08（D-032；CI 通过，v0.0.1 已发布，校验值在本机和测试机上核对一致）、M0-09（D-033；用户在测试机上确认一行命令安装、litenode / lnode 打开菜单、终端中安装后自动进入菜单）。M0 全部完成。M1-01 已完成（确认 P-001、P-002；D-034 权限规则、D-035；集成测试结果经用户确认）；改用分支开发（D-036）；端口冲突与 ufw 同步的设计变更（D-037、D-038）；M0-10 移除共存检测；M1-02 节点模型（D-039）；方案审查（D-040 ~ D-048）；M0-11 CI arm64；M1-00 多类整体变更；M1-03 Xray 配置生成（D-049）；M1-04 Reality 预设；M1-05 目标检测（D-051）；M1-06 分享链接和二维码（D-052）；M1-07a 端口 / ufw / 已有拦截检测；M1-07 节点菜单（D-053；实机发现并解决 ML-KEM 问题 D-054、常用列表重选 D-055）；M1-08 客户端管理（D-056）；集成测试发现并修复：查询最新版本时响应大小上限过小、校验用临时文件名导致 Xray 无法识别格式、回退时被 systemd 启动频率限制拦住、恢复 xray.json 时丢失属组。

@@ -107,3 +107,25 @@ func TestDeleteNodeFlow(t *testing.T) {
 		t.Error("node not deleted")
 	}
 }
+
+func TestClientMenuFlow(t *testing.T) {
+	f := nodeSystem()
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "2", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	// nodes > clients (4) > node 1 > add (1) default remark; then delete the
+	// original client (5, 1, y); then delete the last one (5, 1, y) which
+	// deletes the node and leaves the client menu.
+	input := strings.Join([]string{"1", "4", "1", "1", "", "5", "1", "y", "5", "1", "y", "0", "0"}, "\n") + "\n"
+	r := runNodes(t, f, input)
+	for _, want := range []string{
+		" 节点 1: Reality-443 (VLESS-TCP-Reality :443)",
+		" 1. 添加客户端", " 2. 修改客户端      (备注 / UUID)", " 3. 启用 / 禁用客户端", " 4. 分享链接 / 二维码", " 5. 删除客户端",
+		"客户端已添加。", "#Reality-443-2",
+		"删除客户端 Reality-443？ [y/N]", "客户端已删除。",
+		"节点至少需要一个客户端，是否同时删除节点？ [y/N]", "节点已删除。",
+		"（暂无节点）",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+}
