@@ -20,8 +20,23 @@ func ConfigFile(s state.SSH) change.File {
 	return change.File{Path: ConfigPath, Data: data, Mode: state.PrivateFileMode}
 }
 
+// PrivsepDir must exist for "sshd -t" and "sshd -T". ssh.service creates
+// it when it starts; under socket activation (Ubuntu) that may not have
+// happened yet, e.g. at boot when the boot-time rollback runs.
+const PrivsepDir = "/run/sshd"
+
+func ensurePrivsepDir(r system.Runner) error {
+	if _, err := r.ReadDir(PrivsepDir); err == nil {
+		return nil
+	}
+	return system.EnsureDir(r, PrivsepDir, 0o755)
+}
+
 // ReadEffective runs "sshd -T".
 func ReadEffective(ctx context.Context, r system.Runner) (Effective, error) {
+	if err := ensurePrivsepDir(r); err != nil {
+		return Effective{}, err
+	}
 	res, err := r.Query(ctx, SshdPath, "-T")
 	if err != nil {
 		return Effective{}, fmt.Errorf("sshd -T: %w (%s)", err, strings.TrimSpace(res.Stderr))
@@ -44,6 +59,9 @@ func Kind(store *state.Store) *change.Kind {
 				return err
 			}
 			if err := CheckInclude(main); err != nil {
+				return err
+			}
+			if err := ensurePrivsepDir(r); err != nil {
 				return err
 			}
 			if res, err := r.Query(ctx, SshdPath, "-t"); err != nil {

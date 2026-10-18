@@ -157,7 +157,8 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 | `/etc/sysctl.d/99-litenode.conf` | BBR、内核转发等 sysctl 设置 |
 | `/var/log/litenode.log` | LiteNode 自身的操作日志 |
 | `/run/litenode.lock` | 实例锁（`flock`），重启后自动清除 |
-| `/run/litenode/pending` | 限时确认的待确认标记（内容为备份 ID），同一时间只有一个（D-040） |
+| `/etc/litenode/rollback/pending` | 限时确认的待确认标记（内容为备份 ID），同一时间只有一个（D-040）；放在磁盘上，重启后仍在（D-062） |
+| `/etc/systemd/system/litenode-rollback-boot.service` | 开机时回滚因重启而未确认的修改（oneshot，只在有待确认标记时执行，D-062）；第一次限时确认时安装 |
 
 **`/etc/litenode` 权限规则**（集中定义在 `internal/state/layout.go`）：
 
@@ -355,9 +356,10 @@ docs/
 - 同一时间只有一个修改在等待确认（菜单持有实例锁），所以定时任务和标记都是全局唯一的，超时时整体回滚这一次变更涉及的所有类型（D-040）。
 - 定时任务：`systemd-run --unit=litenode-rollback --on-active=60 --timer-property=AccuracySec=1s /usr/local/bin/litenode internal rollback`。创建前先停止同名定时器并 `reset-failed`，以便重复使用单元名。
 - 开始计时的时机：校验通过之后、修改生效之前。计时失败则不应用修改并恢复。应用失败时立即恢复并取消计时。
-- **确认与超时的竞态**：开始计时时写入标记文件 `/run/litenode/pending`（内容为本次备份 ID）。用户确认和定时任务都通过 rename 认领这个文件，先认领的一方生效：确认先到则取消定时器，修改保留；定时任务先到则恢复该备份 ID 对应的备份。确认时发现标记已被认领，提示"已超时，配置已自动恢复，请重新修改"，菜单重新读取状态。
+- **确认与超时的竞态**：开始计时时写入标记文件 `/etc/litenode/rollback/pending`（内容为本次备份 ID）。用户确认和定时任务都通过 rename 认领这个文件，先认领的一方生效：确认先到则取消定时器，修改保留；定时任务先到则恢复该备份 ID 对应的备份。确认时发现标记已被认领，提示"已超时，配置已自动恢复，请重新修改"，菜单重新读取状态。
 - `internal rollback` 不受实例锁限制（见第 5 节）。
-- **已知限制**：等待确认期间如果服务器重启，临时定时器和 `/run` 下的标记都会消失，修改不会被回滚。
+- **重启时的回滚**（D-062）：临时定时器在重启后消失，但标记文件在磁盘上。`litenode-rollback-boot.service`（`ConditionPathExists=/etc/litenode/rollback/pending`，`WantedBy=multi-user.target`，执行 `litenode internal rollback`）在开机时认领标记并回滚，与定时器使用同一个回滚流程。第一次限时确认（计时之前）写入并启用该单元，内容不变时不再改动；安装失败则不应用修改。
+- **立即恢复**：用户回答不是 `y` 时不等待超时，立即认领标记并回滚，同时停止定时器。用户在等待确认时退出（Ctrl+C、断开）则提示"修改未确认，将在限时到期后自动恢复"，由定时器回滚。
 
 ## 7. 菜单通用规则
 
@@ -748,6 +750,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 - `Include` 检查：主配置中必须有能匹配 `/etc/ssh/sshd_config.d/00-litenode.conf` 的 `Include`（相对路径相对于 `/etc/ssh`），而且在它之前不能出现 LiteNode 管理的配置项（`Port`、`PubkeyAuthentication`、`PasswordAuthentication`、`KbdInteractiveAuthentication`、`ChallengeResponseAuthentication`、`PermitRootLogin`），也不能在 `Match` 块中。其他配置项（如 `HostKey`）在前面没有影响，不算错误。
 - 配置类型 `sshd`：就地校验（写入后 `sshd -t` 和 `Include` 检查，失败立即恢复，sshd 还没有重新加载）；应用时 `ssh.service` 在运行则 `systemctl reload ssh.service`（Ubuntu 套接字激活时 sshd 可能没有运行，下次启动时读取新配置），然后用 `sshd -T` 核对状态文件中的每一项都已生效，不一致则整体恢复。恢复后同样核对，所以恢复的结果也经过确认。
 - `/usr/sbin/sshd`、服务名 `ssh.service` 在 Debian 12 和 Ubuntu 24.04 上相同（Debian 上 `sshd.service` 是别名）。
+- `sshd -t` 和 `sshd -T` 需要 `/run/sshd` 存在。Ubuntu 的套接字激活下，`ssh.service` 还没启动过（例如开机回滚时）这个目录不存在，所以执行前不存在时创建（root、755，与 systemd 创建的相同）。
 - **实测**（2026-10-18）：
   - Ubuntu 24.04（OpenSSH 9.6）：`50-cloud-init.conf` 写着 `PasswordAuthentication yes`，`00-litenode.conf` 中的 `no` 生效；`ssh.socket` 启用、`ssh.service` 由套接字启动，套接字监听 `0.0.0.0:22` 和 `[::]:22`。
   - Debian 12（OpenSSH 9.2，测试 VPS 的商家在主配置 `Include` 之后写了 `Port 61234`）：`Port` 与其他配置项不同，**所有文件中的 `Port` 都生效**，sshd 同时监听两个端口。LiteNode 写入新端口后 `sshd -T` 显示两个端口，核对不通过，修改被整体恢复。修改端口（M2-05）必须处理这种情况。
