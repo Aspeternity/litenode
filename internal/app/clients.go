@@ -164,9 +164,10 @@ func (u *nodeUI) clientLink(id int64) error {
 	return nil
 }
 
-// showClientLink prints a client's link with its QR code.
+// showClientLink prints a client's link with its QR code, for the
+// address the user picks when there are several (D-068).
 func (u *nodeUI) showClientLink(nodeID, clientID int64) {
-	addr, err := u.ensureShareAddress()
+	addr, isDefault, err := u.chooseLinkAddress()
 	if err != nil || addr == "" {
 		return
 	}
@@ -176,7 +177,7 @@ func (u *nodeUI) showClientLink(nodeID, clientID int64) {
 		}
 		for _, c := range n.Clients {
 			if c.ID == clientID {
-				u.showLink(n, c, addr, true)
+				u.showLink(n, c, addr, isDefault, true)
 			}
 		}
 	}

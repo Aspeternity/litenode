@@ -54,6 +54,9 @@ type nodeUI struct {
 	checker  TargetChecker
 	detector AddressDetector
 	scanner  TargetScanner
+	// dns resolves domains added as share addresses (nil: the system
+	// resolver).
+	dns share.Resolver
 }
 
 func (u *nodeUI) state() *state.State {
@@ -81,7 +84,7 @@ func (u *nodeUI) protocolLabel(n node.Node) string {
 // menu is the node list menu (DESIGN section 9.1).
 func (u *nodeUI) menu() ui.Menu {
 	st := u.state()
-	status := []string{text.ShareAddressLine(st.Server.ShareAddress)}
+	status := []string{text.ShareAddressLine(st.Server.DefaultShareAddress(), len(st.Server.ShareAddresses))}
 	if len(st.Nodes) == 0 {
 		status = append(status, text.NodeNone)
 	} else {
@@ -137,9 +140,9 @@ func (u *nodeUI) add() error {
 	}
 	preset := presets[choice-1]
 
-	addr, err := u.ensureShareAddress()
-	if err != nil {
-		return err
+	addr, err := u.ensureShareAddresses()
+	if err != nil || addr == "" {
+		return err // "" : the user went back
 	}
 	port, err := u.askNewPort(addr)
 	if err != nil {
@@ -162,13 +165,18 @@ func (u *nodeUI) add() error {
 		return err
 	}
 	u.s.Println(u.s.Colors.Good(text.NodeAdded))
-	u.showLink(n, n.Clients[0], addr, true)
+	u.showLink(n, n.Clients[0], addr, true, true)
+	if len(u.state().Server.ShareAddresses) > 1 {
+		u.s.Println(text.OtherAddressesHint)
+	}
 	return nil
 }
 
-// showLink prints a client's link, optionally with a QR code and hints.
-func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, full bool) {
-	link, err := share.Link(u.svc.Registry, n, c, addr)
+// showLink prints a client's link for addr, optionally with a QR code and
+// hints. isDefault: addr is the default address (the remark has no
+// suffix, D-068).
+func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, isDefault, full bool) {
+	link, err := share.LinkFor(u.svc.Registry, n, c, addr, isDefault)
 	if err != nil {
 		u.s.Println(u.s.Colors.Bad(text.ActionFailed(err)))
 		return
@@ -206,7 +214,7 @@ func (u *nodeUI) printLinks(id int64) {
 			if !c.Enabled {
 				continue
 			}
-			if link, err := share.Link(u.svc.Registry, n, c, st.Server.ShareAddress); err == nil {
+			if link, err := share.Link(u.svc.Registry, n, c, st.Server.DefaultShareAddress()); err == nil {
 				u.s.Println(c.Remark + ":")
 				u.s.Println(link)
 			}
@@ -396,11 +404,13 @@ func (u *nodeUI) scanTarget() (string, error) {
 	return u.chooseResult(text.ScanHeading, text.ScanFound, results)
 }
 
-// scanCenter is the VPS's public IPv4: the share address if it is one,
+// scanCenter is the VPS's public IPv4: the first IPv4 share address,
 // otherwise the detected address.
 func (u *nodeUI) scanCenter() (netip.Addr, bool) {
-	if a, err := netip.ParseAddr(u.state().Server.ShareAddress); err == nil && a.Unmap().Is4() {
-		return a.Unmap(), true
+	for _, addr := range u.state().Server.ShareAddresses {
+		if a, err := netip.ParseAddr(addr); err == nil && a.Unmap().Is4() {
+			return a.Unmap(), true
+		}
 	}
 	if d := u.detector.Detect(u.ctx); d.IPv4 != "" {
 		if a, err := netip.ParseAddr(d.IPv4); err == nil {
@@ -459,102 +469,6 @@ func (u *nodeUI) printCheck(r reality.Result) {
 	if r.LargeHomepage() {
 		u.s.Println(u.s.Colors.Warn(text.LargeHomepage(r.HomepageSize)))
 	}
-}
-
-// ensureShareAddress returns the share address, detecting and asking for
-// it the first time (DESIGN section 9.5, D-041).
-func (u *nodeUI) ensureShareAddress() (string, error) {
-	if addr := u.state().Server.ShareAddress; addr != "" {
-		return addr, nil
-	}
-	return u.detectShareAddress()
-}
-
-func (u *nodeUI) detectShareAddress() (string, error) {
-	u.s.Println(text.Checking)
-	cands := u.detector.Detect(u.ctx).Candidates()
-	var addr string
-	switch len(cands) {
-	case 0:
-		u.s.Println(u.s.Colors.Warn(text.ShareAddrNone))
-		a, err := u.askAddress("")
-		if err != nil || a == "" {
-			return "", err
-		}
-		addr = a
-	case 1:
-		addr = cands[0]
-		u.s.Println(text.ShareAddrDetected + addr)
-	default:
-		m := ui.Menu{Heading: text.ShareAddrHeading, Status: []string{text.ChooseShareAddr}}
-		for _, c := range cands {
-			m.Items = append(m.Items, ui.Item{Label: c})
-		}
-		choice, err := u.s.Choose(m)
-		if err != nil || choice == 0 {
-			return "", err
-		}
-		addr = cands[choice-1]
-	}
-	return addr, u.svc.SetShareAddress(addr)
-}
-
-func (u *nodeUI) askAddress(def string) (string, error) {
-	for {
-		var in string
-		var err error
-		if def != "" {
-			in, err = u.s.PromptDefault(text.PromptShareAddress, def)
-		} else {
-			in, err = u.s.Prompt(text.PromptShareAddress + ": ")
-		}
-		if err != nil || in == "" {
-			return "", err
-		}
-		if share.ValidAddress(in) {
-			return in, nil
-		}
-		u.s.Println(u.s.Colors.Warn(text.ErrInvalidAddress))
-	}
-}
-
-// shareAddress is the "share address" menu (D-041).
-func (u *nodeUI) shareAddress() error {
-	return u.s.Run(func() ui.Menu {
-		return ui.Menu{
-			Heading: text.NodeShareAddress,
-			Status:  []string{text.ShareAddressLine(u.state().Server.ShareAddress)},
-			Items: []ui.Item{
-				{Label: text.ShareAddrEnter, Action: func() error {
-					addr, err := u.askAddress(u.state().Server.ShareAddress)
-					if err != nil || addr == "" {
-						return err
-					}
-					return u.setShareAddress(addr)
-				}},
-				{Label: text.ShareAddrDetect, Action: func() error {
-					_, err := u.detectShareAddressThen()
-					return err
-				}},
-			},
-		}
-	})
-}
-
-func (u *nodeUI) detectShareAddressThen() (string, error) {
-	addr, err := u.detectShareAddress()
-	if err == nil && addr != "" {
-		u.s.Println(text.ShareAddrChanged)
-	}
-	return addr, err
-}
-
-func (u *nodeUI) setShareAddress(addr string) error {
-	if err := u.svc.SetShareAddress(addr); err != nil {
-		return err
-	}
-	u.s.Println(text.ShareAddrChanged)
-	return nil
 }
 
 // toggle enables or disables a node.
