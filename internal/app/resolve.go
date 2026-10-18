@@ -8,13 +8,14 @@ import (
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/forwardmgr"
 	"github.com/Aspeternity/litenode/internal/state"
+	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
 )
 
-// forwards builds the forward service on env's Runner.
-func (env Env) forwards(store *state.Store) *forwardmgr.Service {
-	return &forwardmgr.Service{Runner: env.Runner, Store: store, Changes: change.NewManager(env.Runner, store),
-		Resolver: env.ForwardResolver, Executable: env.Executable}
+// forwards builds the forward service on r.
+func (env Env) forwards(r system.Runner, store *state.Store) *forwardmgr.Service {
+	return &forwardmgr.Service{Runner: r, Store: store, Changes: change.NewManager(r, store),
+		Resolver: env.ForwardResolver, Executable: env.Executable, Dialer: env.ForwardDialer}
 }
 
 // resolve is run by litenode-resolve.timer: it looks up the domain
@@ -37,7 +38,7 @@ func resolve(ctx context.Context, env Env) int {
 	}
 	defer lock.Release()
 
-	res, err := env.forwards(state.NewStore(env.Runner)).Resolve(ctx)
+	res, err := env.forwards(env.Runner, state.NewStore(env.Runner)).Resolve(ctx)
 	for _, e := range res.Failed {
 		fmt.Fprintln(env.Stderr, text.ResolveLookupFailed(e))
 	}
