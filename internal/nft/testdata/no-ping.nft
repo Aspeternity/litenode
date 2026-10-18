@@ -14,4 +14,9 @@ table inet litenode {
 		ip6 saddr fe80::/10 udp sport 547 udp dport 546 accept
 		tcp dport 22 accept comment "litenode:ssh"
 	}
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+		ct state established,related accept
+		ct state invalid drop
+	}
 }

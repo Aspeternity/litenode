@@ -65,6 +65,17 @@ func (s *Service) Check(ctx context.Context) Preflight {
 	return p
 }
 
+// EnsureNft installs the nftables package if nft is missing.
+func EnsureNft(ctx context.Context, r system.Runner) error {
+	if nftInstalled(ctx, r) {
+		return nil
+	}
+	if _, err := r.Exec(ctx, "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "nftables"); err != nil {
+		return fmt.Errorf("install nftables: %w", err)
+	}
+	return nil
+}
+
 func nftInstalled(ctx context.Context, r system.Runner) bool {
 	_, err := r.Query(ctx, nft.NftPath, "--version")
 	return err == nil
@@ -205,10 +216,8 @@ func (s *Service) Enable(ctx context.Context) error {
 	if on, _ := system.ServiceActive(ctx, r, FirewalldUnit); on {
 		return ErrFirewalldActive
 	}
-	if !nftInstalled(ctx, r) {
-		if _, err := r.Exec(ctx, "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "nftables"); err != nil {
-			return fmt.Errorf("install nftables: %w", err)
-		}
+	if err := EnsureNft(ctx, r); err != nil {
+		return err
 	}
 	if err := ufw.Sync(ctx, r, nil); err != nil {
 		return fmt.Errorf("remove LiteNode rules from ufw: %w", err)

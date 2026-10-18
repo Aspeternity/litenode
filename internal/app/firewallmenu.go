@@ -61,6 +61,8 @@ func ownerLabel(e firewall.Entry) string {
 		return text.FirewallSSH
 	case e.NodeIndex > 0:
 		return text.FirewallNode(e.NodeIndex)
+	case e.ForwardIndex > 0:
+		return text.FirewallForward(e.ForwardIndex)
 	case e.Note != "":
 		return text.FirewallManual + " " + e.Note
 	}
@@ -483,7 +485,7 @@ func (u *firewallUI) deleteRule() error {
 		return err
 	}
 	if !firewall.IsManual(e.Owner) {
-		u.s.End(u.s.Colors.Warn(text.FirewallAutoRule(ownerLabel(*e), e.Owner == firewall.OwnerSSH)))
+		u.s.End(u.s.Colors.Warn(text.FirewallAutoRule(ownerLabel(*e), autoRuleMenu(e.Owner))))
 		return nil
 	}
 	ok, err := u.s.Confirm(text.ConfirmDeleteRule(i, portLabel(*e)))
@@ -492,4 +494,15 @@ func (u *firewallUI) deleteRule() error {
 	}
 	owner := e.Owner
 	return u.edit(text.FirewallRuleDeleted, func(st *state.State) error { return firewall.DeleteRule(st, owner) })
+}
+
+// autoRuleMenu is the menu where an automatic rule is changed.
+func autoRuleMenu(owner string) string {
+	switch {
+	case owner == firewall.OwnerSSH:
+		return text.FirewallInSSH
+	case firewall.IsForward(owner):
+		return text.FirewallInForwards
+	}
+	return text.FirewallInNodes
 }

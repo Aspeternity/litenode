@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 )
@@ -105,5 +106,22 @@ func TestRandomFree(t *testing.T) {
 		if p < 10000 || p > 60000 {
 			t.Fatalf("port %d out of range", p)
 		}
+	}
+}
+
+func TestForwardClaims(t *testing.T) {
+	fs := []forward.Forward{
+		{ID: 5, Protocol: forward.TCPUDP, ListenPort: "30001"},
+		{ID: 6, Protocol: forward.UDP, ListenPort: "31000-31001"},
+	}
+	c := Checker{Claims: StateClaims(nil, fs)}
+	got := c.Check([]Key{{TCP, 30001}, {UDP, 30001}, {TCP, 31000}, {UDP, 31001}}, "", nil)
+	want := []Conflict{{Key{TCP, 30001}, "forward:5"}, {Key{UDP, 30001}, "forward:5"}, {Key{UDP, 31001}, "forward:6"}}
+	if !slices.Equal(got, want) {
+		t.Errorf("Check = %v", got)
+	}
+	// A rule does not conflict with itself.
+	if got := c.Check([]Key{{TCP, 30001}}, "forward:5", nil); len(got) != 0 {
+		t.Errorf("self conflict %v", got)
 	}
 }

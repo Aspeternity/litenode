@@ -68,7 +68,7 @@ func (s *Service) SetPort(ctx context.Context, port int) (int, error) {
 	for _, p := range e.Ports {
 		self = append(self, ports.Key{Proto: ports.TCP, Port: p})
 	}
-	checker := ports.Checker{Listening: listening, Claims: ports.NodeClaims(st.Nodes)}
+	checker := ports.Checker{Listening: listening, Claims: ports.StateClaims(st.Nodes, st.Forwards)}
 	if c := checker.Check([]ports.Key{{Proto: ports.TCP, Port: port}}, SSHOwner, self); len(c) > 0 {
 		return 0, &PortTakenError{Conflicts: c}
 	}

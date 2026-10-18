@@ -332,17 +332,17 @@
 
 完成后：线路机可以只用 LiteNode 完成转发，不装 Xray。
 
-### M4-01 转发规则生成和内核转发 `未开始`
+### M4-01 转发规则生成和内核转发 `已完成`
 
 - DNAT、masquerade、forward 放行、端口段、tcp/udp、sysctl。
 - 本机端口冲突检查（M1-07a）；ufw 在运行且 LiteNode 防火墙未启用时，添加、修改、删除、启用 / 禁用规则与 ufw 对账（`ufw route allow` 到目标 IP 和端口，D-038）。
 - 按地址族分别转发（D-046）：IPv4 连接只转到 IPv4 目标、IPv6 只转到 IPv6；规则使用多类变更（nft + sysctl + ufw，D-040）。
 - 验收：
-  - [ ] golden file 测试。
-  - [ ] [VPS] ufw 在运行时，转发正常工作（TCP 和 UDP）；删除规则后对应的 `route` 规则被删除。
-  - [ ] [VPS] 客户端通过线路机连接落地机节点正常（TCP 和 UDP）。
-  - [ ] golden file 测试：IPv4 目标、IPv6 目标、同时有 A / AAAA 的域名目标分别生成正确的 DNAT 规则。
-  - [ ] [VPS] 防火墙启用和关闭时转发都正常。
+  - [x] golden file 测试。
+  - [x] [VPS] ufw 在运行时，转发正常工作（TCP 和 UDP）；删除规则后对应的 `route` 规则被删除。
+  - [x] [VPS] 客户端通过线路机连接落地机节点正常（TCP 和 UDP）。
+  - [x] golden file 测试：IPv4 目标、IPv6 目标、同时有 A / AAAA 的域名目标分别生成正确的 DNAT 规则。
+  - [x] [VPS] 防火墙启用和关闭时转发都正常。
 
 ### M4-02 域名目标和重新解析 `未开始`
 
