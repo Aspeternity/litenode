@@ -129,3 +129,31 @@ func TestClientMenuFlow(t *testing.T) {
 		}
 	}
 }
+
+func TestXrayMenu(t *testing.T) {
+	f := nodeSystem()
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "2", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	r := runNodes(t, f, "3\n2\n0\n0\n")
+	for _, want := range []string{
+		" 1. 启动", " 2. 停止", " 3. 重启", " 4. 查看日志", " 5. 更新 Xray       (可选指定版本)", " 6. 卸载 Xray       (同时删除所有节点和客户端)",
+		"Xray 已停止。",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+	if st, _ := state.NewStore(f).Load(); !st.Xray.Stopped {
+		t.Error("stop not recorded")
+	}
+	// Main menu warns while nodes exist but Xray was stopped by hand.
+	r = runNodes(t, f, "0\n")
+	if !strings.Contains(r.stdout, "⚠ Xray 已手动停止") {
+		t.Errorf("no manual-stop warning:\n%s", r.stdout)
+	}
+	// Not installed: only the note.
+	g := supported()
+	r = runNodes(t, g, "3\n0\n0\n")
+	if !strings.Contains(r.stdout, "Xray 未安装，首次添加节点时会自动安装。") || strings.Contains(r.stdout, " 1. 启动") {
+		t.Errorf("not-installed menu:\n%s", r.stdout)
+	}
+}

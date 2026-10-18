@@ -679,11 +679,13 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
   - 程序本身不走第 6 节的变更流程（体积大，不保留 10 份备份），见下方"更新"。
 - **服务**：`litenode-xray.service`，以专用系统用户 `litenode-xray` 运行，通过 `AmbientCapabilities=CAP_NET_BIND_SERVICE` 允许绑定 443 等低端口（`CapabilityBoundingSet` 也只保留这一项），另加 `NoNewPrivileges`、`ProtectSystem=full`、`ProtectHome`、`PrivateTmp`。配置 `/etc/litenode/xray.json` 为 640、属组 `litenode-xray`。
 - **启动 / 停止**（D-045）：Xray 默认按节点自动启停（有启用的节点时运行，否则停止并取消开机启动）。用户在菜单中"停止"时，在状态文件中记为手动停止（`xray.stopped`），停止服务并取消开机启动；之后的配置变更照常写入和校验配置，但不启动 Xray，重启机器后也不启动。"启动"清除这个标记并按节点情况运行；没有启用的节点时提示"没有启用的节点，Xray 无需运行"。
-- **查看日志**：`journalctl -u litenode-xray -f`。
+- **查看日志**：显示最近 50 行（`journalctl -u litenode-xray -n 50`），并提示实时查看可运行 `journalctl -u litenode-xray -f`（D-057：在菜单内持续跟踪需要按 Ctrl+C 结束，会与 LiteNode 自身的中断处理冲突）。
+- **状态行**：版本、运行状态（运行中 / 已停止 / 已停止（手动））、已运行时间（`ActiveEnterTimestampMonotonic` 与 `/proc/uptime` 计算）、内存（`MemoryCurrent`）。Xray 未安装时只显示"首次添加节点时会自动安装"。
+- **更新**时可输入版本（回车为默认版本，D-054）；输入的版本低于 v26.9.8 时警告 ML-KEM 目标将无法使用。
 - **更新**：默认最新版，可以输入指定版本。更新后用当前配置执行 `xray run -test` 校验，失败则回退旧版本。
   - 旧程序先改名为 `xray.bak`，新程序写入后依次检查：`xray version` 报告的版本正确、接受当前配置、服务原本在运行时重启后 2 秒仍在运行。任一项失败就把 `xray.bak` 改回并重启旧程序（重启前先 `systemctl reset-failed`，因为崩溃的新程序会被 systemd 反复拉起而触发启动频率限制）。成功后删除 `xray.bak`。
 - **卸载（程序部分）**：停止并禁用服务，删除程序、单元文件、`xray.json` 和 `litenode-xray` 用户；`/usr/local/lib/litenode` 为空时一并删除。删除节点和客户端由调用方处理（D-020）。
-- **卸载**：执行前列出将删除的节点数和客户端数，提示可以先在"维护"中导出配置，二次确认后删除 Xray、所有节点和客户端，并清理这些节点对应的防火墙规则（LiteNode 防火墙中的自动规则，或 ufw 中带 `litenode:node:` 标记的规则）。端口转发、SSH 和防火墙的其他设置保持不变。
+- **卸载**：执行前列出将删除的节点数和客户端数，提示可以先在"维护"中导出配置，二次确认后删除 Xray、所有节点和客户端，并清理这些节点对应的防火墙规则（LiteNode 防火墙中的自动规则，或 ufw 中带 `litenode:node:` 标记的规则）。端口转发、SSH 和防火墙的其他设置保持不变。实现上先把删除所有节点作为一次多类变更（ufw 节点规则随之删除、Xray 停止），再删除程序、单元文件、配置和用户。（导出功能在 M6-01 完成前，提示中暂不提及。）
 
 ## 13. SSH 管理
 

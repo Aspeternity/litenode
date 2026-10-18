@@ -82,6 +82,15 @@ type MainStatus struct {
 	Warnings []string
 }
 
+// column pads s to width, keeping at least two spaces before the next
+// field when s is wider than its column.
+func column(s string, width int) string {
+	if Width(s)+2 > width {
+		return s + "  "
+	}
+	return PadRight(s, width)
+}
+
 // MainStatusLines renders the main menu status area.
 func MainStatusLines(st MainStatus, c Colors) []string {
 	xray := st.Xray
@@ -96,9 +105,9 @@ func MainStatusLines(st MainStatus, c Colors) []string {
 		fw = text.StatusUnknown
 	}
 	lines := []string{
-		PadRight(PadRight(text.StatusXray(xray), statusCol2)+text.StatusNodes(st.Nodes), statusCol3) +
+		column(column(text.StatusXray(xray), statusCol2)+text.StatusNodes(st.Nodes), statusCol3) +
 			text.StatusForwards(st.Forwards),
-		PadRight(text.StatusSSH(ssh), statusCol3) + text.StatusFirewall(fw),
+		column(text.StatusSSH(ssh), statusCol3) + text.StatusFirewall(fw),
 		SystemLine(st.System),
 	}
 	for _, w := range st.Warnings {
