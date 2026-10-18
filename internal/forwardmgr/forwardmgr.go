@@ -45,6 +45,8 @@ type Service struct {
 	Executable string
 	// UnitDir holds the resolve timer units; empty uses DefaultUnitDir.
 	UnitDir string
+	// Dialer opens the connections of Probe; nil uses a net.Dialer.
+	Dialer Dialer
 }
 
 // Kinds are the configuration kinds forward operations change, in apply
@@ -142,6 +144,17 @@ func (s *Service) checkPorts(st *state.State, f forward.Forward) error {
 		return &PortTakenError{Conflicts: conflicts}
 	}
 	return nil
+}
+
+// CheckPorts fails with *PortTakenError if the local ports of the rule
+// with the given ID (0 for a new rule) are taken, so the menu can ask
+// again before the rest of the rule.
+func (s *Service) CheckPorts(id int64, protocol, listenPort string) error {
+	st, err := s.Store.Load()
+	if err != nil {
+		return err
+	}
+	return s.checkPorts(st, forward.Forward{ID: id, Protocol: protocol, ListenPort: listenPort})
 }
 
 func index(st *state.State, id int64) int {

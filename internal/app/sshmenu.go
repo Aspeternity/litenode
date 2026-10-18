@@ -530,11 +530,7 @@ func describeSSH(err error) (string, bool) {
 		}
 	}
 	if errors.As(err, &pt) {
-		var lines []string
-		for _, c := range pt.Conflicts {
-			lines = append(lines, text.PortTaken(c.Port, string(c.Proto), c.Owner))
-		}
-		return strings.Join(lines, "\n"), true
+		return portConflicts(pt.Conflicts), true
 	}
 	return "", false
 }

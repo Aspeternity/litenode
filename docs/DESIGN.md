@@ -716,6 +716,8 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 **添加规则**：本机端口（单个端口或端口段，端口段时目标也是等长端口段）、协议（tcp / udp / tcp+udp）、目标地址（IP 或域名）和端口、备注（可以为空，不要求唯一）。按第 2 节"端口冲突检查"检查本机端口（修改端口、启用已禁用的规则时同样检查）。
 
+列表还有备注列，只有一个地址族可用的目标标"仅 IPv4" / "仅 IPv6"。**修改规则**与添加是同一个 5 步流程（本机端口 → 协议 → 目标地址 → 目标端口 → 备注），每一步以当前值为默认；端口冲突在选完协议后检查，冲突时回到第 1 步（D-077）。
+
 **实现要点**：
 
 - **内核转发**：有启用的 IPv4 目标时在 `/etc/sysctl.d/99-litenode.conf` 写入 `net.ipv4.ip_forward=1`，有启用的 IPv6 目标时写入 `net.ipv6.conf.all.forwarding=1`，并把 `accept_ra = 1` 的网卡先设为 `2`（否则开启转发后不再接受路由器通告，SLAAC 地址和默认路由会丢失）。不再需要时从文件删除，但不把运行中的值改回 0（D-075）。
@@ -727,7 +729,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 - **域名目标**：nftables 只能使用 IP。添加时分别解析 A 和 AAAA 记录，保存 `resolved_ipv4` / `resolved_ipv6`（D-046）；同时创建 `litenode-resolve.timer`（每 5 分钟，`OnCalendar=*:0/5`），由 `litenode internal resolve` 重新解析，IP 变化时重新生成并应用规则，未变化时不做任何修改。没有域名目标（含已禁用的规则）时删除这个 timer。重新解析时某一类记录查询失败（超时等，不是记录不存在）保留该类当前地址；域名两类记录都没有时保留原地址并记录错误，不删除规则（D-076）。
 - **开机加载**：规则写入 `/etc/litenode/nftables.nft`，由 `litenode-nft.service`（oneshot）开机加载。不修改系统的 `/etc/nftables.conf`。
 - **与 ufw 同步**：LiteNode 防火墙未启用且 ufw 在运行时，规则的添加、修改、删除、启用 / 禁用以及域名重新解析（IP 变化时）都同步 `ufw route allow` 规则（写落地机的目标 IP 和端口，见第 2 节"与 ufw 共存"）。重新解析由 `litenode internal resolve` 执行，菜单正在运行（持有实例锁）时跳过本轮，下一轮再同步。
-- **测试目标连通性**：从 VPS 对目标 TCP 端口发起连接，显示是否连通和延迟。UDP 无法可靠测试，只提示。
+- **测试目标连通性**：从 VPS 对规则实际使用的每个目标地址（IPv4、IPv6）的第一个目标端口发起 TCP 连接（限时 5 秒），显示是否连通和延迟。UDP 无法可靠测试，只提示（D-077）。
 - **不做流量统计**（第一版）。
 
 ## 12. Xray 服务
