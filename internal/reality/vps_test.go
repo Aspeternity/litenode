@@ -13,10 +13,11 @@ import (
 
 func TestVPS(t *testing.T) {
 	c := &Checker{}
+	c.SetMLKEMSupported(true) // as with the default Xray (D-054)
 	ctx := context.Background()
 	for _, r := range c.CheckAll(ctx, CommonTargets, 10) {
-		t.Logf("%-24s %5dms  TLS1.3=%-5v H2=%-5v X25519=%-5v cert=%-5v homepage=%dB usable=%v err=%v",
-			r.Host, r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK, r.HomepageSize, r.Usable(), r.Err)
+		t.Logf("%-24s %5dms  TLS1.3=%-5v H2=%-5v X25519=%-5v cert=%-5v mlkem=%-5v homepage=%dB usable=%v err=%v",
+			r.Host, r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK, r.MLKEM, r.HomepageSize, r.Usable(), r.Err)
 	}
 	if r := c.Check(ctx, "www.microsoft.com"); !r.Usable() {
 		t.Errorf("www.microsoft.com should be usable: %+v", r)

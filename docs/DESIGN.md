@@ -574,7 +574,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 - 目标格式为域名或"域名:端口"（默认 443），必须是域名（REALITY 的 `serverNames` 需要），不接受 IP。
 - 高风险关键词按域名中以 `.`、`-` 分隔的片段匹配：`dl` 必须是完整片段（`dl.example.com` 命中，`middle.com` 不命中），其他关键词按子串匹配。
 - 同时检测多个目标时最多 10 个并发，结果按"可用 → 能连接但不合格 → 无法连接"排序，同类按延迟排序。
-- **常用列表**（D-055，取代 D-051 的列表）：`www.microsoft.com`、`learn.microsoft.com`、`www.apple.com`、`www.icloud.com`、`itunes.apple.com`、`gateway.icloud.com`。每个都在 2026-10-18 从中国大陆的客户端实际连通（3/3）；amazon、samsung、nvidia、tesla、yahoo、mozilla、bing、xbox、cloudflare 等作为目标在协议上可用（从 VPS 本机连通），但从中国大陆连接持续失败（疑似 SNI 与 IP 不符被干扰，即 D-016 所述风险）。列表上方提示"大型网站在部分地区可能受干扰，推荐扫描附近网站"。每次使用时仍从本机检测，不通过的不能选。
+- **常用列表**（D-059，取代 D-055 的列表）：`www.microsoft.com`、`learn.microsoft.com`、`www.apple.com`、`www.icloud.com`、`itunes.apple.com`、`gateway.icloud.com`、`www.amazon.com`、`www.samsung.com`、`www.nvidia.com`、`www.tesla.com`、`addons.mozilla.org`、`www.yahoo.com`、`www.bing.com`、`www.xbox.com`。按测试 VPS 本机的检测和端到端 REALITY 连接选择（2026-10-18 在 Ubuntu 24.04 测试机上全部通过）；LiteNode 主要用作落地机，不以某一地区直连的结果取舍。列表上方提示"常用列表中的大型网站被很多节点使用，且与本机 IP 不在同一网段，扫描附近网站得到的目标更不容易被识别"（D-016）。每次使用时仍从本机检测，不通过的不能选。
 
 检测结果示例：
 
