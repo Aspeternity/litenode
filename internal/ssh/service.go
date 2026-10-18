@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"context"
+	"io"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -15,12 +16,15 @@ import (
 type Service struct {
 	Store     *state.Store
 	Confirmer *change.Confirmer
+	Fetcher   Fetcher
+	// Rand is the randomness for generated keys (crypto/rand.Reader).
+	Rand io.Reader
 }
 
 // Kinds are the configuration kinds of SSH changes, for the rollback
 // registry.
 func (s *Service) Kinds() []*change.Kind {
-	return []*change.Kind{Kind(s.Store)}
+	return []*change.Kind{Kind(s.Store), AuthKeysKind()}
 }
 
 // Change applies fn to the SSH settings and arms the rollback.
