@@ -626,3 +626,17 @@
   - `ssh` 包不能引用 `firewall`（`firewall` 引用 `ssh`），由 `app` 把 `firewall.SyncKind` 注入 `ssh.Service.Firewall`；回滚子命令的类别表中登记 `firewall`。
 - **原因**：沿用变更流程，节点或 SSH 变更失败、超时回滚时防火墙规则自动一致；防火墙放在 sshd 之后，不需要预测 sshd 新端口，sshd 重新加载到防火墙加载之间只有毫秒级间隔，已建立的连接不受影响。
 - **否决**：由调用方预先生成 `nftables.nft` 作为 `nft` 类别的文件（SSH 回滚到未管理端口时无法预知 sshd 端口）；防火墙放在 sshd 之前并同时放行新旧端口（确认后还要再清理一次旧端口）。
+
+### D-075 端口转发规则和内核转发的实现（由 Claude 决定（用户授权））
+
+- **内容**：
+  - **规则结构**：prerouting 每个地址族一条 DNAT（`meta nfproto ipv4|ipv6` 限定地址族）；postrouting 按"原始目的端口"做 masquerade（`ct original proto-dst <本机端口> ct status dnat masquerade`）；防火墙启用时 forward 链默认丢弃，放行已建立的连接和 `ct original proto-dst <本机端口> ct status dnat` 的转发流量。本机端口由端口冲突检查保证唯一，所以按原始端口匹配只会命中 LiteNode 自己的转发。
+  - **端口段**：目标端口段与本机端口段相同时 DNAT 不写端口（保持原端口）；不同时用 `dport map` 一一对应。nft 的 `dnat to 地址:端口段` 是从段中任选端口，不是按偏移对应，不能用。
+  - **来源限制**：转发规则的自动来源限制（`auto_sources` 中的 `forward:<ID>`）只在防火墙启用时生效，写在 forward 链的放行规则上；DNAT 规则本身不带来源限制。转发规则不写入 input 链（DNAT 后流量不经过 input），也不算作 SSH 访问。
+  - **表的生成**：`firewall.SyncKind` 改为无论防火墙是否启用都按状态生成整张表（防火墙关闭时只有转发链）；从来没有表且没有转发时不创建文件。转发的变更由 `sysctl`、`firewall`、`ufw` 三类组成一次变更（D-040），先开内核转发再加载规则。
+  - **内核转发**：新增 `sysctl` 类别管理 `/etc/sysctl.d/99-litenode.conf`（M5 的系统优化也写这个文件）：有启用的 IPv4 目标时 `net.ipv4.ip_forward = 1`，有启用的 IPv6 目标时 `net.ipv6.conf.all.forwarding = 1`。不再需要时从文件中删除（没有设置时删除文件），但不把运行中的值改回 0：Docker、VPN 等可能依赖转发。
+  - **IPv6 路由器通告**：开启 IPv6 转发后，`accept_ra = 1` 的网卡会忽略路由器通告，靠 SLAAC 获得的地址和默认路由会在过期后丢失。因此开启 IPv6 转发时，把当前 `accept_ra = 1` 的网卡（不含 `all`、`default`、`lo`）在同一文件中先设为 `2`；已经写进文件的网卡以后仍保留。
+  - **ufw**：`route allow` 规则支持端口段（`port 40000:40010`）；多条转发指向同一目标时只保留第一条的备注，避免对账时来回改写备注。
+  - **其他**：转发备注可以为空，不为空时格式同节点备注，不要求唯一；添加时没有 `nft` 就先安装 nftables（与启用防火墙相同）；删除转发时一并删除它的来源限制；添加 / 修改时解析域名（A 和 AAAA 分别解析，当前使用的地址仍在解析结果中时保持不变），定时重新解析在 M4-02。
+- **原因**：按原始端口匹配，规则数量与转发数量成正比，与目标地址无关，域名重新解析时 postrouting 和 forward 链不变；`dport map` 是 nft 中唯一可靠的端口一一映射写法；`accept_ra` 问题会让 IPv6 机器在开启转发后数小时内断网，且不易察觉。
+- **否决**：按 DNAT 后的目标地址和端口做 masquerade（会影响本机或 Docker 发往同一目标的流量，且地址变化时要改多处）；DNAT 规则上加来源限制（防火墙关闭时来源限制也会生效，与节点规则不一致）；删除最后一条转发时把 `ip_forward` 改回 0（可能中断其他软件）；不处理 `accept_ra`。

@@ -142,7 +142,7 @@ func sshAccess(st *state.State, sshPorts []int) []string {
 	for _, p := range sshPorts {
 		for _, e := range Entries(st, sshPorts) {
 			from, to, err := nft.ParsePorts(e.Ports)
-			if err != nil || p < from || p > to || e.Proto == "udp" {
+			if err != nil || p < from || p > to || e.Proto == "udp" || IsForward(e.Owner) {
 				continue
 			}
 			out = append(out, strconv.Itoa(p)+" "+e.Owner+" "+e.Proto+" "+strings.Join(e.Sources, ","))

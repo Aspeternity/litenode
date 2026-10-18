@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
@@ -178,5 +179,50 @@ func TestPortRules(t *testing.T) {
 	delete(f.Files, User6Rules)
 	if simple, _, _ := PortRules(f, 61234); len(simple) != 1 || simple[0].Display != "61234/tcp" {
 		t.Errorf("61234/tcp: %+v", simple)
+	}
+}
+
+func TestDesiredForwards(t *testing.T) {
+	st := state.New()
+	st.Forwards = []forward.Forward{
+		{ID: 5, Enabled: true, Protocol: forward.TCPUDP, ListenPort: "30001", TargetHost: "la.example.com", TargetPort: "443", ResolvedIPv4: "203.0.113.10", ResolvedIPv6: "2001:db8::10"},
+		{ID: 6, Enabled: true, Protocol: forward.TCP, ListenPort: "31000-31002", TargetHost: "203.0.113.20", TargetPort: "41000-41002"},
+		// Same target as 5: the first comment stays.
+		{ID: 7, Enabled: true, Protocol: forward.UDP, ListenPort: "30002", TargetHost: "203.0.113.10", TargetPort: "443"},
+		{ID: 8, Protocol: forward.TCP, ListenPort: "30003", TargetHost: "203.0.113.30", TargetPort: "443"},
+	}
+	var got []string
+	for _, r := range Desired(st) {
+		got = append(got, strings.Join(Args(r, true), " "))
+	}
+	want := []string{
+		"route allow proto tcp to 203.0.113.10 port 443 comment litenode:forward:5",
+		"route allow proto udp to 203.0.113.10 port 443 comment litenode:forward:5",
+		"route allow proto tcp to 2001:db8::10 port 443 comment litenode:forward:5",
+		"route allow proto udp to 2001:db8::10 port 443 comment litenode:forward:5",
+		"route allow proto tcp to 203.0.113.20 port 41000:41002 comment litenode:forward:6",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("Desired:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// Real tuples of "ufw route allow" (Ubuntu 24.04, M4-01).
+func TestParseRouteRules(t *testing.T) {
+	got := ParseRules([]byte("### tuple ### route:allow tcp 40000:40002 203.0.113.10 any 0.0.0.0/0 in comment=6c6974656e6f64653a666f72776172643a3939\n"),
+		[]byte("### tuple ### route:allow udp 443 2001:db8::10 any ::/0 in comment=6c6974656e6f64653a666f72776172643a3939\n"))
+	want := []Rule{
+		{Route: true, Proto: "tcp", Port: 40000, PortEnd: 40002, Dest: "203.0.113.10", Comment: "litenode:forward:99"},
+		{Route: true, Proto: "udp", Port: 443, Dest: "2001:db8::10", Comment: "litenode:forward:99"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("ParseRules = %+v", got)
+	}
+	if d := Args(want[0], false); strings.Join(d, " ") != "route delete allow proto tcp to 203.0.113.10 port 40000:40002" {
+		t.Errorf("delete args %v", d)
+	}
+	// A deleted forward's rules are deleted.
+	if add, del := Plan(want, nil); len(add) != 0 || len(del) != 2 {
+		t.Errorf("Plan: add %v del %v", add, del)
 	}
 }

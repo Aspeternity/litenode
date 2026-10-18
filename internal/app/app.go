@@ -18,6 +18,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/share"
 	"github.com/Aspeternity/litenode/internal/ssh"
 	"github.com/Aspeternity/litenode/internal/state"
+	"github.com/Aspeternity/litenode/internal/sysctl"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
@@ -105,6 +106,7 @@ func (env Env) kinds(r system.Runner, store *state.Store) change.Registry {
 		reg.Register(k) // replaces ufw with an identical kind
 	}
 	reg.Register(firewall.SyncKind(store))
+	reg.Register(sysctl.Kind())
 	return reg
 }
 

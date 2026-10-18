@@ -10,9 +10,10 @@
 - **使用场景**：LiteNode 主要用作落地机。WSL 到 VPS 的直连经过中国，是用户在软路由上特意配置的模拟环境；直连被干扰不作为取舍依据，以 VPS 本机的协议检测为准（D-059）。
 - 客户端连通性：在 WSL 下载官方 Xray（放在 scratchpad 的独立目录，校验 `.dgst`），`scripts/dev/link2client.py` 把链接转成客户端配置，经 SOCKS 访问 `https://www.cloudflare.com/cdn-cgi/trace`，出口 IP 为 VPS 即连通。
 - **WSL 到 VPS 的直连经过 GFW（中国移动）**：所以"从中国大陆能连"和"协议上可用"要分开测；后者把 `scripts/dev/link2client.py` 和 `scripts/dev/vprobe.sh` 传到 VPS 的 `/tmp`，在 VPS 本机运行（注意测试机重启会清空 `/tmp`）。
-- 带 `vps` 构建标签的集成测试（`ports` 用 `VPS_SSH_PORT` 指定 sshd 端口，默认 22；`ssh` 会真实修改 sshd 配置，带 3 分钟自动恢复定时器）：`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o x.test ./internal/<包>`，传到测试机以 root 运行 `./x.test -test.v -test.run TestVPS`。已有：`xray`、`change`、`share`、`reality`、`ufw`、`ports`、`firewall`、`ssh`。
+- 带 `vps` 构建标签的集成测试（`ports` 用 `VPS_SSH_PORT` 指定 sshd 端口，默认 22；`ssh` 会真实修改 sshd 配置，带 3 分钟自动恢复定时器）：`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o x.test ./internal/<包>`，传到测试机以 root 运行 `./x.test -test.v -test.run TestVPS`。已有：`xray`、`change`、`share`、`reality`、`ufw`、`ports`、`firewall`、`ssh`、`forwardmgr`。
 - **测试防火墙时从另一台测试机探测端口**：WSL 到 VPS 的直连经过用户的中国代理，代理会自己完成 TCP 握手，被拦截的端口也显示"open"（M3-01 实测）。
 - 测试"检查并修复"：用 `nft -a list chain inet litenode input` 找到规则的 handle，`nft delete rule inet litenode input handle <N>` 删除或 `nft insert rule ...` 加入带 `litenode:` 注释的规则，制造差异后再运行菜单。探测端口可在探测机上用 `timeout 4 bash -c "</dev/tcp/<IP>/<端口>"`，被测端口用 `python3 -m http.server <端口>` 监听。
+- **测试端口转发**（M4-01）：Ubuntu 当线路机、Debian 当落地机。`forwardmgr` 的实机测试程序用 `LN_FWD=add|delete|fw-on|fw-off|link|golden` 直接修改测试机的真实状态（用法见 `internal/forwardmgr/vps_test.go` 开头）。在落地机上用 `LN_FWD=link LN_ADDR=<线路机 IP> LN_PORT=<转发端口>` 生成经线路机的链接，交给 `/tmp/vprobe.sh`（出口 IP 为落地机即通）；UDP 用落地机上的 Python 回显服务，回复中的来源地址为线路机 IP 说明 masquerade 生效。开 ufw 前先 `ufw allow 22/tcp`，并用 `systemd-run --on-active=20m ufw disable` 做保险。
 - 测试防火墙重启后的状态：先装一个开机 10 分钟后 `nft delete table inet litenode` 的临时服务（`Type=simple`，oneshot 会拖住 `multi-user.target`）作为应急，验证后删除。远程 `pkill -f` 的模式会匹配执行它的 shell，按端口结束进程用 `fuser -k <端口>/tcp`。
 - 测试机上用户可能开着 `lnode`（实例锁）：运行菜单前先 `pgrep -x lnode` 检查，不要结束用户的进程；远程 `pkill -f` 的匹配模式不能匹配到执行它的 shell 命令本身。
 - 验证脚本只输出结论（PASS / FAIL、关键几行），不要把整屏菜单或完整日志拿回会话（节省 token，见 CLAUDE.md）。
@@ -49,6 +50,7 @@
 - Reality 目标（M1-05）：`reality.Checker{}.Check(ctx, target)` / `CheckAll(ctx, targets, 10)`，`Result.Usable()`、`LargeHomepage()`、`Keyword`；`reality.CommonTargets`；`reality.SplitTarget` 校验手动输入。选择菜单在 M1-07。
 - 分享（M1-06）：`share.Link(reg, node, client, addr)`（端口优先 `share_port`）、`share.QR(text, color)`、`share.NewDetector().Detect(ctx)` → `Detected{IPv4, IPv6, Source}`，`Candidates()` IPv4 在前；`OnInterface(ip)` 为 false 时提示 NAT；`share.ValidAddress` 校验手动输入。测试机已安装 `zbar-tools`（`zbarimg`）用于验证二维码。
 - 端口 / ufw / 已有拦截（M1-07a）：`ports.Listening(r)` + `ports.NodeClaims(nodes)` → `ports.Checker{}.Check(want, self, selfPorts)`，`RandomFree`；`ufw.Desired(nodes)` + `ufw.Reconcile(ctx, r, desired, liteNodeFirewall)`（ufw 未运行或 LiteNode 防火墙启用时不操作；`Sync` 无条件执行）；`firewall.DetectForeignFilter(ctx, r)`。
+- 转发（M4-01）：业务在 `internal/forwardmgr`（`Service.Add/Update/SetEnabled/Delete`，错误 `PortTakenError`、`ErrNotFound`、`forward.Err*`），模型和校验在 `internal/forward`（`Check`、`CheckFields`、`IPv4()` / `IPv6()`、`Resolve`）。表由 `firewall.Config(st, sshPorts)` 生成（防火墙关闭时也包含转发链），`firewall.SyncKind` 无论防火墙是否启用都按状态应用；内核转发由 `sysctl.Desired(st, sysctl.ReadEnv(r))` 决定。防火墙条目 `Entry.ForwardIndex` 用于显示"转发 N"。端口冲突检查统一用 `ports.StateClaims(nodes, forwards)`。
 - 菜单动作返回 `ui.ErrBack` 可退出当前菜单（如删除节点后离开该节点的子菜单）。
 - 能力探测注册在 `internal/system/probe.go` 的 `probes`，目前只有 BBR；swap、sysctl、nftables 在对应任务中加入。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。

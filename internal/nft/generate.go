@@ -3,7 +3,10 @@ package nft
 import (
 	"fmt"
 	"net/netip"
+	"strconv"
 	"strings"
+
+	"github.com/Aspeternity/litenode/internal/forward"
 )
 
 // Table is the one table LiteNode uses, shared by the firewall and port
@@ -30,14 +33,30 @@ type Firewall struct {
 	BlockPing bool
 }
 
-// Config is everything in the table. Forwarding (M4) is added by its
-// task.
+// Forward is a port forwarding rule (DESIGN section 11).
+type Forward struct {
+	// Ports is the local port or range; Proto is "tcp", "udp" or
+	// "tcp+udp".
+	Ports, Proto string
+	// IPv4 and IPv6 are the targets of each address family, "" for none:
+	// DNAT cannot change the address family (D-046).
+	IPv4, IPv6 string
+	// TargetPorts is the target port, or a range as long as Ports.
+	TargetPorts string
+	// Sources limit who may use the rule while the firewall is on.
+	Sources []string
+	// Comment names the owner, "litenode:forward:<id>".
+	Comment string
+}
+
+// Config is everything in the table.
 type Config struct {
 	Firewall *Firewall
+	Forwards []Forward
 }
 
 // Empty reports whether the table has nothing to do and is removed.
-func (c Config) Empty() bool { return c.Firewall == nil }
+func (c Config) Empty() bool { return c.Firewall == nil && len(c.Forwards) == 0 }
 
 // Generate returns the nft script for c. It always first creates and
 // deletes the table, so loading it replaces the old table in one
@@ -61,8 +80,138 @@ func Generate(c Config) ([]byte, error) {
 		}
 		b.WriteString("\t}\n")
 	}
+	if len(c.Forwards) > 0 {
+		pre, post, err := natRules(c.Forwards)
+		if err != nil {
+			return nil, err
+		}
+		writeChain(&b, "prerouting", "type nat hook prerouting priority dstnat; policy accept;", pre)
+		writeChain(&b, "postrouting", "type nat hook postrouting priority srcnat; policy accept;", post)
+	}
+	if c.Firewall != nil {
+		lines, err := forwardFilter(c.Forwards)
+		if err != nil {
+			return nil, err
+		}
+		writeChain(&b, "forward", "type filter hook forward priority filter; policy drop;", lines)
+	}
 	b.WriteString("}\n")
 	return []byte(b.String()), nil
+}
+
+func writeChain(b *strings.Builder, name, hook string, lines []string) {
+	b.WriteString("\tchain " + name + " {\n\t\t" + hook + "\n")
+	for _, l := range lines {
+		b.WriteString("\t\t" + l + "\n")
+	}
+	b.WriteString("\t}\n")
+}
+
+// natRules are the DNAT rules, one per address family with a target, and
+// the masquerade rule of each forward: without it the target replies to
+// the client directly and the connection fails.
+func natRules(fs []Forward) (pre, post []string, err error) {
+	for _, f := range fs {
+		match, err := portMatch(f.Proto, f.Ports)
+		if err != nil {
+			return nil, nil, err
+		}
+		tail := ""
+		if f.Comment != "" {
+			tail = fmt.Sprintf(" comment %q", f.Comment)
+		}
+		for _, t := range []struct{ family, addr string }{{"ipv4", f.IPv4}, {"ipv6", f.IPv6}} {
+			if t.addr == "" {
+				continue
+			}
+			to, err := dnatTarget(f, t.addr)
+			if err != nil {
+				return nil, nil, err
+			}
+			pre = append(pre, "meta nfproto "+t.family+" "+match+" "+to+tail)
+		}
+		if f.IPv4 != "" || f.IPv6 != "" {
+			post = append(post, originalMatch(f)+" masquerade"+tail)
+		}
+	}
+	return pre, post, nil
+}
+
+// dnatTarget is the "dnat" statement for one target address. A range
+// mapped to the same ports keeps the port; a range mapped to other ports
+// uses a map, since a DNAT port range picks any port of it rather than
+// the matching one.
+func dnatTarget(f Forward, addr string) (string, error) {
+	a, err := netip.ParseAddr(addr)
+	if err != nil {
+		return "", fmt.Errorf("invalid target address %q", addr)
+	}
+	verb, host := "dnat ip to ", a.String()
+	if a.Is6() {
+		verb, host = "dnat ip6 to ", "["+a.String()+"]"
+	}
+	from, to, err := ParsePorts(f.Ports)
+	if err != nil {
+		return "", err
+	}
+	tFrom, tTo, err := ParsePorts(f.TargetPorts)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case tTo-tFrom != to-from:
+		return "", fmt.Errorf("target ports %q do not match %q", f.TargetPorts, f.Ports)
+	case from == to:
+		return verb + host + ":" + strconv.Itoa(tFrom), nil
+	case from == tFrom:
+		return verb + a.String(), nil
+	}
+	pairs := make([]string, 0, to-from+1)
+	for p := from; p <= to; p++ {
+		pairs = append(pairs, fmt.Sprintf("%d : %d", p, p-from+tFrom))
+	}
+	return verb + a.String() + " : " + l4Field(f.Proto) + " dport map { " + strings.Join(pairs, ", ") + " }", nil
+}
+
+func l4Field(proto string) string {
+	if proto == "tcp+udp" {
+		return "th"
+	}
+	return proto
+}
+
+// originalMatch matches connections this forward translated: by their
+// original local port, which no other rule may use (D-037).
+func originalMatch(f Forward) string {
+	l4 := "meta l4proto " + f.Proto
+	if f.Proto == "tcp+udp" {
+		l4 = "meta l4proto { tcp, udp }"
+	}
+	return l4 + " ct original proto-dst " + f.Ports + " ct status dnat"
+}
+
+// forwardFilter is the forward chain while the firewall is on: replies,
+// then the forwarded connections, limited to their sources.
+func forwardFilter(fs []Forward) ([]string, error) {
+	lines := []string{"ct state established,related accept", "ct state invalid drop"}
+	for _, f := range fs {
+		if f.IPv4 == "" && f.IPv6 == "" {
+			continue
+		}
+		if _, err := portMatch(f.Proto, f.Ports); err != nil {
+			return nil, err
+		}
+		tail := originalMatch(f) + " accept"
+		if f.Comment != "" {
+			tail += fmt.Sprintf(" comment %q", f.Comment)
+		}
+		ls, err := withSources(f.Sources, tail)
+		if err != nil {
+			return nil, err
+		}
+		lines = append(lines, ls...)
+	}
+	return lines, nil
 }
 
 // base are the rules every firewall needs before the open ports (D-070):
@@ -93,8 +242,7 @@ func inputRules(f *Firewall) ([]string, error) {
 	return lines, nil
 }
 
-// ruleLines writes one rule: one line without sources, otherwise one per
-// address family that has sources.
+// ruleLines writes one input rule.
 func ruleLines(r Rule) ([]string, error) {
 	match, err := portMatch(r.Proto, r.Ports)
 	if err != nil {
@@ -104,11 +252,17 @@ func ruleLines(r Rule) ([]string, error) {
 	if r.Comment != "" {
 		tail += fmt.Sprintf(" comment %q", r.Comment)
 	}
-	if len(r.Sources) == 0 {
+	return withSources(r.Sources, tail)
+}
+
+// withSources prefixes tail with the source limits: one line without
+// sources, otherwise one per address family that has sources.
+func withSources(sources []string, tail string) ([]string, error) {
+	if len(sources) == 0 {
 		return []string{tail}, nil
 	}
 	var v4, v6 []string
-	for _, s := range r.Sources {
+	for _, s := range sources {
 		p, err := ParseSource(s)
 		if err != nil {
 			return nil, err
@@ -143,30 +297,7 @@ func portMatch(proto, ports string) (string, error) {
 }
 
 // ParsePorts reads "443" or "10000-10100".
-func ParsePorts(s string) (from, to int, err error) {
-	a, b, isRange := strings.Cut(s, "-")
-	if from, err = parsePort(a); err != nil {
-		return 0, 0, err
-	}
-	to = from
-	if isRange {
-		if to, err = parsePort(b); err != nil {
-			return 0, 0, err
-		}
-		if to <= from {
-			return 0, 0, fmt.Errorf("port range %q is empty", s)
-		}
-	}
-	return from, to, nil
-}
-
-func parsePort(s string) (int, error) {
-	var p int
-	if _, err := fmt.Sscanf(s, "%d", &p); err != nil || fmt.Sprint(p) != s || p < 1 || p > 65535 {
-		return 0, fmt.Errorf("invalid port %q", s)
-	}
-	return p, nil
-}
+func ParsePorts(s string) (from, to int, err error) { return forward.ParsePorts(s) }
 
 // ParseSource reads an address or network ("1.2.3.4", "10.0.0.0/8",
 // "2001:db8::/32").

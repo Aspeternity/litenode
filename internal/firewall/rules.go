@@ -2,7 +2,9 @@ package firewall
 
 import (
 	"strconv"
+	"strings"
 
+	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/nft"
 	"github.com/Aspeternity/litenode/internal/state"
 )
@@ -17,6 +19,13 @@ func NodeOwner(id int64) string { return "node:" + strconv.FormatInt(id, 10) }
 
 // ManualOwner names one of the user's rules.
 func ManualOwner(id int64) string { return "manual:" + strconv.FormatInt(id, 10) }
+
+// ForwardOwner names a forward's rule.
+func ForwardOwner(id int64) string { return forward.Owner(id) }
+
+// IsForward reports whether owner is a forward. Forwarded traffic is
+// filtered in the forward chain, not the input chain.
+func IsForward(owner string) bool { return strings.HasPrefix(owner, "forward:") }
 
 // Comment is the nft comment of an owner's rule.
 func Comment(owner string) string { return "litenode:" + owner }
@@ -41,13 +50,17 @@ type Entry struct {
 	// NodeIndex is the node's position in the node list (from 1) for node
 	// rules, 0 otherwise.
 	NodeIndex int
+	// ForwardIndex is the forward's position in the forward list (from 1)
+	// for forward rules, 0 otherwise.
+	ForwardIndex int
 	// Note is the user's note of a manual rule.
 	Note string
 }
 
 // Entries lists the rules the state calls for, whether or not the
-// firewall is on: the SSH ports, the enabled nodes' ports and the user's
-// rules, each with its source limits. sshPorts come from SSHPorts.
+// firewall is on: the SSH ports, the enabled nodes' ports, the enabled
+// forwards' local ports and the user's rules, each with its source
+// limits. sshPorts come from SSHPorts.
 func Entries(st *state.State, sshPorts []int) []Entry {
 	var es []Entry
 	for _, p := range sshPorts {
@@ -60,6 +73,12 @@ func Entries(st *state.State, sshPorts []int) []Entry {
 			es = append(es, Entry{Owner: o, Ports: strconv.Itoa(n.Port), Proto: "tcp", Sources: st.Firewall.AutoSources[o], NodeIndex: i + 1})
 		}
 	}
+	for i, f := range st.Forwards {
+		if f.Enabled {
+			o := ForwardOwner(f.ID)
+			es = append(es, Entry{Owner: o, Ports: f.ListenPort, Proto: f.Protocol, Sources: st.Firewall.AutoSources[o], ForwardIndex: i + 1})
+		}
+	}
 	for _, r := range st.Firewall.Rules {
 		es = append(es, Entry{Owner: ManualOwner(r.ID), Ports: r.Port, Proto: r.Protocol, Sources: r.Sources, Note: r.Note})
 	}
@@ -67,14 +86,27 @@ func Entries(st *state.State, sshPorts []int) []Entry {
 }
 
 // Config is the nftables configuration the state calls for (DESIGN
-// section 14): nothing while the firewall is off, otherwise Entries.
+// sections 11 and 14): the input filter while the firewall is on, and the
+// enabled forwards whether or not it is.
 func Config(st *state.State, sshPorts []int) nft.Config {
+	var c nft.Config
+	for _, f := range st.Forwards {
+		if f.Enabled {
+			o := ForwardOwner(f.ID)
+			c.Forwards = append(c.Forwards, nft.Forward{
+				Ports: f.ListenPort, Proto: f.Protocol, IPv4: f.IPv4(), IPv6: f.IPv6(), TargetPorts: f.TargetPort,
+				Sources: st.Firewall.AutoSources[o], Comment: Comment(o),
+			})
+		}
+	}
 	if !st.Firewall.Enabled {
-		return nft.Config{}
+		return c
 	}
-	f := &nft.Firewall{BlockPing: st.Firewall.BlockPing}
+	c.Firewall = &nft.Firewall{BlockPing: st.Firewall.BlockPing}
 	for _, e := range Entries(st, sshPorts) {
-		f.Rules = append(f.Rules, nft.Rule{Ports: e.Ports, Proto: e.Proto, Sources: e.Sources, Comment: Comment(e.Owner)})
+		if !IsForward(e.Owner) {
+			c.Firewall.Rules = append(c.Firewall.Rules, nft.Rule{Ports: e.Ports, Proto: e.Proto, Sources: e.Sources, Comment: Comment(e.Owner)})
+		}
 	}
-	return nft.Config{Firewall: f}
+	return c
 }

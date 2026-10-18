@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/system"
 )
@@ -102,6 +103,28 @@ func NodeClaims(nodes []node.Node) []Claim {
 		out = append(out, Claim{Key{TCP, n.Port}, NodeOwner(n.ID)})
 	}
 	return out
+}
+
+// ForwardClaims lists the local ports of all forwards, enabled or not:
+// their DNAT takes the traffic of these ports from any program listening
+// there.
+func ForwardClaims(fs []forward.Forward) []Claim {
+	var out []Claim
+	for _, f := range fs {
+		from, to, err := forward.ParsePorts(f.ListenPort)
+		if err != nil {
+			continue
+		}
+		for _, k := range Range(f.Protocol, from, to) {
+			out = append(out, Claim{k, forward.Owner(f.ID)})
+		}
+	}
+	return out
+}
+
+// StateClaims lists the ports of every node and forward in the state.
+func StateClaims(nodes []node.Node, fs []forward.Forward) []Claim {
+	return append(NodeClaims(nodes), ForwardClaims(fs)...)
 }
 
 // Conflict explains why a wanted port is taken.

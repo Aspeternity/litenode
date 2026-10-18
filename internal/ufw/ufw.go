@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 )
@@ -38,21 +39,32 @@ const (
 // Rule is an allow rule. Dest "" means any (input rules); route rules
 // carry the post-DNAT destination IP.
 type Rule struct {
-	Route   bool
-	Proto   string // tcp, udp or any
-	Port    int
+	Route bool
+	Proto string // tcp, udp or any
+	Port  int
+	// PortEnd ends a port range starting at Port; 0 for a single port.
+	PortEnd int
 	Dest    string
 	Comment string
 }
 
 type ruleKey struct {
-	Route bool
-	Proto string
-	Port  int
-	Dest  string
+	Route   bool
+	Proto   string
+	Port    int
+	PortEnd int
+	Dest    string
 }
 
-func (r Rule) key() ruleKey { return ruleKey{r.Route, r.Proto, r.Port, r.Dest} }
+func (r Rule) key() ruleKey { return ruleKey{r.Route, r.Proto, r.Port, r.PortEnd, r.Dest} }
+
+// ports is the port as ufw writes it: "443" or "40000:40010".
+func (r Rule) ports() string {
+	if r.PortEnd > 0 {
+		return strconv.Itoa(r.Port) + ":" + strconv.Itoa(r.PortEnd)
+	}
+	return strconv.Itoa(r.Port)
+}
 
 // Managed reports whether LiteNode added the rule.
 func (r Rule) Managed() bool { return strings.HasPrefix(r.Comment, Marker) }
@@ -60,21 +72,59 @@ func (r Rule) Managed() bool { return strings.HasPrefix(r.Comment, Marker) }
 // NodeComment is the comment of a node's rule.
 func NodeComment(id int64) string { return Marker + "node:" + strconv.FormatInt(id, 10) }
 
+// ForwardComment is the comment of a forward's rules.
+func ForwardComment(id int64) string { return Marker + forward.Owner(id) }
+
 // SSHComment is the comment of the SSH port's rule.
 const SSHComment = Marker + "ssh"
 
-// Desired lists the rules the state calls for: one per enabled node, and
-// the SSH port when LiteNode manages it (M2-05). Forwards (M4) are added
-// by their task.
+// Desired lists the rules the state calls for: one per enabled node, the
+// SSH port when LiteNode manages it (M2-05), and route rules to the
+// targets of enabled forwards (M4-01): ufw filters forwarded packets
+// after DNAT, so they name the target address and port, one rule per
+// protocol and address family (D-046). Two rules for the same target
+// keep the first comment, so reconciling does not relabel it back and
+// forth.
 func Desired(st *state.State) []Rule {
 	var out []Rule
+	seen := map[ruleKey]bool{}
+	add := func(r Rule) {
+		if !seen[r.key()] {
+			seen[r.key()] = true
+			out = append(out, r)
+		}
+	}
 	for _, n := range st.Nodes {
 		if n.Enabled {
-			out = append(out, Rule{Proto: "tcp", Port: n.Port, Comment: NodeComment(n.ID)})
+			add(Rule{Proto: "tcp", Port: n.Port, Comment: NodeComment(n.ID)})
 		}
 	}
 	if st.SSH.Port > 0 {
-		out = append(out, Rule{Proto: "tcp", Port: st.SSH.Port, Comment: SSHComment})
+		add(Rule{Proto: "tcp", Port: st.SSH.Port, Comment: SSHComment})
+	}
+	for _, f := range st.Forwards {
+		if !f.Enabled {
+			continue
+		}
+		from, to, err := forward.ParsePorts(f.TargetPort)
+		if err != nil {
+			continue
+		}
+		end := 0
+		if to > from {
+			end = to
+		}
+		protos := []string{f.Protocol}
+		if f.Protocol == forward.TCPUDP {
+			protos = []string{forward.TCP, forward.UDP}
+		}
+		for _, addr := range []string{f.IPv4(), f.IPv6()} {
+			for _, p := range protos {
+				if addr != "" {
+					add(Rule{Route: true, Proto: p, Port: from, PortEnd: end, Dest: addr, Comment: ForwardComment(f.ID)})
+				}
+			}
+		}
 	}
 	return out
 }
@@ -103,7 +153,8 @@ func ParseRules(files ...[]byte) []Rule {
 
 // parseTuple parses "<action> <proto> <dport> <dst> <sport> <src> <dir>
 // [comment=<hex>]". Only plain allow rules from anywhere, with a single
-// port, are represented; anything else is ignored.
+// port or one range ("40000:40010"), are represented; anything else is
+// ignored.
 func parseTuple(s string) (Rule, bool) {
 	f := strings.Fields(s)
 	if len(f) < 7 {
@@ -117,7 +168,13 @@ func parseTuple(s string) (Rule, bool) {
 	default:
 		return Rule{}, false
 	}
-	port, err := strconv.Atoi(f[2])
+	first, last, isRange := strings.Cut(f[2], ":")
+	port, err := strconv.Atoi(first)
+	if err == nil && isRange {
+		if r.PortEnd, err = strconv.Atoi(last); err == nil && r.PortEnd <= port {
+			err = errors.New("empty range")
+		}
+	}
 	if err != nil || f[4] != "any" || (f[5] != "0.0.0.0/0" && f[5] != "::/0") || !strings.HasPrefix(f[6], "in") {
 		return Rule{}, false
 	}
@@ -192,7 +249,7 @@ func Args(r Rule, add bool) []string {
 	} else {
 		args = append(args, r.Dest)
 	}
-	args = append(args, "port", strconv.Itoa(r.Port))
+	args = append(args, "port", r.ports())
 	if add {
 		args = append(args, "comment", r.Comment)
 	}
