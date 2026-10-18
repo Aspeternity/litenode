@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/nft"
@@ -102,16 +103,94 @@ func (s *Service) apply(ctx context.Context, st *state.State) error {
 	if err != nil {
 		return err
 	}
-	f, err := nft.ConfigFile(Config(st, ports))
+	return s.write(ctx, st, ports, true)
+}
+
+// write writes and loads the table for st, under confirm-or-rollback when
+// confirm is set.
+func (s *Service) write(ctx context.Context, st *state.State, sshPorts []int, confirm bool) error {
+	f, err := nft.ConfigFile(Config(st, sshPorts))
 	if err != nil {
 		return err
 	}
 	k := s.Kinds()
-	_, err = s.Confirmer.Apply(ctx, change.Change{
+	ch := change.Change{
 		Parts: []change.Part{{Kind: k[0], Files: []change.File{f}}, {Kind: k[1]}},
 		State: st,
-	})
+	}
+	if confirm {
+		_, err = s.Confirmer.Apply(ctx, ch)
+	} else {
+		_, err = s.Confirmer.Manager.Apply(ctx, ch)
+	}
 	return err
+}
+
+// Edit changes the firewall settings with edit and applies them. A change
+// to who may reach the SSH ports goes through confirm-or-rollback, and
+// Edit reports confirm = true: the caller then asks the user to confirm.
+// Other changes (opening a port, ping) only add or remove access to
+// other ports and are applied directly (D-073).
+func (s *Service) Edit(ctx context.Context, edit func(st *state.State) error) (confirm bool, err error) {
+	st, err := s.Store.Load()
+	if err != nil {
+		return false, err
+	}
+	if !st.Firewall.Enabled {
+		return false, ErrDisabled
+	}
+	ports, err := s.SSHPorts(ctx, st)
+	if err != nil {
+		return false, err
+	}
+	before, err := s.Store.Load()
+	if err != nil {
+		return false, err
+	}
+	if err := edit(st); err != nil {
+		return false, err
+	}
+	confirm = AffectsSSH(before, st, ports)
+	return confirm, s.write(ctx, st, ports, confirm)
+}
+
+// Inspect compares the loaded rules with the state ("check and repair").
+func (s *Service) Inspect(ctx context.Context) (Report, error) {
+	st, err := s.Store.Load()
+	if err != nil {
+		return Report{}, err
+	}
+	ports, err := s.SSHPorts(ctx, st)
+	if err != nil {
+		return Report{}, err
+	}
+	want := Config(st, ports).Firewall
+	if want == nil {
+		return Report{}, ErrDisabled
+	}
+	var got *nft.Chain
+	// nft fails when the table or chain does not exist.
+	if res, err := s.runner().Query(ctx, nft.NftPath, append(append([]string{"list", "chain"}, strings.Fields(nft.Table)...), "input")...); err == nil {
+		c, err := nft.ParseChain(res.Stdout)
+		if err != nil {
+			return Report{}, err
+		}
+		got = &c
+	}
+	return Compare(want, got)
+}
+
+// Repair loads the rules the state calls for again, under
+// confirm-or-rollback (it rewrites the SSH rule too).
+func (s *Service) Repair(ctx context.Context) error {
+	st, err := s.Store.Load()
+	if err != nil {
+		return err
+	}
+	if !st.Firewall.Enabled {
+		return ErrDisabled
+	}
+	return s.apply(ctx, st)
 }
 
 // Enable turns the firewall on, opening the SSH ports, the nodes' ports
