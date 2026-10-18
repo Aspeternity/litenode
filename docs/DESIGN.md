@@ -119,7 +119,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/sc
 - `/usr/local/bin/lnode` 已被其他程序占用（不是指向 `litenode` 的软链接）时不覆盖，提示用户使用 `litenode` 命令，安装照常完成。
 - 只有标准输入和输出都是终端时才在最后执行 `litenode` 进入菜单；否则只提示安装完成。
 
-**无法访问 GitHub 的机器**（D-042）：国内线路机、纯 IPv6 的 VPS（github.com 没有 IPv6 地址）无法下载。第一版不内置镜像或下载代理：install.sh、Xray 下载、更新脚本在下载失败时给出清楚的中文报错，说明可能无法访问 GitHub，并指向 README 中的手动安装说明（在本地下载程序和 `sha256sums.txt`、上传、校验、放到 `/usr/local/bin`）。纯 IPv6 机器在 README 中提示可先开启 WARP 或使用 DNS64。线路机不需要 Xray，只需手动安装 LiteNode 本身。
+**无法访问 GitHub 的机器**（D-042）：国内线路机、纯 IPv6 的 VPS（github.com 没有 IPv6 地址）无法下载。第一版不内置镜像或下载代理：install.sh、Xray 下载、更新脚本在下载失败时给出清楚的中文报错，说明可能无法访问 GitHub，并给出 README「无法访问 GitHub 的机器」一节的链接（`text.NoGitHubURL`，D-102），其中有手动安装说明（在本地下载程序和 `sha256sums.txt`、上传、校验、放到 `/usr/local/bin`）。Xray 没有手动安装方法。纯 IPv6 机器在 README 中提示可先开启 WARP 或使用 DNS64。线路机不需要 Xray，只需手动安装 LiteNode 本身。
 
 ### 发布
 
