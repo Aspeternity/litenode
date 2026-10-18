@@ -71,11 +71,11 @@ func SharePortCurrent(sharePort int) string {
 func Current(v any) string { return fmt.Sprintf("当前: %v", v) }
 
 // ChoosePreset heads the preset menu.
-const ChoosePreset = "选择节点类型"
+const ChoosePreset = "节点类型"
 
 // Target selection (DESIGN section 10.1).
 const (
-	ChooseTarget     = "选择目标网站 (SNI)"
+	ChooseTarget     = "目标网站 (SNI)"
 	TargetCommon     = "从常用列表选择"
 	TargetManual     = "手动输入"
 	TargetNoneUsable = "常用列表中没有通过检测的网站，请选择其他方式。"

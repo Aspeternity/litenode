@@ -40,11 +40,11 @@ func (u *nodeUI) xrayMenu() ui.Menu {
 func (u *nodeUI) xrayStart() error {
 	err := u.svc.StartXray(u.ctx)
 	if errors.Is(err, nodemgr.ErrNoEnabledNodes) {
-		u.s.Println(text.XrayNoNodes)
+		u.s.End(text.XrayNoNodes)
 		return nil
 	}
 	if err == nil {
-		u.s.Println(u.s.Colors.Good(text.XrayStarted))
+		u.s.Done(text.XrayStarted)
 	}
 	return err
 }
@@ -53,7 +53,7 @@ func (u *nodeUI) xrayStop() error {
 	if err := u.svc.StopXray(u.ctx); err != nil {
 		return err
 	}
-	u.s.Println(text.XrayStoppedMsg)
+	u.s.Done(text.XrayStoppedMsg)
 	return nil
 }
 
@@ -61,13 +61,13 @@ func (u *nodeUI) xrayRestart() error {
 	err := u.svc.RestartXray(u.ctx)
 	switch {
 	case errors.Is(err, nodemgr.ErrNoEnabledNodes):
-		u.s.Println(text.XrayNoNodes)
+		u.s.End(text.XrayNoNodes)
 		return nil
 	case err != nil && u.state().Xray.Stopped:
-		u.s.Println(text.XrayStoppedByUserErr)
+		u.s.End(u.s.Colors.Warn(text.XrayStoppedByUserErr))
 		return nil
 	case err == nil:
-		u.s.Println(text.XrayRestarted)
+		u.s.Done(text.XrayRestarted)
 	}
 	return err
 }
@@ -77,7 +77,7 @@ func (u *nodeUI) xrayLogs() error {
 	if err != nil {
 		return err
 	}
-	u.s.Println(text.XrayLogsTitle)
+	u.s.End(text.XrayLogsTitle)
 	u.s.Println(strings.TrimRight(logs, "\n"))
 	return nil
 }
@@ -96,7 +96,7 @@ func (u *nodeUI) xrayUpdate() error {
 	if err != nil {
 		return err
 	}
-	u.s.Println(u.s.Colors.Good(text.XrayUpdated(v)))
+	u.s.Done(text.XrayUpdated(v))
 	return nil
 }
 
@@ -113,6 +113,6 @@ func (u *nodeUI) xrayUninstall() error {
 	if err := u.svc.UninstallXray(u.ctx); err != nil {
 		return err
 	}
-	u.s.Println(text.XrayUninstalled)
+	u.s.Done(text.XrayUninstalled)
 	return ui.ErrBack
 }

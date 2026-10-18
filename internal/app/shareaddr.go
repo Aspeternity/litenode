@@ -118,7 +118,10 @@ func (u *nodeUI) shareAddress() error {
 				{Label: text.ShareAddrAdd, Hint: text.ShareAddrAddHint, Action: u.addAddress},
 				{Label: text.ShareAddrDefault, Hidden: len(list) < 2, Action: u.setDefaultAddress},
 				{Label: text.ShareAddrDetect, Action: func() error {
-					_, err := u.detectAddresses(u.shareAddresses())
+					list, err := u.detectAddresses(u.shareAddresses())
+					if err == nil && len(list) > 0 {
+						u.s.Done(text.Done)
+					}
 					return err
 				}},
 				{Label: text.ShareAddrDelete, Hidden: len(list) == 0, Action: u.deleteAddress},
@@ -136,7 +139,7 @@ func (u *nodeUI) addAddress() error {
 	}
 	list := u.shareAddresses()
 	if slices.Contains(list, a) {
-		u.s.Println(text.ShareAddrExists)
+		u.s.End(text.ShareAddrExists)
 		return nil
 	}
 	if share.AddressKind(a) == "" {
@@ -162,7 +165,7 @@ func (u *nodeUI) addAddress() error {
 	if err := u.svc.SetShareAddresses(append(list, a)); err != nil {
 		return err
 	}
-	u.s.Println(text.ShareAddrAdded)
+	u.s.Done(text.ShareAddrAdded)
 	return nil
 }
 
@@ -184,7 +187,7 @@ func (u *nodeUI) setDefaultAddress() error {
 	if err := u.svc.SetShareAddresses(list); err != nil {
 		return err
 	}
-	u.s.Println(text.ShareAddrDefaultOK)
+	u.s.Done(text.ShareAddrDefaultOK)
 	return nil
 }
 
@@ -197,9 +200,9 @@ func (u *nodeUI) deleteAddress() error {
 	if err := u.svc.SetShareAddresses(slices.Delete(slices.Clone(list), i-1, i)); err != nil {
 		return err
 	}
-	u.s.Println(text.ShareAddrDeleted)
 	if i == 1 && len(list) > 1 {
 		u.s.Println(text.ShareAddrDefaultOK)
 	}
+	u.s.Done(text.ShareAddrDeleted)
 	return nil
 }

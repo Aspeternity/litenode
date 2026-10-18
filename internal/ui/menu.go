@@ -27,6 +27,9 @@ type Item struct {
 	// Hidden removes the item when the feature is unavailable. Remaining
 	// items are numbered consecutively.
 	Hidden bool
+	// Page marks an item that opens another menu (a page). Any other item
+	// is an operation and runs as a flow (D-069).
+	Page bool
 	// Action runs when the item is chosen.
 	Action func() error
 }
@@ -91,7 +94,33 @@ func (m Menu) Render() string {
 		line(" " + m.Notice)
 	}
 	line(Separator)
+	for _, l := range m.itemLines() {
+		if l == "" {
+			line(Separator)
+			continue
+		}
+		line(" " + l)
+	}
+	// Submenus have a single separator, above option 0 (D-014). In the
+	// grouped main menu option 0 belongs to the last group instead.
+	if !m.Grouped {
+		line(Separator)
+	}
+	line(" 0. " + m.exitLabel())
+	return b.String()
+}
 
+func (m Menu) exitLabel() string {
+	if m.ExitLabel != "" {
+		return m.ExitLabel
+	}
+	return text.Back
+}
+
+// itemLines are the numbered items, hints aligned; "" marks a group
+// separator of a grouped menu.
+func (m Menu) itemLines() []string {
+	var out []string
 	items := m.Visible()
 	labelWidth := hintColumn
 	for _, it := range items {
@@ -103,23 +132,13 @@ func (m Menu) Render() string {
 	numWidth := len(fmt.Sprint(len(items))) + 1
 	for i, it := range items {
 		if m.Grouped && i > 0 && it.Group != items[i-1].Group {
-			line(Separator)
+			out = append(out, "")
 		}
 		label := it.Label
 		if it.Hint != "" {
 			label = PadRight(label, labelWidth) + it.Hint
 		}
-		line(fmt.Sprintf(" %-*s %s", numWidth, fmt.Sprintf("%d.", i+1), label))
+		out = append(out, fmt.Sprintf("%-*s %s", numWidth, fmt.Sprintf("%d.", i+1), label))
 	}
-	// Submenus have a single separator, above option 0 (D-014). In the
-	// grouped main menu option 0 belongs to the last group instead.
-	if !m.Grouped {
-		line(Separator)
-	}
-	exit := m.ExitLabel
-	if exit == "" {
-		exit = text.Back
-	}
-	line(" 0. " + exit)
-	return b.String()
+	return out
 }
