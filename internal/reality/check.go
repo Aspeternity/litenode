@@ -51,10 +51,13 @@ type Result struct {
 	Keyword string
 }
 
-// Usable reports whether the target meets the REALITY requirements.
-// High-risk keywords and large homepages are warnings, not failures.
+// Usable reports whether the target meets the REALITY requirements,
+// including answering an HTTP request for "/" like a real website does
+// (D-058): a host that completes TLS but serves nothing gives the disguise
+// away and is often itself a proxy server. High-risk keywords and large
+// homepages are warnings, not failures.
 func (r Result) Usable() bool {
-	return r.Err == nil && r.TLS13 && r.H2 && r.X25519 && r.CertOK && (!r.MLKEM || r.MLKEMSupported)
+	return r.Err == nil && r.TLS13 && r.H2 && r.X25519 && r.CertOK && (!r.MLKEM || r.MLKEMSupported) && r.HomepageSize >= 0
 }
 
 // LargeHomepage reports whether the homepage is large enough to warn.

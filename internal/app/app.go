@@ -46,6 +46,7 @@ type Env struct {
 
 	// Optional overrides for tests; nil uses the real implementations.
 	TargetChecker   TargetChecker
+	TargetScanner   TargetScanner
 	AddressDetector AddressDetector
 	XrayFetcher     xray.Fetcher
 	Rand            io.Reader
@@ -168,6 +169,15 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	nodes := &nodeUI{ctx: ctx, s: s, svc: svc, checker: env.TargetChecker, detector: env.AddressDetector}
 	if nodes.checker == nil {
 		nodes.checker = &reality.Checker{}
+	}
+	nodes.scanner = env.TargetScanner
+	if nodes.scanner == nil {
+		// The scanner checks candidates with the same checker, so it
+		// follows the ML-KEM support set before each target choice.
+		c := nodes.checker
+		s := reality.NewScanner(nil)
+		s.Check = c.Check
+		nodes.scanner = s
 	}
 	if nodes.detector == nil {
 		nodes.detector = share.NewDetector()
