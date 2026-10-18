@@ -148,6 +148,18 @@ func (m *Manager) LoadBackup(id string) (*Backup, error) {
 	return &b, nil
 }
 
+// BackupState is the state saved in b, as it was before that change.
+func (m *Manager) BackupState(b *Backup) (*state.State, error) {
+	if !b.StateExisted {
+		return state.New(), nil
+	}
+	data, err := m.Runner.ReadFile(filepath.Join(b.Dir, stateName))
+	if err != nil {
+		return nil, fmt.Errorf("read state of backup %s: %w", b.ID, err)
+	}
+	return state.Decode(data)
+}
+
 // Backups returns the IDs of the backups that include kind, oldest first.
 func (m *Manager) Backups(kind string) ([]string, error) {
 	all, err := m.allBackups()

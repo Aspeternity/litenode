@@ -596,6 +596,13 @@ func describe(err error) string {
 	var pt *nodemgr.PortTakenError
 	var ce *change.Error
 	var ie *nodemgr.XrayInstallError
+	// A failed restore matters most; otherwise SSH errors have their own
+	// text, also when wrapped in a change error (restored).
+	if !errors.As(err, &ce) || ce.RestoreErr == nil {
+		if msg, ok := describeSSH(err); ok {
+			return msg
+		}
+	}
 	switch {
 	case errors.Is(err, node.ErrRemarkEmpty):
 		return text.ErrRemarkEmpty

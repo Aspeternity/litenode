@@ -9,7 +9,7 @@ import (
 
 // mainMenu builds the main menu (DESIGN section 8). Modules not yet
 // implemented are placeholders.
-func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState string, nodes, xrayMenu func() error) ui.Menu {
+func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState, sshState string, nodes, xrayMenu, sshMenu func() error) ui.Menu {
 	todo := func() error {
 		s.Println(text.InDevelopment)
 		return nil
@@ -23,6 +23,7 @@ func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, 
 		Status: ui.MainStatusLines(ui.MainStatus{
 			Xray:     xrayState,
 			Nodes:    len(st.Nodes),
+			SSH:      sshState,
 			System:   info,
 			Warnings: warnings,
 		}, s.Colors),
@@ -32,7 +33,7 @@ func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, 
 			{Label: text.MenuNodes, Group: 1, Action: nodes},
 			{Label: text.MenuForwards, Group: 1, Action: todo},
 			{Label: text.MenuXray, Group: 1, Action: xrayMenu},
-			{Label: text.MenuSSH, Group: 2, Action: todo},
+			{Label: text.MenuSSH, Group: 2, Action: sshMenu},
 			{Label: text.MenuFirewall, Group: 2, Action: todo},
 			{Label: text.MenuSysopt, Group: 2, Action: todo},
 			{Label: text.MenuMaint, Hint: text.MenuMaintHint, Group: 3, Action: todo},
