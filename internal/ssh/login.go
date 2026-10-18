@@ -78,6 +78,13 @@ func (s *Service) SetPasswordAuth(ctx context.Context, on bool) error {
 	return s.changePolicy(ctx, func(p *Policy) { p.Password = on }, func(c *state.SSH) { c.PasswordAuth = &on })
 }
 
+// SetLoginMethod sets key and password login together, as one change
+// (D-090: key only, password only, or both).
+func (s *Service) SetLoginMethod(ctx context.Context, pubkey, password bool) error {
+	return s.changePolicy(ctx, func(p *Policy) { p.Pubkey, p.Password = pubkey, password },
+		func(c *state.SSH) { c.PubkeyAuth, c.PasswordAuth = &pubkey, &password })
+}
+
 // ErrRootPolicy means an unknown root login policy.
 var ErrRootPolicy = errors.New("unknown root login policy")
 

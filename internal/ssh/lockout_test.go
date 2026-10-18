@@ -136,3 +136,22 @@ func TestSetRootLogin(t *testing.T) {
 		t.Errorf("state = %+v", st.SSH)
 	}
 }
+
+func TestSetLoginMethod(t *testing.T) {
+	ctx := context.Background()
+	// Key only without any key is refused (D-090).
+	_, svc := loginService(t, effectiveDefault)
+	if err := svc.SetLoginMethod(ctx, true, false); !errors.Is(err, ErrNeedKey) {
+		t.Fatalf("key only without a key = %v, want ErrNeedKey", err)
+	}
+	// Password only: both settings are written in one step (the fake sshd
+	// reports the result).
+	_, svc = loginService(t, "port 22\npubkeyauthentication no\npasswordauthentication yes\npermitrootlogin yes\n")
+	if err := svc.SetLoginMethod(ctx, false, true); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := svc.Store.Load()
+	if st.SSH.PubkeyAuth == nil || *st.SSH.PubkeyAuth || st.SSH.PasswordAuth == nil || !*st.SSH.PasswordAuth {
+		t.Errorf("state = %+v", st.SSH)
+	}
+}

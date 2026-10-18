@@ -58,13 +58,6 @@ func (u *sshUI) keys() []accountKey {
 	return out
 }
 
-func onOff(b bool) string {
-	if b {
-		return text.SSHOn
-	}
-	return text.SSHOff
-}
-
 func rootLabel(policy string) string {
 	switch policy {
 	case ssh.RootYes:
@@ -93,19 +86,38 @@ func sshMainStatus(ctx context.Context, svc *ssh.Service) string {
 	return text.SSHMainStatus(portList(e.Ports), e.PubkeyAuth, e.PasswordAuth)
 }
 
-// menu is the SSH menu; its status shows what sshd actually uses.
+// menu is the SSH menu (D-090); its status shows what sshd actually uses.
 func (u *sshUI) menu() ui.Menu {
 	var status []string
+	keys := len(u.keys())
 	e, err := ssh.ReadEffective(u.ctx, u.svc.Confirmer.Manager.Runner)
 	if err != nil {
 		status = append(status, u.s.Colors.Bad(text.ActionFailed(err)))
 	} else {
-		password := onOff(e.PasswordAuth)
+		method := text.LoginMethod(e.PubkeyAuth, e.PasswordAuth)
 		if e.PasswordAuth {
-			password = u.s.Colors.Warn(password + " " + text.PasswordWarn)
+			method = u.s.Colors.Warn(method + " " + text.PasswordWarn)
 		}
-		status = append(status, text.SSHStatusLine(portList(e.Ports), onOff(e.PubkeyAuth), password, rootLabel(e.PermitRootLogin)))
+		status = append(status, text.SSHStatusLines(portList(e.Ports), method, rootLabel(e.PermitRootLogin), keys)...)
 	}
+	return ui.Menu{
+		Heading: text.MenuSSH,
+		Status:  status,
+		Items: []ui.Item{
+			{Label: text.SSHKeys, Page: true, Action: func() error { return u.s.Run(u.keysMenu) }},
+			{Label: text.SSHLoginMethod, Action: u.loginMethod},
+			{Label: text.SSHRootPolicy, Action: u.rootPolicy},
+			{Label: text.SSHPortChange, Action: u.changePort},
+			{Label: text.SSHSudoUser, Action: u.createSudoUser},
+			{Label: text.SSHRollback, Action: u.rollback},
+		},
+	}
+}
+
+// keysMenu is the key management page: the keys of all admins, numbered
+// as "delete key" expects.
+func (u *sshUI) keysMenu() ui.Menu {
+	var status []string
 	keys := u.keys()
 	if len(keys) == 0 {
 		status = append(status, text.SSHKeysNone)
@@ -121,18 +133,12 @@ func (u *sshUI) menu() ui.Menu {
 		}
 	}
 	return ui.Menu{
-		Heading: text.MenuSSH,
+		Heading: text.SSHKeys,
 		Status:  status,
 		Items: []ui.Item{
-			{Label: text.SSHKeyAdd, Hint: text.SSHKeyAddHint, Action: u.addKey},
-			{Label: text.SSHKeyGen, Hint: text.SSHKeyGenHint, Action: u.generateKey},
-			{Label: text.SSHPubkeyToggle, Hint: text.SSHToggleHint, Action: u.togglePubkey},
-			{Label: text.SSHPasswordToggle, Hint: text.SSHToggleHint, Action: u.togglePassword},
-			{Label: text.SSHRootPolicy, Hint: text.SSHRootHint, Action: u.rootPolicy},
-			{Label: text.SSHPortChange, Hint: text.SSHPortHint, Action: u.changePort},
-			{Label: text.SSHSudoUser, Action: u.createSudoUser},
+			{Label: text.SSHKeyGen, Action: u.generateKey},
+			{Label: text.SSHKeyAdd, Action: u.addKey},
 			{Label: text.SSHKeyDelete, Hidden: len(keys) == 0, Action: u.deleteKey},
-			{Label: text.SSHRollback, Action: u.rollback},
 		},
 	}
 }
@@ -297,32 +303,28 @@ func (u *sshUI) effective() (ssh.Effective, error) {
 	return ssh.ReadEffective(u.ctx, u.svc.Confirmer.Manager.Runner)
 }
 
-func (u *sshUI) togglePubkey() error {
+// loginMethod chooses key only, password only or both; choosing the
+// current one does nothing. The interlocks refuse, e.g., key only
+// without a key.
+func (u *sshUI) loginMethod() error {
 	e, err := u.effective()
 	if err != nil {
 		return err
 	}
-	ok, err := u.s.Confirm(text.ConfirmToggle(text.SSHPubkeyToggle, !e.PubkeyAuth))
-	if err != nil || !ok {
+	methods := []struct{ pubkey, password bool }{{true, false}, {false, true}, {true, true}}
+	m := ui.Menu{Heading: text.SSHLoginMethod, Status: []string{text.SSHCurrent(text.LoginMethod(e.PubkeyAuth, e.PasswordAuth))}}
+	for _, x := range methods {
+		m.Items = append(m.Items, ui.Item{Label: text.LoginMethod(x.pubkey, x.password)})
+	}
+	choice, err := u.s.Choose(m)
+	if err != nil || choice == 0 {
 		return err
 	}
-	if err := u.svc.SetPubkeyAuth(u.ctx, !e.PubkeyAuth); err != nil {
-		return err
+	x := methods[choice-1]
+	if x.pubkey == e.PubkeyAuth && x.password == e.PasswordAuth {
+		return nil
 	}
-	_, err = u.confirmed(text.ChangeKept)
-	return err
-}
-
-func (u *sshUI) togglePassword() error {
-	e, err := u.effective()
-	if err != nil {
-		return err
-	}
-	ok, err := u.s.Confirm(text.ConfirmToggle(text.SSHPasswordToggle, !e.PasswordAuth))
-	if err != nil || !ok {
-		return err
-	}
-	if err := u.svc.SetPasswordAuth(u.ctx, !e.PasswordAuth); err != nil {
+	if err := u.svc.SetLoginMethod(u.ctx, x.pubkey, x.password); err != nil {
 		return err
 	}
 	_, err = u.confirmed(text.ChangeKept)
@@ -335,7 +337,7 @@ func (u *sshUI) rootPolicy() error {
 		return err
 	}
 	policies := []string{ssh.RootYes, ssh.RootKeysOnly, ssh.RootNo}
-	m := ui.Menu{Heading: text.SSHRootPolicy, Status: []string{text.RootPolicyCurrent(rootLabel(e.PermitRootLogin))}}
+	m := ui.Menu{Heading: text.SSHRootPolicy, Status: []string{text.SSHCurrent(rootLabel(e.PermitRootLogin))}}
 	for _, p := range policies {
 		m.Items = append(m.Items, ui.Item{Label: rootLabel(p)})
 	}
