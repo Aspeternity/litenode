@@ -231,7 +231,8 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r), probeDNS: env.dnsProber(), syncWait: 30 * time.Second,
 		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)}}
 	maintMenu := &maintUI{ctx: ctx, s: s, reg: reg, svc: &maint.Service{Runner: r, Store: store, Nodes: svc, Forwards: env.forwards(r, store),
-		Confirmer: sshSvc.Confirmer, Version: env.Version}}
+		Confirmer: sshSvc.Confirmer, Version: env.Version},
+		upd: &maint.Updater{Runner: r, Fetcher: env.fetcher(), Arch: runtime.GOARCH}, version: env.Version}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))
