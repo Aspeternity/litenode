@@ -9,7 +9,7 @@ import (
 
 // mainMenu builds the main menu (DESIGN section 8). Modules not yet
 // implemented are placeholders.
-func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState, sshState string, nodes, xrayMenu, sshMenu func() error) ui.Menu {
+func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState, sshState string, ufwToo bool, nodes, xrayMenu, sshMenu, firewallMenu func() error) ui.Menu {
 	todo := func() error {
 		s.Println(text.InDevelopment)
 		return nil
@@ -18,12 +18,16 @@ func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, 
 	if st.Xray.Stopped && enabledNodes(st) > 0 {
 		warnings = append(warnings, text.XrayManualWarning)
 	}
+	if ufwToo {
+		warnings = append(warnings, text.FirewallUFWBoth)
+	}
 	return ui.Menu{
 		Title: text.MainTitle(version),
 		Status: ui.MainStatusLines(ui.MainStatus{
 			Xray:     xrayState,
 			Nodes:    len(st.Nodes),
 			SSH:      sshState,
+			Firewall: firewallMainStatus(s, st.Firewall.Enabled),
 			System:   info,
 			Warnings: warnings,
 		}, s.Colors),
@@ -34,7 +38,7 @@ func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, 
 			{Label: text.MenuForwards, Group: 1, Page: true, Action: todo},
 			{Label: text.MenuXray, Group: 1, Page: true, Action: xrayMenu},
 			{Label: text.MenuSSH, Group: 2, Page: true, Action: sshMenu},
-			{Label: text.MenuFirewall, Group: 2, Page: true, Action: todo},
+			{Label: text.MenuFirewall, Group: 2, Page: true, Action: firewallMenu},
 			{Label: text.MenuSysopt, Group: 2, Page: true, Action: todo},
 			{Label: text.MenuMaint, Hint: text.MenuMaintHint, Group: 3, Page: true, Action: todo},
 		},

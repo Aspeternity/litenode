@@ -198,7 +198,8 @@ func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, isDefault, fu
 		port = n.SharePort
 	}
 	u.s.Println(text.SecurityGroup(port))
-	if !ufw.Active(u.ctx, u.svc.Runner) {
+	// Only without a firewall LiteNode keeps in step (D-044).
+	if !u.state().Firewall.Enabled && !ufw.Active(u.ctx, u.svc.Runner) {
 		if f := firewall.DetectForeignFilter(u.ctx, u.svc.Runner); f.Found() {
 			u.s.Println(u.s.Colors.Warn(text.ForeignFilter(n.Port, f.Where)))
 		}
@@ -519,6 +520,9 @@ func describe(err error) string {
 	// text, also when wrapped in a change error (restored).
 	if !errors.As(err, &ce) || ce.RestoreErr == nil {
 		if msg, ok := describeSSH(err); ok {
+			return msg
+		}
+		if msg, ok := describeFirewall(err); ok {
 			return msg
 		}
 	}

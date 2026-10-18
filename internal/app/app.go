@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/Aspeternity/litenode/internal/change"
-	"github.com/Aspeternity/litenode/internal/nft"
+	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/reality"
@@ -101,7 +101,9 @@ func (env Env) kinds(r system.Runner, store *state.Store) change.Registry {
 	for _, k := range (&ssh.Service{Store: store}).Kinds() {
 		reg.Register(k)
 	}
-	reg.Register(nft.Kind())
+	for _, k := range (&firewall.Service{Store: store}).Kinds() {
+		reg.Register(k) // replaces ufw with an identical kind
+	}
 	return reg
 }
 
@@ -198,7 +200,10 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	}
 	sshSvc := &ssh.Service{Store: store, Confirmer: change.NewConfirmer(change.NewManager(r, store), env.Executable),
 		Fetcher: env.fetcher(), Rand: env.rand()}
-	sshMenu := &sshUI{ctx: ctx, s: s, svc: sshSvc, reg: env.kinds(r, store)}
+	reg := env.kinds(r, store)
+	sshMenu := &sshUI{ctx: ctx, s: s, svc: sshSvc, reg: reg}
+	fwSvc := &firewall.Service{Store: store, Confirmer: sshSvc.Confirmer}
+	fwMenu := &firewallUI{ctx: ctx, s: s, svc: fwSvc, reg: reg}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))
@@ -212,9 +217,11 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 			active, _ = system.ServiceActive(ctx, r, xray.UnitName)
 		}
 		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st), sshMainStatus(ctx, sshSvc),
+			fwSvc.BothActive(ctx, st),
 			func() error { return s.Run(nodes.menu) },
 			func() error { return s.Run(nodes.xrayMenu) },
-			func() error { return s.Run(sshMenu.menu) })
+			func() error { return s.Run(sshMenu.menu) },
+			func() error { return s.Run(fwMenu.menu) })
 	})
 	return 0
 }

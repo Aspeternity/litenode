@@ -304,14 +304,14 @@
   - [x] golden file 测试：给定状态，生成的规则与预期一致。（`internal/nft/testdata/*.nft`；另有 `firewall.Config` 的单元测试和 `nft` 配置类型的测试。）
   - [x] [VPS] 生成的规则通过 `nft -c -f`，重启后规则仍在。（Debian 12：`nft -c -f` 通过；加载后重启，`litenode-nft.service` 开机加载表，从另一台测试机探测 SSH 和两个节点端口可达、测试端口 18080 被拦截；之后已移除表。）
 
-### M3-02 启用、关闭、重置 `未开始`
+### M3-02 启用、关闭、重置 `已完成`
 
 - 启用时：检测 ufw / firewalld 在运行则提示先停用；ufw 停用后删除带 `litenode:` 标记的 ufw 规则；检测到 Docker 时提示。关闭后若 ufw 在运行，恢复与 ufw 对账。LiteNode 防火墙与 ufw 同时启用时主菜单显示警告（D-038）。
 
 - 检测 ufw / firewalld / 已有规则，自动放行，限时确认回滚。
 - 验收：
-  - [ ] [VPS] 启用后 SSH 和节点正常，其他端口无法访问；IPv6 网络正常。
-  - [ ] [VPS] 启用后不确认，60 秒后自动恢复。
+  - [x] [VPS] 启用后 SSH 和节点正常，其他端口无法访问；IPv6 网络正常。（Debian 12：从 Ubuntu 探测 SSH 61234 和两个节点端口可达、测试端口 18080 被拦截，限时内从 WSL 新开 SSH 登录成功，ping 和出站正常；Ubuntu 24.04：22、443 可达、18080 被拦截，清空邻居缓存 90 秒后 IPv6 ping 和 HTTPS 正常。细节见 D-072。）
+  - [x] [VPS] 启用后不确认，60 秒后自动恢复。（Debian 12：退出不确认，66 秒后表已删除、状态恢复为未启用，`litenode-rollback` 日志"未在限时内确认，已恢复"。）
 
 ### M3-03 规则管理 `未开始`
 
