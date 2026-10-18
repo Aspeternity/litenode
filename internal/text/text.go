@@ -148,7 +148,6 @@ const (
 	MenuFirewall     = "防火墙管理"
 	MenuSysopt       = "系统优化"
 	MenuMaint        = "维护"
-	MenuMaintHint    = "(备份 / 更新 / 卸载)"
 	StatusUnknown    = "-"
 	XrayNotInstalled = "○ 未安装"
 	XrayInstalled    = "● 已安装"

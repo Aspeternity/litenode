@@ -213,7 +213,6 @@ func ForeignFilter(port int, where []string) string {
 // Share address.
 const (
 	ShareAddrAdd       = "添加地址"
-	ShareAddrAddHint   = "(域名或 IP)"
 	ShareAddrDefault   = "设为默认"
 	ShareAddrDelete    = "删除地址"
 	ShareAddrDetect    = "重新检测"
@@ -309,7 +308,6 @@ const (
 const (
 	ClientAdd          = "添加客户端"
 	ClientModify       = "修改客户端"
-	ClientModifyHint   = "(备注 / UUID)"
 	ClientToggle       = "启用 / 禁用客户端"
 	ClientDelete       = "删除客户端"
 	ClientRemark       = "备注"
@@ -374,9 +372,7 @@ const (
 	XrayRestart          = "重启"
 	XrayLogs             = "查看日志"
 	XrayUpdate           = "更新 Xray"
-	XrayUpdateHint       = "(可选指定版本)"
 	XrayUninstall        = "卸载 Xray"
-	XrayUninstallHint    = "(同时删除所有节点和客户端)"
 	XrayNotInstalledNote = "Xray 未安装，首次添加节点时会自动安装。"
 	XrayStarted          = "Xray 已启动。"
 	XrayStoppedMsg       = "Xray 已停止。在添加或修改节点后也会保持停止，直到在这里启动。"
@@ -397,7 +393,6 @@ const (
 // Node outbound IP (DESIGN section 12, D-084).
 const (
 	XrayOutboundIP        = "节点出站 IP"
-	XrayOutboundIPHint    = "(与系统优先级独立)"
 	OutboundIPDefault     = "默认（由系统决定）"
 	OutboundIPPreferIPv4  = "优先 IPv4"
 	OutboundIPPreferIPv6  = "优先 IPv6"

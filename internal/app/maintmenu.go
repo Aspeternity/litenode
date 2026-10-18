@@ -28,11 +28,11 @@ func (u *maintUI) menu() ui.Menu {
 	return ui.Menu{
 		Heading: text.MenuMaint,
 		Items: []ui.Item{
-			{Label: text.MaintExport, Hint: text.MaintExportHint, Action: u.export},
+			{Label: text.MaintExport, Action: u.export},
 			{Label: text.MaintImport, Action: u.importConfig},
 			{Label: text.MaintUpdate, Action: u.update},
-			{Label: text.MaintRemove, Hint: text.MaintRemoveHint, Action: u.removeProgram},
-			{Label: text.MaintPurge, Hint: text.MaintPurgeHint, Action: u.purge},
+			{Label: text.MaintRemove, Action: u.removeProgram},
+			{Label: text.MaintPurge, Action: u.purge},
 		},
 	}
 }

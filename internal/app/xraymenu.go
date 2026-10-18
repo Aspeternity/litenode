@@ -36,9 +36,9 @@ func (u *nodeUI) xrayMenu() ui.Menu {
 			{Label: text.XrayStop, Action: u.xrayStop},
 			{Label: text.XrayRestart, Action: u.xrayRestart},
 			{Label: text.XrayLogs, Page: true, Action: u.xrayLogs},
-			{Label: text.XrayOutboundIP, Hint: text.XrayOutboundIPHint, Action: u.xrayOutboundIP},
-			{Label: text.XrayUpdate, Hint: text.XrayUpdateHint, Action: u.xrayUpdate},
-			{Label: text.XrayUninstall, Hint: text.XrayUninstallHint, Action: u.xrayUninstall},
+			{Label: text.XrayOutboundIP, Action: u.xrayOutboundIP},
+			{Label: text.XrayUpdate, Action: u.xrayUpdate},
+			{Label: text.XrayUninstall, Action: u.xrayUninstall},
 		},
 	}
 }

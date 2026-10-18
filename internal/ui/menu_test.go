@@ -25,7 +25,7 @@ func mainMenuFixture(status []string) Menu {
 			{Label: text.MenuSSH, Group: 2},
 			{Label: text.MenuFirewall, Group: 2},
 			{Label: text.MenuSysopt, Group: 2},
-			{Label: text.MenuMaint, Hint: text.MenuMaintHint, Group: 3},
+			{Label: text.MenuMaint, Group: 3},
 		},
 	}
 }
