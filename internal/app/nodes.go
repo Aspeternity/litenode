@@ -89,14 +89,13 @@ func (u *nodeUI) menu() ui.Menu {
 		status = append(status, ui.Table(rows)...)
 	}
 	none := len(st.Nodes) == 0
-	todo := func() error { u.s.Println(text.InDevelopment); return nil }
 	return ui.Menu{
 		Status: status,
 		Items: []ui.Item{
 			{Label: text.NodeAdd, Action: u.add},
 			{Label: text.NodeModify, Hidden: none, Action: u.modify},
 			{Label: text.NodeToggle, Hidden: none, Action: u.toggle},
-			{Label: text.NodeClients, Hidden: none, Action: todo},
+			{Label: text.NodeClients, Hidden: none, Action: u.clients},
 			{Label: text.NodeShareAddress, Hint: text.NodeShareAddrHint, Action: u.shareAddress},
 			{Label: text.NodeDelete, Hidden: none, Action: u.delete},
 		},
@@ -524,6 +523,8 @@ func describe(err error) string {
 		return text.ErrRemarkDuplicate
 	case errors.Is(err, nodemgr.ErrNotFound):
 		return text.ErrNodeNotFound
+	case errors.Is(err, nodemgr.ErrClientNotFound):
+		return text.ErrClientNotFound
 	case errors.As(err, &pt):
 		msg := ""
 		for i, c := range pt.Conflicts {

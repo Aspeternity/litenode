@@ -160,3 +160,13 @@ func TestConfirm(t *testing.T) {
 		}
 	}
 }
+
+func TestRunErrBackLeavesMenu(t *testing.T) {
+	s, _, _ := newTestSession(strings.NewReader("1\n"))
+	err := s.Run(func() Menu {
+		return Menu{Items: []Item{{Label: "x", Action: func() error { return ErrBack }}}}
+	})
+	if err != nil {
+		t.Errorf("err = %v, want nil (back)", err)
+	}
+}
