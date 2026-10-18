@@ -4,14 +4,11 @@ import "fmt"
 
 // Maintenance menu (DESIGN section 16).
 const (
-	MaintExport     = "导出配置"
-	MaintExportHint = "(节点 + 客户端 + 转发 + 防火墙规则)"
-	MaintImport     = "导入配置"
-	MaintUpdate     = "更新脚本"
-	MaintRemove     = "卸载脚本"
-	MaintRemoveHint = "(Xray 和转发继续运行)"
-	MaintPurge      = "全部卸载"
-	MaintPurgeHint  = "(删除 Xray、节点、转发规则)"
+	MaintExport = "导出配置"
+	MaintImport = "导入配置"
+	MaintUpdate = "更新脚本"
+	MaintRemove = "卸载脚本"
+	MaintPurge  = "全部卸载"
 
 	PromptExportPath = "导出文件路径"
 	PromptImportPath = "导入文件路径（直接回车取消）"

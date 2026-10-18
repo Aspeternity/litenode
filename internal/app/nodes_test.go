@@ -126,7 +126,7 @@ func TestClientMenuFlow(t *testing.T) {
 		"═ 客户端管理 ═",
 		" ID  节点         备注           状态",
 		" 2   Reality-443  Reality-443-2  ● 启用",
-		" 1. 添加客户端", " 2. 修改客户端      (备注 / UUID)", " 3. 启用 / 禁用客户端", " 4. 删除客户端",
+		" 1. 添加客户端", " 2. 修改客户端\n", " 3. 启用 / 禁用客户端", " 4. 删除客户端",
 		"请输入客户端序号 (0 返回): ",
 		"客户端已添加。", "#Reality-443-2",
 		"删除客户端 Reality-443？ [y/N]", "客户端已删除。",
@@ -179,7 +179,7 @@ func TestXrayMenu(t *testing.T) {
 	r := runNodes(t, f, "5\n2\n0\n0\n")
 	for _, want := range []string{
 		" 1. 启动", " 2. 停止", " 3. 重启", " 4. 查看日志", " 5. 节点出站 IP", " 6. 更新 Xray", " 7. 卸载 Xray",
-		"(同时删除所有节点和客户端)", "节点出站: 默认（由系统决定）", "Xray 已停止。",
+		" 7. 卸载 Xray\n", "节点出站: 默认（由系统决定）", "Xray 已停止。",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)

@@ -78,7 +78,7 @@ func (u *firewallUI) menu() ui.Menu {
 		return ui.Menu{
 			Heading: text.MenuFirewall,
 			Status:  []string{text.StatusFirewall(u.s.Colors.Off(text.FirewallOff))},
-			Items:   []ui.Item{{Label: text.FirewallEnable, Hint: text.FirewallEnableHnt, Action: u.enable}},
+			Items:   []ui.Item{{Label: text.FirewallEnable, Action: u.enable}},
 		}
 	}
 	status := []string{text.FirewallStatusLine(u.s.Colors.Good(text.FirewallOn), !st.Firewall.BlockPing)}
@@ -97,10 +97,10 @@ func (u *firewallUI) menu() ui.Menu {
 		Heading: text.MenuFirewall,
 		Status:  status,
 		Items: []ui.Item{
-			{Label: text.FirewallOpen, Hint: text.FirewallOpenHint, Action: u.open},
-			{Label: text.FirewallModify, Hint: text.FirewallModifyHint, Page: true, Action: u.modify},
+			{Label: text.FirewallOpen, Action: u.open},
+			{Label: text.FirewallModify, Page: true, Action: u.modify},
 			{Label: text.FirewallPing, Action: u.togglePing},
-			{Label: text.FirewallCheck, Hint: text.FirewallCheckHint, Action: u.check},
+			{Label: text.FirewallCheck, Action: u.check},
 			{Label: text.FirewallDelete, Action: u.deleteRule},
 			{Label: text.FirewallDisable, Action: u.disable},
 			{Label: text.FirewallReset, Action: u.reset},

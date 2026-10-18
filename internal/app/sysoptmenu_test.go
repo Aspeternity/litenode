@@ -101,6 +101,20 @@ func TestSysoptMenuDNS(t *testing.T) {
 	}
 }
 
+func TestSysoptMenuDNSCustomEmptyGoesBack(t *testing.T) {
+	f := supported()
+	f.Files["/etc/resolv.conf"] = []byte("nameserver 10.0.0.1\n")
+	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")
+	// main: 8; 2 DNS; 4 custom; empty answer; back; quit.
+	r := runSysopt(t, f, "8", "2", "4", "", "0", "0")
+	if strings.Contains(r.stdout, text.ErrDNSServers) || !strings.Contains(r.stdout, "空格分隔，直接回车返回）") {
+		t.Errorf("custom DNS with an empty answer:\n%s", r.stdout)
+	}
+	if got := string(f.Files["/etc/resolv.conf"]); got != "nameserver 10.0.0.1\n" {
+		t.Errorf("resolv.conf changed:\n%s", got)
+	}
+}
+
 func TestSysoptMenuClock(t *testing.T) {
 	f := supported()
 	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")

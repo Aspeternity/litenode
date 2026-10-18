@@ -66,7 +66,7 @@ func (u *sysoptUI) menu() ui.Menu {
 		Status:  []string{strings.Join(fields, "   ")},
 		Items: []ui.Item{
 			{Label: text.SysoptBBR, Hidden: !u.caps.Has(system.CapBBR), Action: func() error { return u.bbr(bbr) }},
-			{Label: text.SysoptSwap, Hint: text.SysoptSwapHint, Hidden: !u.caps.Has(system.CapSwap), Action: u.swap},
+			{Label: text.SysoptSwap, Hidden: !u.caps.Has(system.CapSwap), Action: u.swap},
 			{Label: text.SysoptPreference, Action: u.preference},
 			{Label: text.SysoptDNS, Action: u.dns},
 			{Label: text.SysoptClock, Hidden: clockErr != nil, Action: u.clock},
@@ -277,7 +277,7 @@ func (u *sysoptUI) dns() error {
 	} else {
 		for {
 			in, err := u.s.Prompt(text.PromptDNSServers + ": ")
-			if err != nil {
+			if err != nil || in == "" {
 				return err
 			}
 			if servers, err = sysopt.ParseServers(in); err == nil {
@@ -364,7 +364,7 @@ func (u *sysoptUI) timezone(cur string) error {
 	var tz string
 	if c <= len(sysopt.CommonTimezones) {
 		tz = sysopt.CommonTimezones[c-1]
-	} else if tz, err = u.s.Prompt(text.PromptTimezone + ": "); err != nil {
+	} else if tz, err = u.s.Prompt(text.PromptTimezone + ": "); err != nil || tz == "" {
 		return err
 	}
 	if err := u.svc.SetTimezone(u.ctx, strings.TrimSpace(tz)); err != nil {

@@ -67,7 +67,7 @@ func (u *nodeUI) clientsMenu() ui.Menu {
 		Status:  u.clientTable(st),
 		Items: []ui.Item{
 			{Label: text.ClientAdd, Hidden: len(st.Nodes) == 0, Action: u.addClientToNode},
-			{Label: text.ClientModify, Hint: text.ClientModifyHint, Hidden: none, Action: u.modifyClient},
+			{Label: text.ClientModify, Hidden: none, Action: u.modifyClient},
 			{Label: text.ClientToggle, Hidden: none, Action: u.toggleClient},
 			{Label: text.ClientDelete, Hidden: none, Action: u.deleteClient},
 		},

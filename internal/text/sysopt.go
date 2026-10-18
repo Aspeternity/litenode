@@ -25,7 +25,6 @@ func StatusBBR(v string) string { return "BBR: " + v }
 // Swap (DESIGN section 15).
 const (
 	SysoptSwap        = "swap"
-	SysoptSwapHint    = "(创建 / 调整 / 删除)"
 	SwapNone          = "无"
 	SwapResize        = "调整大小"
 	SwapDelete        = "删除"
@@ -100,7 +99,7 @@ const (
 	SysoptDNS         = "DNS"
 	DNSCustom         = "自定义"
 	DNSReset          = "恢复系统默认"
-	PromptDNSServers  = "DNS 服务器 IP（最多 3 个，空格分隔）"
+	PromptDNSServers  = "DNS 服务器 IP（最多 3 个，空格分隔，直接回车返回）"
 	ErrDNSServers     = "请输入 1 ~ 3 个 IP 地址，用空格分隔。"
 	ConfirmDNSFailed  = "仍要使用这些 DNS 服务器？"
 	DNSResetDone      = "已恢复系统默认 DNS。"
@@ -137,7 +136,7 @@ const (
 	ClockSetTimezone  = "设置时区"
 	ClockEnableNTP    = "开启时间同步"
 	TimezoneCustom    = "其他（手动输入）"
-	PromptTimezone    = "时区（如 Asia/Shanghai）"
+	PromptTimezone    = "时区（如 Asia/Shanghai，直接回车返回）"
 	ErrTimezone       = "系统中没有这个时区，请按 地区/城市 格式输入，如 Asia/Shanghai。"
 	NTPWaiting        = "正在等待时间同步（最多 30 秒）……"
 	NTPSyncedDone     = "时间同步已开启，时钟已同步。"
