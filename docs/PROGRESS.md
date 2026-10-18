@@ -24,8 +24,8 @@
 
 登录信息由用户在会话中提供，**不写入仓库或记忆**。用户授权两台都可以完全用于测试。
 
-- **Ubuntu 24.04.5**（M2 起的主测试机，D-048）：KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 62.84.164.181，有 IPv6。`/usr/local/bin/litenode` 是 M2-06 分支的编译版本（与合并后的 main 相同）；没有节点、Xray 未安装；root 的 `authorized_keys` 中有从 GitHub 导入的 Aspeternity 公钥（即开发机 WSL 的 `~/.ssh/id_ed25519`），可以用密钥登录，M2-04 关闭密码登录时使用；装有 `litenode-rollback-boot.service`；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`（M2-04、M2-05 测试后的状态）；ufw 已停用（测试时启用过）；已安装 `python3`、`zbar-tools`；ufw 未启用。
-- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234（主配置中有商家写的 `Port 61234`），公网 IP 216.23.88.252。上面有用户的 2 个节点（`Test`、`Test2`）和 Xray；分享地址列表有 IPv4 和 `216-23-88-252.sslip.io`（M1-06 测试时添加）；没有 LiteNode 的 nftables 表（`/etc/litenode/nftables.nft` 只含删除表的两行，`litenode-nft.service` 已停用）；系统自带的 `table inet filter`（全部 accept）保持不变。`/usr/local/bin/litenode` 是 M2-06 分支的编译版本（与合并后的 main 相同）；`00-litenode.conf` 管理着 `Port 61234`（带 `ListenAddress`）。
+- **Ubuntu 24.04.5**（KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 62.84.164.181，有 IPv6）：`/usr/local/bin/litenode` 是 `fix/ui-flow-style` 的编译版本（与合并后的 main `154181f` 相同）；有用户验收时添加的节点 `Reality-443`，Xray 运行中；分享地址有 IPv4 和 IPv6；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`；root 的 `authorized_keys` 中**已没有**开发机的公钥（用户验收时改过），只能用密码登录，不要在这台机器上关闭密码登录；装有 `litenode-rollback-boot.service`；ufw 已停用。
+- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234（主配置中有商家写的 `Port 61234`），公网 IP 216.23.88.252。上面有用户的 2 个节点（`Test`、`Test2`）和 Xray；分享地址列表有 IPv4 和 `216-23-88-252.sslip.io`（M1-06 测试时添加）；没有 LiteNode 的 nftables 表（`/etc/litenode/nftables.nft` 只含删除表的两行，`litenode-nft.service` 已停用）；系统自带的 `table inet filter`（全部 accept）保持不变。`/usr/local/bin/litenode` 是 `fix/M1-06` 的编译版本（多个分享地址，早于流程样式）；`00-litenode.conf` 管理着 `Port 61234`（带 `ListenAddress`）。
 
 ## 实机测试方法（M1 建立，后续沿用）
 
