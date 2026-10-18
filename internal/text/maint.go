@@ -8,6 +8,10 @@ const (
 	MaintExportHint = "(节点 + 客户端 + 转发 + 防火墙规则)"
 	MaintImport     = "导入配置"
 	MaintUpdate     = "更新脚本"
+	MaintRemove     = "卸载脚本"
+	MaintRemoveHint = "(Xray 和转发继续运行)"
+	MaintPurge      = "全部卸载"
+	MaintPurgeHint  = "(删除 Xray、节点、转发规则)"
 
 	PromptExportPath = "导出文件路径"
 	PromptImportPath = "导入文件路径（直接回车取消）"
@@ -77,4 +81,44 @@ func UpdateFailed(err error) string {
 // ErrUpdateBadBinary explains a downloaded program that does not run.
 func ErrUpdateBadBinary(err error) string {
 	return fmt.Sprintf("下载的程序无法正常运行，未做任何修改：%v", err)
+}
+
+// Uninstall (DESIGN section 16).
+const (
+	ConfirmRemoveProgram = "将删除 LiteNode 程序（litenode 和 lnode），Xray、节点、转发规则、防火墙和 /etc/litenode/ 中的配置保留并继续运行，重新安装后可以继续管理。确定卸载？"
+	RemoveProgramDone    = "LiteNode 程序已删除，Xray 和转发规则继续运行。"
+	ConfirmPurgeAgain    = "此操作不可恢复。再次确认全部卸载？"
+	PurgeDone            = "LiteNode 已全部卸载。"
+	KeptTitle            = "以下设置保留未改动（卸载不会回滚，可以以后手动处理）："
+	ReinstallHint        = "重新安装：bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/scripts/install.sh)"
+)
+
+// ConfirmPurge lists what the full uninstall deletes.
+func ConfirmPurge(nodes, clients, forwards int, firewallOn bool) string {
+	fw := "LiteNode 防火墙未启用，其规则文件一并删除"
+	if firewallOn {
+		fw = "LiteNode 防火墙保持生效（只保留 SSH 端口和手动规则）"
+	}
+	return fmt.Sprintf("将删除 Xray、%d 个节点、%d 个客户端、%d 条转发规则、LiteNode 的服务和程序，以及 /etc/litenode/ 中的状态和备份；%s。需要保留节点可以先导出配置。确定全部卸载？", nodes, clients, forwards, fw)
+}
+
+// KeptNames describe the settings that stay, by maint.Kept* key.
+var KeptNames = map[string]string{
+	"ssh":      "SSH 设置",
+	"ufw-ssh":  "ufw 中的 SSH 端口规则（litenode:ssh）",
+	"firewall": "LiteNode 防火墙（开机由 litenode-nft.service 加载）",
+	"sysctl":   "sysctl 设置（BBR 等）",
+	"swap":     "swap 文件（在 /etc/fstab 中挂载）",
+	"dns":      "DNS 设置",
+	"gai":      "系统 IPv4 / IPv6 优先级（LiteNode 标记的段落）",
+	"log":      "LiteNode 操作日志",
+}
+
+// KeptLine names one kept setting and its file.
+func KeptLine(what, path string) string {
+	name, ok := KeptNames[what]
+	if !ok {
+		name = what
+	}
+	return "  • " + name + "：" + path
 }

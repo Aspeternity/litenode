@@ -41,13 +41,16 @@ func (s *Service) unitDir() string {
 
 // ResolveUnits returns the service and timer unit files that run
 // "litenode internal resolve" every 5 minutes. OnCalendar keeps the
-// interval fixed however long a run takes.
+// interval fixed however long a run takes. The service skips its runs
+// while the program is missing (after "uninstall program", DESIGN section
+// 16), so forwards keep their addresses without errors in the journal.
 func ResolveUnits(executable string) (service, timer string) {
 	service = `[Unit]
 Description=LiteNode: re-resolve port forwarding targets
 Documentation=https://github.com/Aspeternity/litenode
 After=network-online.target
 Wants=network-online.target
+ConditionPathExists=` + executable + `
 
 [Service]
 Type=oneshot
