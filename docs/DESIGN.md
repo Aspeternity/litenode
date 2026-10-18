@@ -315,6 +315,9 @@ docs/
       { "id": 1, "port": "28388", "protocol": "tcp", "sources": ["1.2.3.4"], "note": "手动" }
     ],
     "auto_sources": { "node:1": ["198.51.100.7"] }
+  },
+  "sysopt": {
+    "bbr": true
   }
 }
 ```
@@ -958,7 +961,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 排序按常用程度。
 
-- **BBR + fq**：检查内核是否支持 bbr，写入 `/etc/sysctl.d/99-litenode.conf`（`net.core.default_qdisc=fq`、`net.ipv4.tcp_congestion_control=bbr`）并立即生效。
+- **BBR + fq**：检查内核是否支持 bbr，写入 `/etc/sysctl.d/99-litenode.conf`（`net.core.default_qdisc=fq`、`net.ipv4.tcp_congestion_control=bbr`）并立即生效（D-078）。状态文件 `sysopt.bbr` 记录是否由 LiteNode 开启，sysctl 文件仍由状态整体生成。已由 LiteNode 开启时该项为关闭：删除这两行并把拥塞控制改回 `cubic`；已由系统其他配置开启时只提示无需操作。
 - **swap**：创建交换文件（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小。
 - **IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6。
 - **DNS**：系统使用 systemd-resolved 时写入 `/etc/systemd/resolved.conf.d/` 下的配置文件；否则修改 `/etc/resolv.conf`，并提示该文件可能被 DHCP 或 cloud-init 覆盖。提供常用 DNS 选项和自定义输入。

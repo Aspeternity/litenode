@@ -39,6 +39,9 @@ type State struct {
 	Nodes    []node.Node `json:"nodes"`
 	// Forwards are the port forwarding rules (DESIGN section 11).
 	Forwards []forward.Forward `json:"forwards"`
+	// Sysopt holds the system optimizations LiteNode manages (DESIGN
+	// section 15).
+	Sysopt Sysopt `json:"sysopt"`
 }
 
 // Server holds server-wide settings.
@@ -73,6 +76,14 @@ type SSH struct {
 	PasswordAuth *bool `json:"password_authentication,omitempty"`
 	// PermitRootLogin is "yes", "prohibit-password" or "no".
 	PermitRootLogin string `json:"permit_root_login,omitempty"`
+}
+
+// Sysopt holds the system optimizations whose files are generated from
+// the state. Settings changed by system commands (swap, DNS, time zone)
+// are read from the system instead.
+type Sysopt struct {
+	// BBR writes BBR and fq to /etc/sysctl.d/99-litenode.conf.
+	BBR bool `json:"bbr,omitempty"`
 }
 
 // Firewall is the LiteNode firewall (DESIGN section 14). Its automatic

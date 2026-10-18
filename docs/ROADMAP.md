@@ -361,8 +361,8 @@
 
 ## M5 系统优化
 
-### M5-01 BBR + fq `未开始`
-- 验收：[ ] [VPS] 开启后 `sysctl net.ipv4.tcp_congestion_control` 为 bbr，重启后保持。
+### M5-01 BBR + fq `已完成`
+- 验收：[x] [VPS] 开启后 `sysctl net.ipv4.tcp_congestion_control` 为 bbr，重启后保持。
 
 ### M5-02 swap `未开始`
 - 验收：[ ] [VPS] 创建、调整、删除正常，重启后保持；容器环境中该项隐藏。
