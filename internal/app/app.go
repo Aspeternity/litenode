@@ -21,6 +21,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/ssh"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/sysctl"
+	"github.com/Aspeternity/litenode/internal/sysopt"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
@@ -216,6 +217,8 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	fwSvc := &firewall.Service{Store: store, Confirmer: sshSvc.Confirmer}
 	fwMenu := &firewallUI{ctx: ctx, s: s, svc: fwSvc, reg: reg}
 	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store)}
+	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r),
+		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)}}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))
@@ -223,6 +226,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	// Both going back from the main menu and quitting end the program.
 	s.Run(func() ui.Menu {
 		st := nodes.state()
+		info.BBREnabled = system.BBREnabled(r)
 		_, installed := svc.Xray.Installed(ctx)
 		active := false
 		if installed {
@@ -234,7 +238,8 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 			func() error { return s.Run(fwdMenu.menu) },
 			func() error { return s.Run(nodes.xrayMenu) },
 			func() error { return s.Run(sshMenu.menu) },
-			func() error { return s.Run(fwMenu.menu) })
+			func() error { return s.Run(fwMenu.menu) },
+			func() error { return s.Run(optMenu.menu) })
 	})
 	return 0
 }

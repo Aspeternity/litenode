@@ -9,7 +9,7 @@ import (
 
 // mainMenu builds the main menu (DESIGN section 8). Modules not yet
 // implemented are placeholders.
-func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState, sshState string, ufwToo bool, nodes, forwards, xrayMenu, sshMenu, firewallMenu func() error) ui.Menu {
+func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState, sshState string, ufwToo bool, nodes, forwards, xrayMenu, sshMenu, firewallMenu, sysoptMenu func() error) ui.Menu {
 	todo := func() error {
 		s.Println(text.InDevelopment)
 		return nil
@@ -40,7 +40,7 @@ func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, 
 			{Label: text.MenuXray, Group: 1, Page: true, Action: xrayMenu},
 			{Label: text.MenuSSH, Group: 2, Page: true, Action: sshMenu},
 			{Label: text.MenuFirewall, Group: 2, Page: true, Action: firewallMenu},
-			{Label: text.MenuSysopt, Group: 2, Page: true, Action: todo},
+			{Label: text.MenuSysopt, Group: 2, Page: true, Action: sysoptMenu},
 			{Label: text.MenuMaint, Hint: text.MenuMaintHint, Group: 3, Page: true, Action: todo},
 		},
 	}
