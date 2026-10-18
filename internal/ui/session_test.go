@@ -221,3 +221,77 @@ func TestFollowHangupQuits(t *testing.T) {
 		t.Errorf("Prompt after SIGHUP = %v, want ErrQuit", err)
 	}
 }
+
+// holdMenu has an operation that shows something to read, one with a
+// one-line result, and one that fails.
+func holdMenu(s *Session) func() Menu {
+	return func() Menu {
+		return Menu{Items: []Item{
+			{Label: "show", Action: func() error { s.Done("ok"); s.Hold(); s.Println("link"); return nil }},
+			{Label: "toggle", Action: func() error { s.Done("enabled"); return nil }},
+			{Label: "fail", Action: func() error { return errors.New("boom") }},
+		}}
+	}
+}
+
+func TestRunHoldsAfterContentAndErrors(t *testing.T) {
+	cases := []struct {
+		name, in string
+		pauses   int
+	}{
+		// After a hold the next line only returns to the menu: "1" is
+		// not taken as a choice.
+		{"content", "1\n1\n0\n", 1},
+		{"one line", "2\n2\n0\n", 0},
+		{"error", "3\n\n0\n", 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, out, _ := newTestSession(strings.NewReader(tc.in))
+			s.Interactive = true
+			if err := s.Run(holdMenu(s)); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if got := strings.Count(out.String(), text.PressEnter); got != tc.pauses {
+				t.Errorf("pauses = %d, want %d\n%s", got, tc.pauses, out.String())
+			}
+			// "content" ran the operation once: the line after the pause
+			// was not a choice.
+			if tc.name == "content" && strings.Count(out.String(), "link") != 1 {
+				t.Errorf("operation ran more than once:\n%s", out.String())
+			}
+		})
+	}
+}
+
+func TestRunNoHoldWhenNotInteractive(t *testing.T) {
+	s, out, _ := newTestSession(strings.NewReader("1\n3\n0\n"))
+	if err := s.Run(holdMenu(s)); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if strings.Contains(out.String(), text.PressEnter) {
+		t.Errorf("paused with piped input:\n%s", out.String())
+	}
+}
+
+func TestHoldEOFQuits(t *testing.T) {
+	s, _, _ := newTestSession(strings.NewReader("1\n"))
+	s.Interactive = true
+	if err := s.Run(holdMenu(s)); !errors.Is(err, ErrQuit) {
+		t.Fatalf("Run = %v, want ErrQuit", err)
+	}
+}
+
+func TestEndWarnHolds(t *testing.T) {
+	s, out, _ := newTestSession(strings.NewReader("1\n\n0\n"))
+	s.Interactive = true
+	err := s.Run(func() Menu {
+		return Menu{Items: []Item{{Label: "import", Action: func() error { s.EndWarn("no file"); return nil }}}}
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(out.String(), "└─ no file") || strings.Count(out.String(), text.PressEnter) != 1 {
+		t.Errorf("EndWarn did not hold:\n%s", out.String())
+	}
+}

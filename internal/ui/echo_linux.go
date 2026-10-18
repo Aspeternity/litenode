@@ -22,3 +22,10 @@ func SetEcho(fd int, on bool) error {
 	}
 	return nil
 }
+
+// IsTerminal reports whether fd is a terminal.
+func IsTerminal(fd int) bool {
+	var t syscall.Termios
+	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), syscall.TCGETS, uintptr(unsafe.Pointer(&t)))
+	return e == 0
+}

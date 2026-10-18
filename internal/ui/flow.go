@@ -106,6 +106,13 @@ func (s *Session) End(msg string) {
 	fmt.Fprintln(s.Out, "│\n"+flowClose+msg)
 }
 
+// EndWarn closes the current flow with a warning msg, a problem the user
+// has to read: the menu comes back only after Enter (D-096).
+func (s *Session) EndWarn(msg string) {
+	s.End(s.Colors.Warn(msg))
+	s.Hold()
+}
+
 // gutter prefixes every line of text in a flow.
 func (s *Session) gutter(text string) string {
 	if s.flow == nil {
