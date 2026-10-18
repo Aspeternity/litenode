@@ -59,6 +59,8 @@ type Env struct {
 	Resolver        share.Resolver
 	ForwardResolver forward.Resolver
 	ForwardDialer   forwardmgr.Dialer
+	// DNSProber tests DNS servers; nil queries them over the network.
+	DNSProber sysopt.DNSProber
 }
 
 func (env Env) fetcher() xray.Fetcher {
@@ -66,6 +68,13 @@ func (env Env) fetcher() xray.Fetcher {
 		return env.XrayFetcher
 	}
 	return xray.NewHTTPFetcher()
+}
+
+func (env Env) dnsProber() sysopt.DNSProber {
+	if env.DNSProber != nil {
+		return env.DNSProber
+	}
+	return sysopt.ProbeDNS
 }
 
 func (env Env) rand() io.Reader {
@@ -217,7 +226,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	fwSvc := &firewall.Service{Store: store, Confirmer: sshSvc.Confirmer}
 	fwMenu := &firewallUI{ctx: ctx, s: s, svc: fwSvc, reg: reg}
 	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store)}
-	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r),
+	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r), probeDNS: env.dnsProber(),
 		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)}}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {

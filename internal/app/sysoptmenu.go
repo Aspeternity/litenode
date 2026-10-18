@@ -19,6 +19,8 @@ type sysoptUI struct {
 	svc  *sysopt.Service
 	info system.Info
 	caps system.Capabilities
+	// probeDNS tests DNS servers before they are used.
+	probeDNS sysopt.DNSProber
 }
 
 // mark shows a yes / no state.
@@ -55,6 +57,7 @@ func (u *sysoptUI) menu() ui.Menu {
 			{Label: text.SysoptBBR, Hidden: !u.caps.Has(system.CapBBR), Action: func() error { return u.bbr(bbr) }},
 			{Label: text.SysoptSwap, Hint: text.SysoptSwapHint, Hidden: !u.caps.Has(system.CapSwap), Action: u.swap},
 			{Label: text.SysoptPreference, Action: u.preference},
+			{Label: text.SysoptDNS, Action: u.dns},
 		},
 	}
 	for _, it := range m.Items {
@@ -97,6 +100,7 @@ func (u *sysoptUI) bbr(b sysopt.BBR) error {
 // other errors.
 func describeSysopt(err error) (string, bool) {
 	for target, msg := range map[error]string{
+		sysopt.ErrDNSServers: text.ErrDNSServers,
 		sysopt.ErrSwapExists: text.ErrSwapExists, sysopt.ErrNoSwap: text.ErrNoSwap,
 		sysopt.ErrSwapInUse: text.ErrSwapInUse, sysopt.ErrNoDiskSpace: text.ErrNoDiskSpace,
 		sysopt.ErrSwapSize: text.ErrSwapSize(sysopt.FormatMB(sysopt.MinSwapMB), sysopt.FormatMB(sysopt.MaxSwapMB)),
@@ -223,5 +227,74 @@ func (u *sysoptUI) preference() error {
 		return nil
 	}
 	u.s.Done(text.PreferIPv6Done)
+	return nil
+}
+
+func (u *sysoptUI) dns() error {
+	d, err := u.svc.DNSStatus(u.ctx)
+	if err != nil {
+		return err
+	}
+	cur, source := text.DNSNone, text.DNSBySystem
+	if len(d.Servers) > 0 {
+		cur = strings.Join(d.Servers, " ")
+	}
+	if d.Managed {
+		source = text.DNSByLiteNode
+	}
+	u.s.Println(text.DNSCurrent(cur, source, d.Resolved))
+	m := ui.Menu{}
+	for _, p := range sysopt.DNSPresets {
+		m.Items = append(m.Items, ui.Item{Label: text.DNSPresetLabel(p.Name, strings.Join(p.Servers, " "))})
+	}
+	m.Items = append(m.Items, ui.Item{Label: text.DNSCustom}, ui.Item{Label: text.DNSReset, Hidden: !d.Resolved || !d.Managed})
+	c, err := u.s.Choose(m)
+	switch {
+	case err != nil || c == 0:
+		return err
+	case c == len(sysopt.DNSPresets)+2:
+		if err := u.svc.ResetDNS(u.ctx); err != nil {
+			return err
+		}
+		u.s.Done(text.DNSResetDone)
+		return nil
+	}
+	var servers []string
+	if c <= len(sysopt.DNSPresets) {
+		servers = sysopt.DNSPresets[c-1].Servers
+	} else {
+		for {
+			in, err := u.s.Prompt(text.PromptDNSServers + ": ")
+			if err != nil {
+				return err
+			}
+			if servers, err = sysopt.ParseServers(in); err == nil {
+				break
+			}
+			u.s.Println(u.s.Colors.Warn(text.ErrDNSServers))
+		}
+	}
+	failed := false
+	for _, srv := range servers {
+		if err := u.probeDNS(u.ctx, srv); err != nil {
+			u.s.Println(u.s.Colors.Warn(text.DNSProbeFailed(srv, err)))
+			failed = true
+		}
+	}
+	if failed {
+		if ok, err := u.s.Confirm(text.ConfirmDNSFailed); err != nil || !ok {
+			return err
+		}
+	}
+	if !d.Resolved {
+		u.s.Println(u.s.Colors.Warn(text.DNSResolvConfNote))
+	}
+	if err := u.svc.SetDNS(u.ctx, servers); err != nil {
+		return err
+	}
+	u.s.Done(text.DNSSet(strings.Join(servers, " ")))
+	if !u.svc.LookupWorks(u.ctx) {
+		u.s.Println(u.s.Colors.Warn(text.DNSVerifyFailed))
+	}
 	return nil
 }
