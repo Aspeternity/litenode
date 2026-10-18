@@ -41,7 +41,7 @@ func newFixture(t *testing.T) *fixture {
 
 func newState(addr string) *state.State {
 	st := state.New()
-	st.Server.ShareAddress = addr
+	st.Server.ShareAddresses = []string{addr}
 	return st
 }
 

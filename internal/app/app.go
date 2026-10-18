@@ -51,6 +51,7 @@ type Env struct {
 	AddressDetector AddressDetector
 	XrayFetcher     xray.Fetcher
 	Rand            io.Reader
+	Resolver        share.Resolver
 }
 
 func (env Env) fetcher() xray.Fetcher {
@@ -177,7 +178,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	if dryRun {
 		s.Println(s.Colors.Warn(text.DryRunBanner))
 	}
-	nodes := &nodeUI{ctx: ctx, s: s, svc: svc, checker: env.TargetChecker, detector: env.AddressDetector}
+	nodes := &nodeUI{ctx: ctx, s: s, svc: svc, checker: env.TargetChecker, detector: env.AddressDetector, dns: env.Resolver}
 	if nodes.checker == nil {
 		nodes.checker = &reality.Checker{}
 	}

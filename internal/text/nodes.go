@@ -22,7 +22,7 @@ const (
 	NodeToggle         = "启用 / 禁用节点"
 	NodeClients        = "客户端管理"
 	NodeShareAddress   = "分享地址"
-	NodeShareAddrHint  = "(修改 / 重新检测)"
+	NodeShareAddrHint  = "(添加 / 设为默认 / 重新检测)"
 	NodeDelete         = "删除节点"
 	NodeNone           = "（暂无节点）"
 	ColID              = "ID"
@@ -38,7 +38,7 @@ const (
 	PromptPort         = "端口"
 	PromptRemark       = "备注"
 	PromptTarget       = "目标网站域名（可带端口，默认 443；直接回车返回）"
-	PromptShareAddress = "分享地址（IP 或域名）"
+	PromptShareAddress = "分享地址（IP 或域名，直接回车返回）"
 	PromptSharePort    = "分享端口（0 表示与监听端口相同）"
 	Checking           = "正在检测……"
 	InstallingXray     = "首次添加节点，正在安装 Xray……"
@@ -47,12 +47,16 @@ const (
 	Canceled           = "已取消。"
 )
 
-// ShareAddressLine is the status line of the node list.
-func ShareAddressLine(addr string) string {
-	if addr == "" {
-		addr = NotSet
+// ShareAddressLine is the status line of the node list: the default
+// address and how many others there are.
+func ShareAddressLine(def string, n int) string {
+	if def == "" {
+		return "分享地址: " + NotSet
 	}
-	return "分享地址: " + addr
+	if n > 1 {
+		return fmt.Sprintf("分享地址: %s（另有 %d 个）", def, n-1)
+	}
+	return "分享地址: " + def
 }
 
 // SharePortCurrent describes the share port in the modify menu.
@@ -210,13 +214,23 @@ func ForeignFilter(port int, where []string) string {
 
 // Share address.
 const (
-	ShareAddrEnter    = "输入地址"
-	ShareAddrDetect   = "重新检测"
-	ChooseShareAddr   = "检测到多个公网地址，请选择分享链接使用的地址"
-	ShareAddrHeading  = "选择分享地址"
-	ShareAddrNone     = "未能检测到公网地址，请手动输入。"
-	ShareAddrChanged  = "分享地址已修改，所有节点的分享链接已变化，请重新导出。"
-	ShareAddrDetected = "检测到公网地址："
+	ShareAddrAdd       = "添加地址"
+	ShareAddrAddHint   = "(域名或 IP)"
+	ShareAddrDefault   = "设为默认"
+	ShareAddrDelete    = "删除地址"
+	ShareAddrDetect    = "重新检测"
+	ShareAddrNone      = "未能检测到公网地址，请手动输入。"
+	ShareAddrDefaultOK = "默认分享地址已修改，新添加节点的链接和\"修改节点\"后列出的链接使用这个地址。"
+	ShareAddrAdded     = "地址已添加。"
+	ShareAddrDeleted   = "地址已删除。"
+	ShareAddrExists    = "这个地址已经在列表中。"
+	ShareAddrsNone     = "（暂无，生成链接时自动检测）"
+	ShareAddrDetected  = "检测到公网地址："
+	PromptAddressNum   = "请输入地址序号 (0 返回)"
+	LinkAddressHeading = "选择链接使用的地址"
+	OtherAddressesHint = "其他分享地址（如 IPv6、域名）的链接：客户端管理 → 分享链接 / 二维码。"
+	KindDomain         = "域名"
+	DefaultMark        = "默认"
 )
 
 // Modify node menu (DESIGN section 9.3).
@@ -395,3 +409,34 @@ func XrayOldVersion(v, min string) string {
 func ConfirmUninstallXray(nodes, clients int) string {
 	return fmt.Sprintf("将删除 Xray 以及 %d 个节点、%d 个客户端，端口转发、SSH 和防火墙的其他设置不变。确定卸载？", nodes, clients)
 }
+
+// ShareAddrItem lists one share address in the share address page.
+func ShareAddrItem(n int, addr, kind string, isDefault bool) string {
+	if kind == "" {
+		kind = KindDomain
+	}
+	s := fmt.Sprintf("  [%d] %s  %s", n, addr, kind)
+	if isDefault {
+		s += "  " + DefaultMark
+	}
+	return s
+}
+
+// ShareAddrsDetected reports the detected addresses and the default.
+func ShareAddrsDetected(list []string) string {
+	return ShareAddrDetected + strings.Join(list, "、") + "（默认 " + list[0] + "）"
+}
+
+// DomainNotHere warns about a domain that does not resolve to this
+// server.
+func DomainNotHere(domain string, resolved []string) string {
+	return fmt.Sprintf("⚠ %s 解析到 %s，不是本机的地址（可能经过 CDN 或解析未生效），Reality 节点无法通过它连接。", domain, strings.Join(resolved, "、"))
+}
+
+// DomainUnresolved warns about a domain that does not resolve.
+func DomainUnresolved(domain string) string {
+	return fmt.Sprintf("⚠ 无法解析 %s（可能还没有生效）。", domain)
+}
+
+// ConfirmAddAnyway asks whether to keep a doubtful domain.
+const ConfirmAddAnyway = "仍要添加吗？"

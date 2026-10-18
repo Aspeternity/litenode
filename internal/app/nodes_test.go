@@ -77,7 +77,7 @@ func TestAddNodeFlow(t *testing.T) {
 		" 分享地址: 203.0.113.10",
 		" ID  备注         协议               端口  客户端  状态",
 		" 1   Reality-443  VLESS-TCP-Reality  443   1       ● 启用",
-		" 1. 添加节点", " 2. 修改节点", " 3. 启用 / 禁用节点", " 4. 客户端管理", " 5. 分享地址        (修改 / 重新检测)", " 6. 删除节点",
+		" 1. 添加节点", " 2. 修改节点", " 3. 启用 / 禁用节点", " 4. 客户端管理", " 5. 分享地址        (添加 / 设为默认 / 重新检测)", " 6. 删除节点",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
@@ -87,7 +87,7 @@ func TestAddNodeFlow(t *testing.T) {
 		t.Error("preset menu still recommends a node type")
 	}
 	st, err := state.NewStore(f).Load()
-	if err != nil || len(st.Nodes) != 1 || st.Server.ShareAddress != "203.0.113.10" {
+	if err != nil || len(st.Nodes) != 1 || st.Server.DefaultShareAddress() != "203.0.113.10" {
 		t.Fatalf("state = %+v, %v", st, err)
 	}
 }
