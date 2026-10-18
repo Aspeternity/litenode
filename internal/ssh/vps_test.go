@@ -10,16 +10,20 @@ package ssh
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
+	"github.com/Aspeternity/litenode/internal/xray"
 )
 
 const safetyUnit = "litenode-ssh-vps-test"
@@ -199,4 +203,103 @@ func TestVPSHold(t *testing.T) {
 	t.Log("password login off; holding")
 	os.WriteFile("/tmp/ln-hold-armed", nil, 0o600)
 	time.Sleep(10 * time.Minute)
+}
+
+func keySetup(t *testing.T) (context.Context, system.Runner, *Service) {
+	t.Helper()
+	if os.Geteuid() != 0 {
+		t.Skip("run as root on the test VPS")
+	}
+	r := system.NewReal(nil)
+	store := state.NewStore(r)
+	return context.Background(), r, &Service{Store: store, Confirmer: change.NewConfirmer(change.NewManager(r, store), "/usr/local/bin/litenode"),
+		Fetcher: xray.NewHTTPFetcher(), Rand: rand.Reader}
+}
+
+// TestVPSGitHubImport (M2-03) imports a GitHub user's keys for root:
+// LN_GITHUB=<user>. Logging in with the matching private key is checked
+// from the development machine; LN_GITHUB_REMOVE=1 removes them again.
+func TestVPSGitHubImport(t *testing.T) {
+	user := os.Getenv("LN_GITHUB")
+	if user == "" {
+		t.Skip("set LN_GITHUB")
+	}
+	ctx, r, svc := keySetup(t)
+	root, err := LookupAccount(r, "root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, skipped, err := svc.GitHubKeys(ctx, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range keys {
+		t.Logf("%s %s %s", k.ShortType(), k.Fingerprint(), k.Comment)
+	}
+	t.Logf("skipped %d", skipped)
+	if os.Getenv("LN_GITHUB_REMOVE") == "1" {
+		for _, k := range keys {
+			if err := svc.DeleteKey(ctx, root, k.Fingerprint()); err != nil {
+				t.Fatal(err)
+			}
+			if err := svc.Confirmer.Disarm(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return
+	}
+	n, err := svc.AddKeys(ctx, root, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("added %d", n)
+}
+
+// TestVPSGeneratedKeyLogin (M2-03): a key pair generated for a new
+// regular user is valid for ssh-keygen and logs that user in.
+func TestVPSGeneratedKeyLogin(t *testing.T) {
+	ctx, r, svc := keySetup(t)
+	const name = "lntestkey"
+	if _, err := r.Exec(ctx, "useradd", "-m", "-s", "/bin/bash", name); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		r.Exec(ctx, "pkill", "-KILL", "-u", name)
+		r.Exec(ctx, "userdel", "-r", "-f", name)
+	})
+	a, err := LookupAccount(r, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, priv, err := svc.GenerateKey(ctx, a, "litenode-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "id")
+	if err := os.WriteFile(keyFile, priv, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.Query(ctx, "ssh-keygen", "-y", "-f", keyFile)
+	if err != nil {
+		t.Fatalf("ssh-keygen rejects the private key: %v", err)
+	}
+	if got := strings.Fields(res.Stdout); len(got) < 2 || got[0]+" "+got[1] != strings.Join(strings.Fields(k.Line())[:2], " ") {
+		t.Errorf("ssh-keygen -y = %q, want %q", res.Stdout, k.Line())
+	}
+	out, err := r.Query(ctx, "stat", "-c", "%U %a", a.SSHDir(), a.AuthorizedKeysPath())
+	t.Logf("ownership:\n%s", out.Stdout)
+	if err != nil || out.Stdout != name+" 700\n"+name+" 600\n" {
+		t.Errorf("ownership/modes: %q %v", out.Stdout, err)
+	}
+	e, err := ReadEffective(ctx, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	login, err := r.Query(ctx, "ssh", "-i", keyFile, "-p", strconv.Itoa(e.Ports[0]), "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null", "-o", "IdentitiesOnly=yes", name+"@127.0.0.1", "id", "-un")
+	t.Logf("login: %q %v", login.Stdout, err)
+	if err != nil || strings.TrimSpace(login.Stdout) != name {
+		t.Errorf("login with the generated key failed: %v %s", err, login.Stderr)
+	}
 }

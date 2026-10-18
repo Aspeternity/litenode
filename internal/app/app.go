@@ -89,7 +89,9 @@ func (env Env) kinds(r system.Runner, store *state.Store) change.Registry {
 			reg.Register(k)
 		}
 	}
-	reg.Register(ssh.Kind(store))
+	for _, k := range (&ssh.Service{Store: store}).Kinds() {
+		reg.Register(k)
+	}
 	return reg
 }
 
