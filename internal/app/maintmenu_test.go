@@ -93,3 +93,26 @@ func TestMaintUpdate(t *testing.T) {
 		t.Errorf("latest:\n%s", r.stdout)
 	}
 }
+
+func TestMaintUninstallMenu(t *testing.T) {
+	f := nodeSystem()
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	f.Files[maint.BinPath] = []byte("litenode")
+	// Declining either confirmation changes nothing.
+	r := runNodes(t, f, "7\n5\ny\nn\n4\nn\n0\n0\n")
+	if !strings.Contains(r.stdout, " 4. 卸载脚本") || !strings.Contains(r.stdout, " 5. 全部卸载") || !strings.Contains(r.stdout, "此操作不可恢复") {
+		t.Errorf("menu:\n%s", r.stdout)
+	}
+	if f.Files[maint.BinPath] == nil || f.Files[state.DefaultPath] == nil {
+		t.Fatal("declined uninstall removed files")
+	}
+	r = runNodes(t, f, "7\n5\ny\ny\n")
+	for _, want := range []string{"LiteNode 已全部卸载。", "重新安装："} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q:\n%s", want, r.stdout)
+		}
+	}
+	if f.Files[maint.BinPath] != nil || f.Files[state.DefaultPath] != nil {
+		t.Error("files left after full uninstall")
+	}
+}

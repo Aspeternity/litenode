@@ -156,7 +156,7 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 | `/usr/local/lib/litenode/xray` | Xray 程序（独立路径，避免与官方脚本或 3x-ui 冲突） |
 | `/etc/systemd/system/litenode-xray.service` | Xray 服务 |
 | `/etc/systemd/system/litenode-nft.service` | 开机加载 nftables 规则（oneshot） |
-| `/etc/systemd/system/litenode-resolve.service` 和 `.timer` | 端口转发目标为域名时定期重新解析（仅在需要时创建） |
+| `/etc/systemd/system/litenode-resolve.service` 和 `.timer` | 端口转发目标为域名时定期重新解析（仅在需要时创建；程序不存在时跳过，D-088） |
 | `/etc/ssh/sshd_config.d/00-litenode.conf` | SSH 配置（drop-in 文件） |
 | `/etc/sysctl.d/99-litenode.conf` | BBR、内核转发等 sysctl 设置 |
 | `/litenode.swap` | swap 文件（在 `/etc/fstab` 中挂载） |
@@ -997,6 +997,8 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
   - 防火墙**保持生效**：把 `nftables.nft` 重新生成为只包含防火墙的版本（SSH 端口和手动规则，去掉节点端口和转发规则），保留 `litenode-nft.service` 让它开机继续加载。
   - 防火墙未启用时，`nftables.nft` 和 `litenode-nft.service` 一并删除。
   - ufw：删除带 `litenode:node:` 和 `litenode:forward:` 标记的规则，**保留** `litenode:ssh`（与 D-019 一致，卸载不影响 SSH 登录）。
+
+- 卸载脚本删除 `litenode`、`litenode.bak` 和指向它的 `lnode`；转发的重新解析服务带 `ConditionPathExists`，程序不在时跳过。全部卸载需要两次确认，`/var/log/litenode.log` 保留；两种卸载完成后列出保留的设置和重新安装命令并退出（D-088）。
 
 两种卸载都**不回滚** SSH 设置、防火墙、sysctl 设置（BBR）、swap、DNS、时区，避免机器卸载后恢复成密码登录、端口全开等不安全状态。卸载完成后显示这些保留下来的设置及其文件位置，方便用户以后手动处理。
 
