@@ -439,7 +439,7 @@ func XrayOldVersion(v, min string) string {
 
 // ConfirmUninstallXray lists what uninstalling removes.
 func ConfirmUninstallXray(nodes, clients int) string {
-	return fmt.Sprintf("将删除 Xray 以及 %d 个节点、%d 个客户端，端口转发、SSH 和防火墙的其他设置不变。确定卸载？", nodes, clients)
+	return fmt.Sprintf("将删除 Xray 以及 %d 个节点、%d 个客户端，端口转发、SSH 和防火墙的其他设置不变。需要保留节点可以先在\"维护\"中导出配置。确定卸载？", nodes, clients)
 }
 
 // ShareAddrItem lists one share address in the share address page.

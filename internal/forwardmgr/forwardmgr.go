@@ -88,7 +88,7 @@ func (s *Service) apply(ctx context.Context, st *state.State) error {
 	if _, err := s.Changes.Apply(ctx, change.Change{Parts: parts, State: st}); err != nil {
 		return err
 	}
-	if err := s.syncTimer(ctx, st); err != nil {
+	if err := s.SyncTimer(ctx, st); err != nil {
 		return &TimerError{Err: err}
 	}
 	return nil

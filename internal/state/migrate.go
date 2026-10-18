@@ -25,3 +25,21 @@ func migrate(doc map[string]any, from, to int, table map[int]Migration) error {
 	}
 	return nil
 }
+
+// MigrateDocument upgrades doc, a decoded document in the state file format
+// (numbers as json.Number), such as an export file, to SchemaVersion. A nil
+// table uses the registered migrations. A newer document gives a
+// *TooNewError.
+func MigrateDocument(doc map[string]any, table map[int]Migration) error {
+	if table == nil {
+		table = migrations
+	}
+	version, err := schemaVersion(doc)
+	if err != nil {
+		return err
+	}
+	if version > SchemaVersion {
+		return &TooNewError{FileVersion: version}
+	}
+	return migrate(doc, version, SchemaVersion, table)
+}
