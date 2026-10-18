@@ -18,6 +18,8 @@ func mainMenuFixture(status []string) Menu {
 		ExitLabel: text.Exit,
 		Items: []Item{
 			{Label: text.MenuNodes, Group: 1},
+			{Label: text.MenuClients, Group: 1},
+			{Label: text.MenuShare, Group: 1},
 			{Label: text.MenuForwards, Group: 1},
 			{Label: text.MenuXray, Group: 1},
 			{Label: text.MenuSSH, Group: 2},

@@ -249,6 +249,8 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st), sshMainStatus(ctx, sshSvc),
 			fwSvc.BothActive(ctx, st),
 			func() error { return s.Run(nodes.menu) },
+			func() error { return s.Run(nodes.clientsMenu) },
+			func() error { return s.Run(nodes.shareMenu) },
 			func() error { return s.Run(fwdMenu.menu) },
 			func() error { return s.Run(nodes.xrayMenu) },
 			func() error { return s.Run(sshMenu.menu) },

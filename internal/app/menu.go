@@ -8,7 +8,7 @@ import (
 )
 
 // mainMenu builds the main menu (DESIGN section 8).
-func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState, sshState string, ufwToo bool, nodes, forwards, xrayMenu, sshMenu, firewallMenu, sysoptMenu, maintMenu func() error) ui.Menu {
+func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState, sshState string, ufwToo bool, nodes, clients, shareMenu, forwards, xrayMenu, sshMenu, firewallMenu, sysoptMenu, maintMenu func() error) ui.Menu {
 	var warnings []string
 	if st.Xray.Stopped && enabledNodes(st) > 0 {
 		warnings = append(warnings, text.XrayManualWarning)
@@ -31,6 +31,8 @@ func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, 
 		ExitLabel: text.Exit,
 		Items: []ui.Item{
 			{Label: text.MenuNodes, Group: 1, Page: true, Action: nodes},
+			{Label: text.MenuClients, Group: 1, Page: true, Action: clients},
+			{Label: text.MenuShare, Group: 1, Page: true, Action: shareMenu},
 			{Label: text.MenuForwards, Group: 1, Page: true, Action: forwards},
 			{Label: text.MenuXray, Group: 1, Page: true, Action: xrayMenu},
 			{Label: text.MenuSSH, Group: 2, Page: true, Action: sshMenu},

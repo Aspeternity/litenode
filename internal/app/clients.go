@@ -6,68 +6,107 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
+	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
 )
 
-// clients picks a node and shows its client menu (DESIGN section 9.4).
-func (u *nodeUI) clients() error {
-	chosen, err := u.chooseNode()
-	if err != nil || chosen == nil {
-		return err
-	}
-	id := chosen.ID
-	return u.s.Run(func() ui.Menu {
-		st := u.state()
-		seq, n := 0, node.Node{}
-		for i, x := range st.Nodes {
-			if x.ID == id {
-				seq, n = i+1, x
-			}
-		}
-		status := []string{text.ClientsTitle(seq, n.Remark, u.protocolLabel(n), n.Port)}
-		rows := [][]string{{text.ColID, text.ColRemark, text.ColState}}
-		for i, c := range n.Clients {
-			state := u.s.Colors.Off(text.StateDisabled)
-			if c.Enabled {
-				state = u.s.Colors.Good(text.StateEnabled)
-			}
-			rows = append(rows, []string{strconv.Itoa(i + 1), c.Remark, state})
-		}
-		none := len(n.Clients) == 0
-		if none {
-			status = append(status, text.ClientNone)
-		} else {
-			status = append(status, ui.Table(rows)...)
-		}
-		return ui.Menu{
-			Heading: text.NodeClients,
-			Status:  status,
-			Items: []ui.Item{
-				{Label: text.ClientAdd, Action: func() error { return u.addClient(id) }},
-				{Label: text.ClientModify, Hint: text.ClientModifyHint, Hidden: none, Action: func() error { return u.modifyClient(id) }},
-				{Label: text.ClientToggle, Hidden: none, Action: func() error { return u.toggleClient(id) }},
-				{Label: text.ClientLink, Hidden: none, Action: func() error { return u.clientLink(id) }},
-				{Label: text.ClientDelete, Hidden: none, Action: func() error { return u.deleteClient(id) }},
-			},
-		}
-	})
+// clientRef is a client with its node, in the order of the client table.
+type clientRef struct {
+	node   node.Node
+	client node.Client
 }
 
-// chooseClient asks for a client's sequence number within node id.
-func (u *nodeUI) chooseClient(id int64) (*node.Node, *node.Client, error) {
-	for _, n := range u.state().Nodes {
-		if n.ID != id {
-			continue
+// allClients lists the clients of all nodes, node by node.
+func allClients(st *state.State) []clientRef {
+	var refs []clientRef
+	for _, n := range st.Nodes {
+		for _, c := range n.Clients {
+			refs = append(refs, clientRef{node: n, client: c})
 		}
-		i, err := u.s.PromptNumber(text.PromptClientNumber, -1, 0, len(n.Clients))
-		if err != nil || i == 0 {
-			return nil, nil, err
-		}
-		c := n.Clients[i-1]
-		return &n, &c, nil
 	}
-	return nil, nil, nodemgr.ErrNotFound
+	return refs
+}
+
+// clientTable renders the clients of all nodes; nodes without a client
+// get a warning line (D-060).
+func (u *nodeUI) clientTable(st *state.State) []string {
+	refs := allClients(st)
+	var status []string
+	switch {
+	case len(st.Nodes) == 0:
+		return []string{text.ClientNoNodes}
+	case len(refs) == 0:
+		status = []string{text.ClientNone}
+	default:
+		rows := [][]string{{text.ColID, text.ColNode, text.ColRemark, text.ColState}}
+		for i, r := range refs {
+			state := u.s.Colors.Off(text.StateDisabled)
+			if r.client.Enabled {
+				state = u.s.Colors.Good(text.StateEnabled)
+			}
+			rows = append(rows, []string{strconv.Itoa(i + 1), r.node.Remark, r.client.Remark, state})
+		}
+		status = ui.Table(rows)
+	}
+	for _, n := range st.Nodes {
+		if len(n.Clients) == 0 {
+			status = append(status, u.s.Colors.Warn(text.NodeWithoutClients(n.Remark)))
+		}
+	}
+	return status
+}
+
+// clientsMenu is the client menu of the main menu (DESIGN section 9.4):
+// the clients of all nodes in one table.
+func (u *nodeUI) clientsMenu() ui.Menu {
+	st := u.state()
+	none := len(allClients(st)) == 0
+	return ui.Menu{
+		Heading: text.MenuClients,
+		Status:  u.clientTable(st),
+		Items: []ui.Item{
+			{Label: text.ClientAdd, Hidden: len(st.Nodes) == 0, Action: u.addClientToNode},
+			{Label: text.ClientModify, Hint: text.ClientModifyHint, Hidden: none, Action: u.modifyClient},
+			{Label: text.ClientToggle, Hidden: none, Action: u.toggleClient},
+			{Label: text.ClientDelete, Hidden: none, Action: u.deleteClient},
+		},
+	}
+}
+
+// chooseClient asks for a client's sequence number in the client table.
+func (u *nodeUI) chooseClient() (*node.Node, *node.Client, error) {
+	refs := allClients(u.state())
+	if len(refs) == 0 {
+		return nil, nil, nil
+	}
+	i, err := u.s.PromptNumber(text.PromptClientNumber, -1, 0, len(refs))
+	if err != nil || i == 0 {
+		return nil, nil, err
+	}
+	r := refs[i-1]
+	return &r.node, &r.client, nil
+}
+
+// addClientToNode picks the node for a new client (skipped with only one
+// node) and adds the client.
+func (u *nodeUI) addClientToNode() error {
+	st := u.state()
+	switch len(st.Nodes) {
+	case 0:
+		return nil
+	case 1:
+		return u.addClient(st.Nodes[0].ID)
+	}
+	m := ui.Menu{Heading: text.ChooseNodeHeading}
+	for _, n := range st.Nodes {
+		m.Items = append(m.Items, ui.Item{Label: text.NodeChoice(n.Remark, u.protocolLabel(n), n.Port)})
+	}
+	choice, err := u.s.Choose(m)
+	if err != nil || choice == 0 {
+		return err
+	}
+	return u.addClient(st.Nodes[choice-1].ID)
 }
 
 func (u *nodeUI) addClient(id int64) error {
@@ -97,8 +136,8 @@ func (u *nodeUI) addClient(id int64) error {
 	}
 }
 
-func (u *nodeUI) modifyClient(id int64) error {
-	n, c, err := u.chooseClient(id)
+func (u *nodeUI) modifyClient() error {
+	n, c, err := u.chooseClient()
 	if err != nil || c == nil {
 		return err
 	}
@@ -137,8 +176,8 @@ func (u *nodeUI) modifyClient(id int64) error {
 	return nil
 }
 
-func (u *nodeUI) toggleClient(id int64) error {
-	n, c, err := u.chooseClient(id)
+func (u *nodeUI) toggleClient() error {
+	n, c, err := u.chooseClient()
 	if err != nil || c == nil {
 		return err
 	}
@@ -150,15 +189,6 @@ func (u *nodeUI) toggleClient(id int64) error {
 	} else {
 		u.s.Done(text.ClientEnabled)
 	}
-	return nil
-}
-
-func (u *nodeUI) clientLink(id int64) error {
-	_, c, err := u.chooseClient(id)
-	if err != nil || c == nil {
-		return err
-	}
-	u.showClientLink(id, c.ID, "")
 	return nil
 }
 
@@ -191,8 +221,8 @@ func (u *nodeUI) showClientLink(nodeID, clientID int64, done string) {
 
 // deleteClient deletes a client after confirmation. Deleting the last one
 // keeps the node, which cannot be used until a client is added (D-060).
-func (u *nodeUI) deleteClient(id int64) error {
-	n, c, err := u.chooseClient(id)
+func (u *nodeUI) deleteClient() error {
+	n, c, err := u.chooseClient()
 	if err != nil || c == nil {
 		return err
 	}

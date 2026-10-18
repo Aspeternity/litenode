@@ -85,7 +85,7 @@ func (u *nodeUI) protocolLabel(n node.Node) string {
 // menu is the node list menu (DESIGN section 9.1).
 func (u *nodeUI) menu() ui.Menu {
 	st := u.state()
-	status := []string{text.ShareAddressLine(st.Server.DefaultShareAddress(), len(st.Server.ShareAddresses))}
+	var status []string
 	if len(st.Nodes) == 0 {
 		status = append(status, text.NodeNone)
 	} else {
@@ -107,8 +107,6 @@ func (u *nodeUI) menu() ui.Menu {
 			{Label: text.NodeAdd, Action: u.add},
 			{Label: text.NodeModify, Hidden: none, Page: true, Action: u.modify},
 			{Label: text.NodeToggle, Hidden: none, Action: u.toggle},
-			{Label: text.NodeClients, Hidden: none, Page: true, Action: u.clients},
-			{Label: text.NodeShareAddress, Hint: text.NodeShareAddrHint, Page: true, Action: u.shareAddress},
 			{Label: text.NodeDelete, Hidden: none, Action: u.delete},
 		},
 	}
