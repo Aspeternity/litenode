@@ -33,12 +33,11 @@ const (
 	ColState           = "状态"
 	StateEnabled       = "● 启用"
 	StateDisabled      = "○ 禁用"
-	Recommended        = "★推荐"
 	NotSet             = "未设置"
-	PromptNodeNumber   = "请输入节点序号"
+	PromptNodeNumber   = "请输入节点序号 (0 返回)"
 	PromptPort         = "端口"
 	PromptRemark       = "备注"
-	PromptTarget       = "目标网站域名（可带端口，默认 443）"
+	PromptTarget       = "目标网站域名（可带端口，默认 443；直接回车返回）"
 	PromptShareAddress = "分享地址（IP 或域名）"
 	PromptSharePort    = "分享端口（0 表示与监听端口相同）"
 	Checking           = "正在检测……"
@@ -72,20 +71,21 @@ const ChoosePreset = "选择节点类型"
 
 // Target selection (DESIGN section 10.1).
 const (
-	ChooseTarget      = "选择目标网站 (SNI)"
-	TargetCommon      = "从常用列表选择"
-	TargetManual      = "手动输入"
-	TargetNoneUsable  = "常用列表中没有通过检测的网站，请手动输入。"
-	CommonListHint    = "提示：常用列表中的大型网站被很多节点使用，且与本机 IP 不在同一网段，扫描附近网站得到的目标更不容易被识别。"
-	TargetScan        = "扫描附近网站"
-	TargetScanHint    = "(推荐，约 1 分钟)"
-	ScanWarning       = "扫描会连接本机所在 /24 网段其他服务器的 443 端口。部分 VPS 商家禁止端口扫描，可能导致滥用投诉。是否继续？"
-	ScanNoAddress     = "无法确定本机的公网 IPv4 地址，不能扫描。"
-	ScanNoResult      = "附近没有找到可用的网站，请从常用列表选择或手动输入。"
-	ScanFound         = "找到以下可用网站（按延迟排序）："
-	TargetNotUsable   = "该网站未通过检测，不能使用。"
-	TargetUseAnyway   = "仍要使用这个网站吗？"
-	PromptTargetIndex = "请输入网站序号"
+	ChooseTarget     = "选择目标网站 (SNI)"
+	TargetCommon     = "从常用列表选择"
+	TargetManual     = "手动输入"
+	TargetNoneUsable = "常用列表中没有通过检测的网站，请选择其他方式。"
+	CommonHeading    = "常用目标网站"
+	ScanHeading      = "附近的网站"
+	CommonListHint   = "提示：常用列表中的大型网站被很多节点使用，且与本机 IP 不在同一网段，扫描附近网站得到的目标更不容易被识别。"
+	TargetScan       = "扫描附近网站"
+	TargetScanHint   = "(推荐，约 1 分钟)"
+	ScanWarning      = "扫描会连接本机所在 /24 网段其他服务器的 443 端口。部分 VPS 商家禁止端口扫描，可能导致滥用投诉。是否继续？"
+	ScanNoAddress    = "无法确定本机的公网 IPv4 地址，不能扫描。"
+	ScanNoResult     = "附近没有找到可用的网站，请选择其他方式。"
+	ScanFound        = "找到以下可用网站（按延迟排序）："
+	TargetNotUsable  = "该网站未通过检测，不能使用。"
+	TargetUseAnyway  = "仍要使用这个网站吗？"
 )
 
 // CheckLine formats one target check result (DESIGN section 10.2).
@@ -213,6 +213,7 @@ const (
 	ShareAddrEnter    = "输入地址"
 	ShareAddrDetect   = "重新检测"
 	ChooseShareAddr   = "检测到多个公网地址，请选择分享链接使用的地址"
+	ShareAddrHeading  = "选择分享地址"
 	ShareAddrNone     = "未能检测到公网地址，请手动输入。"
 	ShareAddrChanged  = "分享地址已修改，所有节点的分享链接已变化，请重新导出。"
 	ShareAddrDetected = "检测到公网地址："
@@ -233,7 +234,7 @@ const (
 
 // ModifyTitle heads the modify menu.
 func ModifyTitle(n int, remark, proto string) string {
-	return fmt.Sprintf("修改节点 %d: %s (%s)", n, remark, proto)
+	return fmt.Sprintf("节点 %d: %s (%s)", n, remark, proto)
 }
 
 // Fallback limit tiers (P-009, D-053).
@@ -302,14 +303,14 @@ const (
 	ClientDelete       = "删除客户端"
 	ClientRemark       = "备注"
 	ClientResetUUID    = "重置 UUID"
-	PromptClientNumber = "请输入客户端序号"
+	PromptClientNumber = "请输入客户端序号 (0 返回)"
 	ClientAdded        = "客户端已添加。"
 	ClientEnabled      = "客户端已启用。"
 	ClientDisabled     = "客户端已禁用。"
 	ClientDeleted      = "客户端已删除。"
 	ClientUUIDReset    = "UUID 已重置，该客户端的旧链接已失效，新链接如下。"
 	ConfirmResetUUID   = "重置后该客户端的旧链接立即失效（其他客户端不受影响），是否继续？"
-	LastClientDelete   = "节点至少需要一个客户端，是否同时删除节点？"
+	ClientNone         = "（该节点没有客户端，当前不可用；添加客户端后即可使用）"
 	ErrClientNotFound  = "客户端不存在。"
 )
 
@@ -321,6 +322,17 @@ func ClientsTitle(seq int, remark, proto string, port int) string {
 // ConfirmDeleteClient asks before deleting a client.
 func ConfirmDeleteClient(remark string) string {
 	return fmt.Sprintf("删除客户端 %s？", remark)
+}
+
+// ConfirmDeleteLastClient asks before deleting a node's last client; the
+// node stays but cannot be used until a client is added (D-060).
+func ConfirmDeleteLastClient(remark string) string {
+	return fmt.Sprintf("%s 是该节点最后一个客户端，删除后节点暂时不可用，直到添加新客户端。是否继续？", remark)
+}
+
+// ClientLine names the client being modified.
+func ClientLine(remark string) string {
+	return "客户端: " + remark
 }
 
 // Xray service menu (DESIGN section 12).

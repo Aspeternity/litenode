@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/node"
@@ -88,9 +89,27 @@ func TestClients(t *testing.T) {
 	if err := fx.svc.DeleteClient(ctx, n.ID, c.ID); err != nil {
 		t.Fatal(err)
 	}
+	// Deleting the last client keeps the node without an inbound (D-060).
 	last := fx.state(t).Nodes[0].Clients[0].ID
-	if err := fx.svc.DeleteClient(ctx, n.ID, last); !errors.Is(err, ErrLastClient) {
-		t.Errorf("deleting the last client: %v", err)
+	if err := fx.svc.DeleteClient(ctx, n.ID, last); err != nil {
+		t.Fatalf("deleting the last client: %v", err)
+	}
+	if st := fx.state(t); st.Nodes[0].ID != n.ID || len(st.Nodes[0].Clients) != 0 || st.Nodes[0].Port != n.Port {
+		t.Fatalf("node after deleting its last client: %+v", st.Nodes[0])
+	}
+	if got := fx.inbounds(t); slices.Contains(got, n.Port) {
+		t.Errorf("node without clients still has an inbound: %v", got)
+	}
+	// Its next client takes the preset's flow and brings the inbound back.
+	again, err := fx.svc.AddClient(ctx, n.ID, "again")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Flow != node.FlowVision {
+		t.Errorf("flow of a client added to an empty node = %q", again.Flow)
+	}
+	if got := fx.inbounds(t); !slices.Contains(got, n.Port) {
+		t.Errorf("inbounds after adding a client = %v", got)
 	}
 	if err := fx.svc.ResetClientUUID(ctx, n.ID, 9999); !errors.Is(err, ErrClientNotFound) {
 		t.Errorf("unknown client: %v", err)

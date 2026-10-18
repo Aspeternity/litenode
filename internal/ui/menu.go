@@ -36,6 +36,9 @@ type Item struct {
 type Menu struct {
 	// Title, if set, is shown in a box at the top (the main menu only).
 	Title string
+	// Heading, if set, is shown in a bar at the top of a submenu so it
+	// stands out from the output above it (D-060).
+	Heading string
 	// Status lines are shown above the options.
 	Status []string
 	// Notice is shown below the status, e.g. why some options are hidden.
@@ -45,6 +48,14 @@ type Menu struct {
 	Grouped bool
 	// ExitLabel is the label of option 0, text.Back by default.
 	ExitLabel string
+}
+
+// HeadingBar centers s in a bar of "═" as wide as the separators, keeping
+// at least two "═" on each side of a long heading.
+func HeadingBar(s string) string {
+	fill := max(lineWidth-Width(s)-2, 4)
+	left := fill / 2
+	return strings.Repeat("═", left) + " " + s + " " + strings.Repeat("═", fill-left)
 }
 
 // Visible returns the items that are shown, in display order. Item n on
@@ -70,6 +81,9 @@ func (m Menu) Render() string {
 		line(strings.Repeat(" ", max(pad, 0)) + m.Title)
 		line("╚" + strings.Repeat("═", lineWidth) + "╝")
 	}
+	if m.Heading != "" {
+		line(HeadingBar(m.Heading))
+	}
 	for _, s := range m.Status {
 		line(" " + s)
 	}
@@ -85,6 +99,8 @@ func (m Menu) Render() string {
 			labelWidth = max(labelWidth, Width(it.Label)+2)
 		}
 	}
+	// With 10 or more items, labels stay aligned: " 1.  a" / " 10. b".
+	numWidth := len(fmt.Sprint(len(items))) + 1
 	for i, it := range items {
 		if m.Grouped && i > 0 && it.Group != items[i-1].Group {
 			line(Separator)
@@ -93,7 +109,7 @@ func (m Menu) Render() string {
 		if it.Hint != "" {
 			label = PadRight(label, labelWidth) + it.Hint
 		}
-		line(fmt.Sprintf(" %d. %s", i+1, label))
+		line(fmt.Sprintf(" %-*s %s", numWidth, fmt.Sprintf("%d.", i+1), label))
 	}
 	// Submenus have a single separator, above option 0 (D-014). In the
 	// grouped main menu option 0 belongs to the last group instead.

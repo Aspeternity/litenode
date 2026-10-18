@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/system"
@@ -130,5 +131,37 @@ func TestColors(t *testing.T) {
 	}
 	if got := NewColors("").Good("x"); got != "\x1b[32mx\x1b[0m" {
 		t.Errorf("colors on: got %q", got)
+	}
+}
+
+func TestRenderHeading(t *testing.T) {
+	m := Menu{Heading: "节点管理", Status: []string{"分享地址: 203.0.113.10"}, Items: []Item{{Label: "添加节点"}}}
+	want := `══════════════════ 节点管理 ══════════════════
+ 分享地址: 203.0.113.10
+──────────────────────────────────────────────
+ 1. 添加节点
+──────────────────────────────────────────────
+ 0. 返回
+`
+	if got := m.Render(); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	if w := Width(HeadingBar("节点管理")); w != Width(Separator) {
+		t.Errorf("heading width %d, separator %d", w, Width(Separator))
+	}
+	long := HeadingBar(strings.Repeat("长", 30))
+	if !strings.HasPrefix(long, "══ ") || !strings.HasSuffix(long, " ══") {
+		t.Errorf("long heading = %q", long)
+	}
+}
+
+func TestRenderAlignsTwoDigitNumbers(t *testing.T) {
+	var m Menu
+	for i := 0; i < 10; i++ {
+		m.Items = append(m.Items, Item{Label: "x"})
+	}
+	got := m.Render()
+	if !strings.Contains(got, "\n 1.  x\n") || !strings.Contains(got, "\n 10. x\n") || !strings.HasSuffix(got, "\n 0. 返回\n") {
+		t.Errorf("got:\n%s", got)
 	}
 }

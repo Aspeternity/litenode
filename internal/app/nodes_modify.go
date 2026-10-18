@@ -29,7 +29,8 @@ func (u *nodeUI) modify() error {
 			target, limit = n.Reality.Target, n.Reality.FallbackLimit
 		}
 		return ui.Menu{
-			Status: []string{text.ModifyTitle(seq, n.Remark, u.protocolLabel(n))},
+			Heading: text.NodeModify,
+			Status:  []string{text.ModifyTitle(seq, n.Remark, u.protocolLabel(n))},
 			Items: []ui.Item{
 				{Label: text.ModPort, Hint: text.Current(n.Port), Action: func() error { return u.modPort(id) }},
 				{Label: text.ModTarget, Hint: text.Current(target), Action: func() error { return u.modTarget(id, target) }},
@@ -112,7 +113,7 @@ func (u *nodeUI) modFallback(id int64, target string) error {
 		u.s.Println(text.HomepageSize(r.HomepageSize))
 	}
 	names := map[string]string{"default": text.TierDefault, "loose": text.TierLoose, "strict": text.TierStrict}
-	m := ui.Menu{}
+	m := ui.Menu{Heading: text.ModFallback}
 	for _, t := range node.FallbackTiers {
 		m.Items = append(m.Items, ui.Item{Label: text.FallbackTier(names[t.ID], t.Limit.AfterBytes, t.Limit.BytesPerSec, t.Limit.BurstBytesPerSec)})
 	}
