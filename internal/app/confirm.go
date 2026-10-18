@@ -30,7 +30,7 @@ func awaitConfirm(ctx context.Context, s *ui.Session, c *change.Confirmer, reg c
 	}
 	switch {
 	case errors.Is(err, change.ErrRolledBack):
-		s.End(s.Colors.Warn(text.ConfirmTimedOut))
+		s.EndWarn(text.ConfirmTimedOut)
 		return false, nil
 	case err != nil:
 		return false, err

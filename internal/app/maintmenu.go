@@ -48,6 +48,7 @@ func (u *maintUI) export() error {
 		return err
 	}
 	u.s.Done(text.ExportDone(path, sum.Nodes, sum.Clients, sum.Forwards, sum.Rules))
+	u.s.Hold()
 	u.s.Println(u.s.Colors.Warn(text.ExportSecret))
 	return nil
 }
@@ -62,16 +63,16 @@ func (u *maintUI) importConfig() error {
 	var tooNew *state.TooNewError
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		u.s.End(u.s.Colors.Warn(text.ErrImportNoFile))
+		u.s.EndWarn(text.ErrImportNoFile)
 		return nil
 	case errors.Is(err, maint.ErrNotExport):
-		u.s.End(u.s.Colors.Warn(text.ErrNotExportFile))
+		u.s.EndWarn(text.ErrNotExportFile)
 		return nil
 	case errors.As(err, &tooNew):
-		u.s.End(u.s.Colors.Warn(text.ErrImportTooNew))
+		u.s.EndWarn(text.ErrImportTooNew)
 		return nil
 	case errors.Is(err, maint.ErrInvalid):
-		u.s.End(u.s.Colors.Warn(text.ErrImportInvalid(err)))
+		u.s.EndWarn(text.ErrImportInvalid(err))
 		return nil
 	case err != nil:
 		return err
@@ -94,7 +95,7 @@ func (u *maintUI) importConfig() error {
 		for _, c := range taken.Claims {
 			u.s.Println("  " + text.ImportPortTaken(c.Port, string(c.Proto), c.Owner))
 		}
-		u.s.End(u.s.Colors.Warn(text.ImportAborted))
+		u.s.EndWarn(text.ImportAborted)
 		return nil
 	}
 	if err != nil {
@@ -106,6 +107,7 @@ func (u *maintUI) importConfig() error {
 		}
 	}
 	u.s.Done(text.ImportDone)
+	u.s.Hold()
 	u.s.Println(text.ImportShareHint)
 	return nil
 }
@@ -116,7 +118,7 @@ func (u *maintUI) update() error {
 	u.s.Println(text.UpdateChecking)
 	latest, err := u.upd.Latest(u.ctx)
 	if err != nil {
-		u.s.End(u.s.Colors.Warn(text.UpdateFailed(err)))
+		u.s.EndWarn(text.UpdateFailed(err))
 		return nil
 	}
 	if !maint.UpdateAvailable(u.version, latest) {
@@ -131,13 +133,13 @@ func (u *maintUI) update() error {
 	err = u.upd.Update(u.ctx, latest)
 	switch {
 	case errors.Is(err, maint.ErrDigestMismatch):
-		u.s.End(u.s.Colors.Warn(text.ErrUpdateDigest))
+		u.s.EndWarn(text.ErrUpdateDigest)
 		return nil
 	case errors.Is(err, maint.ErrBadBinary):
-		u.s.End(u.s.Colors.Warn(text.ErrUpdateBadBinary(err)))
+		u.s.EndWarn(text.ErrUpdateBadBinary(err))
 		return nil
 	case err != nil:
-		u.s.End(u.s.Colors.Warn(text.UpdateFailed(err)))
+		u.s.EndWarn(text.UpdateFailed(err))
 		return nil
 	}
 	u.s.Done(text.UpdateDone(latest, maint.BakPath))

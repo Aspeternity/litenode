@@ -178,6 +178,7 @@ func (u *nodeUI) add() error {
 // hints. isDefault: addr is the default address (the remark has no
 // suffix, D-068).
 func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, isDefault, full bool) {
+	u.s.Hold()
 	link, err := share.LinkFor(u.svc.Registry, n, c, addr, isDefault)
 	if err != nil {
 		u.s.Println(u.s.Colors.Bad(text.ActionFailed(err)))
@@ -212,6 +213,7 @@ func (u *nodeUI) printLinks(id int64) {
 		if n.ID != id {
 			continue
 		}
+		u.s.Hold()
 		u.s.Println("\n" + text.NewLinksTitle)
 		for _, c := range n.Clients {
 			if !c.Enabled {

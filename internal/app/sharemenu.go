@@ -71,6 +71,7 @@ func (u *nodeUI) allLinks() error {
 		return nil
 	}
 	u.s.End(text.LinkBelow)
+	u.s.Hold()
 	u.s.Println("\n" + text.AllLinksTitle)
 	for _, l := range lines[1:] {
 		u.s.Println(l)

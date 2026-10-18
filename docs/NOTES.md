@@ -6,7 +6,7 @@
 
 - 远程执行：`scripts/dev/vps.sh`（`VPS_HOST`、`VPS_PORT`、`LN_PASS` 环境变量，密码不落盘）。
 - `VPS_SSH_OPTS=-tt scripts/dev/vps.sh '...'` 以带终端的会话执行（模拟用户，断开时进程收到 SIGHUP）。
-- 驱动真实菜单：`printf '1\n1\n...' | NO_COLOR=1 litenode`（菜单从标准输入逐行读取）。
+- 驱动真实菜单：`printf '1\n1\n...' | NO_COLOR=1 litenode`（菜单从标准输入逐行读取）。管道输入不会出现"按回车返回菜单"（D-097）；要测试终端行为，在测试机上用 pty 驱动脚本逐步输入（M7-06 用的是一个 Python `pty.fork` 小脚本：每步等输出停止 1.5 秒再输入，只打印"最后一行 => 输入"）。
 - **使用场景**：LiteNode 主要用作落地机。WSL 到 VPS 的直连经过中国，是用户在软路由上特意配置的模拟环境；直连被干扰不作为取舍依据，以 VPS 本机的协议检测为准（D-059）。
 - 客户端连通性：在 WSL 下载官方 Xray（放在 scratchpad 的独立目录，校验 `.dgst`），`scripts/dev/link2client.py` 把链接转成客户端配置，经 SOCKS 访问 `https://www.cloudflare.com/cdn-cgi/trace`，出口 IP 为 VPS 即连通。
 - **WSL 到 VPS 的直连经过 GFW（中国移动）**：所以"从中国大陆能连"和"协议上可用"要分开测；后者把 `scripts/dev/link2client.py` 和 `scripts/dev/vprobe.sh` 传到 VPS 的 `/tmp`，在 VPS 本机运行（注意测试机重启会清空 `/tmp`）。
@@ -21,7 +21,7 @@
 
 ## 实现约定
 
-- 界面（D-069）：页面中的选项默认作为操作流程运行，打开其他页面的选项要标 `Page: true`；操作成功时调用 `s.Done(text.X)` 结束流程（之后输出的链接等不加前缀），多步操作用 `s.Step(n, total, 名称)` 标步骤；没有调用 `Done` 就返回 nil 显示为"已取消"。
+- 界面（D-069）：页面中的选项默认作为操作流程运行，打开其他页面的选项要标 `Page: true`；操作成功时调用 `s.Done(text.X)` 结束流程（之后输出的链接等不加前缀），多步操作用 `s.Step(n, total, 名称)` 标步骤；没有调用 `Done` 就返回 nil 显示为"已取消"。显示了需要阅读的内容（链接、日志、密钥、测试结果）的操作调用 `s.Hold()`；以警告结束用 `s.EndWarn(text.X)`（自动停住）；返回错误自动停住（D-097）。
 
 - 每个 Go 包用 `doc.go` 写包注释作为占位；尚无文件的目录（`scripts/`、`.github/workflows/`）用 `.gitkeep`，有真实文件后删除。
 - `go.mod` 使用 `go 1.27.2`（开发环境的 Go 版本）。
