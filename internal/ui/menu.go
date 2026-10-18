@@ -43,7 +43,7 @@ type Menu struct {
 	// stands out from the output above it (D-060).
 	Heading string
 	// Path holds the names of the pages above this one; the heading shows
-	// them before its own name (主菜单 › 分享节点, D-096). Session.Run
+	// them before its own name ("Main › Share", D-096). Session.Run
 	// sets it.
 	Path []string
 	// Status lines are shown above the options.
