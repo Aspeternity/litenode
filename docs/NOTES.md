@@ -56,4 +56,6 @@
 - 能力探测注册在 `internal/system/probe.go` 的 `probes`：`CapBBR`、`CapSwap`（M5-02）。
 - 系统优化（M5）：业务在 `internal/sysopt`（`Service.SetBBR/CreateSwap/ResizeSwap/DeleteSwap/SetPreference/SetDNS/ResetDNS/SetTimezone/EnableNTP`），菜单在 `internal/app/sysoptmenu.go`。BBR 在状态文件（`sysopt.bbr`，sysctl 文件由 `sysctl.Desired` 整体生成）；其余从系统读取。文件修改走变更流程：`sysctl`、`swap`（fstab，应用步骤按 fstab 启停 swap）、`gai`、`dns`（应用步骤重启 systemd-resolved）。测试 DNS 服务器用 `Env.DNSProber`。
 - **测试系统优化**（M5）：两台测试机的镜像都已由服务商开启 BBR（Ubuntu 在 `/etc/sysctl.d/99-custom.conf`），测试开启和重启保持前先去掉这两行（备份在 `/root/99-custom.conf.bak`）。Ubuntu 使用 systemd-resolved 且有 IPv6（测优先级：`curl https://www.cloudflare.com/cdn-cgi/trace` 的 `ip=`）；Debian 不用 resolved（resolv.conf 是 resolvconf 的链接，测试后 `ln -sf ../run/resolvconf/resolv.conf /etc/resolv.conf` 恢复），原本没有 NTP 服务，磁盘只剩约 550M。
+- 维护（M6）：业务在 `internal/maint`（`Build` / `Encode` / `Decode` / `Check` / `Replace` / `Conflicts` 是纯函数；`Service.Export/Read/Import`），菜单在 `internal/app/maintmenu.go`。导出文件迁移用 `state.MigrateDocument(doc, table)`。nodemgr 的 `EnsureXray`、forwardmgr 的 `SyncTimer`、firewall 的 `CheckRule` 为此导出。
+- **测试导入导出**（M6-01）：两台测试机先各自导出一份作为备份，测试后导入各自的备份恢复，再删除 `/root` 下的导出文件（含私钥）。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。

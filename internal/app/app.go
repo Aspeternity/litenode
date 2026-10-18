@@ -15,6 +15,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/forwardmgr"
+	"github.com/Aspeternity/litenode/internal/maint"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/reality"
@@ -229,6 +230,8 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store)}
 	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r), probeDNS: env.dnsProber(), syncWait: 30 * time.Second,
 		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)}}
+	maintMenu := &maintUI{ctx: ctx, s: s, reg: reg, svc: &maint.Service{Runner: r, Store: store, Nodes: svc, Forwards: env.forwards(r, store),
+		Confirmer: sshSvc.Confirmer, Version: env.Version}}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))
@@ -249,7 +252,8 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 			func() error { return s.Run(nodes.xrayMenu) },
 			func() error { return s.Run(sshMenu.menu) },
 			func() error { return s.Run(fwMenu.menu) },
-			func() error { return s.Run(optMenu.menu) })
+			func() error { return s.Run(optMenu.menu) },
+			func() error { return s.Run(maintMenu.menu) })
 	})
 	return 0
 }

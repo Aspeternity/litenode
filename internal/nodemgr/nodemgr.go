@@ -159,7 +159,7 @@ func (s *Service) Add(ctx context.Context, in AddInput) (node.Node, error) {
 	if err != nil {
 		return node.Node{}, err
 	}
-	if err := s.ensureXray(ctx, st); err != nil {
+	if err := s.EnsureXray(ctx, st); err != nil {
 		return node.Node{}, err
 	}
 	st.Nodes = append(st.Nodes, n)
@@ -169,9 +169,9 @@ func (s *Service) Add(ctx context.Context, in AddInput) (node.Node, error) {
 	return n, nil
 }
 
-// ensureXray installs Xray when the first node is added (DESIGN section 9.2
+// EnsureXray installs Xray when the first node is added (DESIGN section 9.2
 // step 6) and records the version in st.
-func (s *Service) ensureXray(ctx context.Context, st *state.State) error {
+func (s *Service) EnsureXray(ctx context.Context, st *state.State) error {
 	if v, ok := s.Xray.Installed(ctx); ok {
 		st.Xray.Version = v
 		return nil

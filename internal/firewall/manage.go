@@ -55,9 +55,9 @@ func manualIndex(st *state.State, owner string) int {
 	return slices.IndexFunc(st.Firewall.Rules, func(r state.FirewallRule) bool { return ManualOwner(r.ID) == owner })
 }
 
-// checkRule validates r and that no other manual rule opens the same ports
+// CheckRule validates r and that no other manual rule opens the same ports
 // and protocol (skipping the rule with ID skip).
-func checkRule(st *state.State, r state.FirewallRule, skip int64) error {
+func CheckRule(st *state.State, r state.FirewallRule, skip int64) error {
 	if err := CheckPorts(r.Port); err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func Duplicate(st *state.State, ports, proto string, skip int64) bool {
 
 // AddRule adds a manual rule with a new ID.
 func AddRule(st *state.State, r state.FirewallRule) error {
-	if err := checkRule(st, r, 0); err != nil {
+	if err := CheckRule(st, r, 0); err != nil {
 		return err
 	}
 	r.ID = st.AllocID()
@@ -95,7 +95,7 @@ func UpdateRule(st *state.State, owner string, r state.FirewallRule) error {
 		return ErrNoRule
 	}
 	r.ID = st.Firewall.Rules[i].ID
-	if err := checkRule(st, r, r.ID); err != nil {
+	if err := CheckRule(st, r, r.ID); err != nil {
 		return err
 	}
 	st.Firewall.Rules[i] = r
