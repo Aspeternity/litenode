@@ -7,7 +7,6 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
-	"github.com/Aspeternity/litenode/internal/ufw"
 )
 
 // ErrNothingToRollBack means there is no earlier SSH configuration to go
@@ -54,10 +53,7 @@ func (s *Service) RollBackLast(ctx context.Context) (state.SSH, error) {
 	}
 	st.SSH = prev
 	_, err = s.Confirmer.Apply(ctx, change.Change{
-		Parts: []change.Part{
-			{Kind: ufw.Kind(s.Store)},
-			{Kind: Kind(s.Store), Files: []change.File{ConfigFile(prev, HasIPv6(s.runner()))}},
-		},
+		Parts: s.portParts(ConfigFile(prev, HasIPv6(s.runner()))),
 		State: st,
 	})
 	return prev, err

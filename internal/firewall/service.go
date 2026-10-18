@@ -8,7 +8,6 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/nft"
-	"github.com/Aspeternity/litenode/internal/ssh"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/ufw"
@@ -73,14 +72,7 @@ func nftInstalled(ctx context.Context, r system.Runner) bool {
 
 // SSHPorts are the SSH ports the firewall keeps open now.
 func (s *Service) SSHPorts(ctx context.Context, st *state.State) ([]int, error) {
-	if st.SSH.Port > 0 {
-		return SSHPorts(st, nil), nil
-	}
-	e, err := ssh.ReadEffective(ctx, s.runner())
-	if err != nil {
-		return nil, err
-	}
-	return SSHPorts(st, e.Ports), nil
+	return sshPorts(ctx, s.runner(), st)
 }
 
 // Entries lists the rules the firewall has (or would have once enabled).

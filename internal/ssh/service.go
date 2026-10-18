@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
+	"github.com/Aspeternity/litenode/internal/ufw"
 )
 
 // Service changes the SSH settings. Every change runs under
@@ -19,6 +20,24 @@ type Service struct {
 	Fetcher   Fetcher
 	// Rand is the randomness for generated keys (crypto/rand.Reader).
 	Rand io.Reader
+	// Firewall keeps the firewall rules in step with the SSH port
+	// (firewall.SyncKind, which imports this package). Port changes apply
+	// it after sshd, so it opens the port sshd then uses. Nil means none.
+	Firewall *change.Kind
+}
+
+// portParts are the parts of a change that may move sshd to another
+// port: ufw first, so the new port is open before sshd moves (D-065),
+// then sshd, then the firewall (D-074).
+func (s *Service) portParts(sshFile change.File) []change.Part {
+	parts := []change.Part{
+		{Kind: ufw.Kind(s.Store)},
+		{Kind: Kind(s.Store), Files: []change.File{sshFile}},
+	}
+	if s.Firewall != nil {
+		parts = append(parts, change.Part{Kind: s.Firewall})
+	}
+	return parts
 }
 
 // Kinds are the configuration kinds of SSH changes, for the rollback

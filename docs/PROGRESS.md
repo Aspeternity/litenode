@@ -4,12 +4,12 @@
 
 ## 当前状态
 
-- **阶段**：M2 已由用户验收通过；验收后的两项修改已合并（多个分享地址 D-068，PR #29；页面和操作流程分开显示 D-069，PR #30）。**M3 防火墙进行中**。
-- **当前任务**：M3-03 已完成（PR 合并后）；下一个是 M3-04 与节点、SSH 联动。
+- **阶段**：M3 防火墙全部完成（M3-01～M3-04），**等待用户实机验收 M3**。
+- **当前任务**：无；M3-04（与节点、SSH 联动，D-074）已完成。
 
 ## 下次会话从这里开始
 
-1. 从 main 切出 M3-04 分支。防火墙规则操作都在 `firewall.Service.Edit`（按 SSH 端口可访问性是否改变决定是否限时确认，D-073）；M3-04 要在节点增删改端口、SSH 改端口、Xray 卸载时重新生成并加载规则。M3-04 完成即 M3 结束，停下来请用户实机验收。
+1. 用户验收 M3 后再开始 M4 端口转发（从 main 切出 M4-01 分支）。验收中发现的问题先修。
 2. 打标签 `v0.0.3` 前先问用户（尚未同意）。
 3. 实机测试前读 `docs/NOTES.md` 的"实机测试方法"。
 
@@ -18,7 +18,7 @@
 登录密码记在本机记忆中（用户同意），**不写入仓库**。用户授权两台都可以完全用于测试。
 
 - **Ubuntu 24.04.5**（KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 62.84.164.181，有 IPv6）：`/usr/local/bin/litenode` 是 `fix/ui-flow-style` 的编译版本（与合并后的 main `154181f` 相同）；有用户验收时添加的节点 `Reality-443`，Xray 运行中；分享地址有 IPv4 和 IPv6；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`；root 的 `authorized_keys` 中**已没有**开发机的公钥（用户验收时改过），只能用密码登录，不要在这台机器上关闭密码登录；装有 `litenode-rollback-boot.service`；ufw 已停用。`/usr/local/bin/litenode` 已换成 M3-02 的编译版本，LiteNode 防火墙测试后已关闭。
-- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234（主配置中有商家写的 `Port 61234`），公网 IP 216.23.88.252。上面有用户的 2 个节点（`Test`、`Test2`）和 Xray；分享地址列表有 IPv4 和 `216-23-88-252.sslip.io`（M1-06 测试时添加）；没有 LiteNode 的 nftables 表（M3-01 重启测试后已移除，`/etc/litenode/nftables.nft` 只含删除表的两行，`litenode-nft.service` 已停用）；系统自带的 `table inet filter`（全部 accept）保持不变。`/usr/local/bin/litenode` 是 M3-03 的编译版本；LiteNode 防火墙测试后已重置并关闭（表已删除）；`00-litenode.conf` 管理着 `Port 61234`（带 `ListenAddress`）。
+- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234（主配置中有商家写的 `Port 61234`），公网 IP 216.23.88.252。上面有用户的 2 个节点（`Test`、`Test2`）和 Xray；分享地址列表有 IPv4 和 `216-23-88-252.sslip.io`（M1-06 测试时添加）；没有 LiteNode 的 nftables 表（M3-01 重启测试后已移除，`/etc/litenode/nftables.nft` 只含删除表的两行，`litenode-nft.service` 已停用）；系统自带的 `table inet filter`（全部 accept）保持不变。`/usr/local/bin/litenode` 是 M3-04 的编译版本；LiteNode 防火墙测试后已关闭（表已删除）；`00-litenode.conf` 管理着 `Port 61234`（带 `ListenAddress`）。
 
 ## 未解决的问题
 
