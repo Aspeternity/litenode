@@ -349,8 +349,8 @@ func ConfirmDeleteLastClient(remark string) string {
 
 // Share menu (DESIGN section 9.5).
 const (
-	ShareLinkQR    = "查看链接和二维码"
-	ShareAllLinks  = "显示全部链接"
+	ShareLinkQR    = "导出单个链接"
+	ShareAllLinks  = "导出全部链接"
 	ShareNoClients = "（暂无客户端）"
 	ShareClientOff = "该客户端或其节点已禁用，链接暂时不能使用。"
 	ShareAllNone   = "没有启用的客户端。"

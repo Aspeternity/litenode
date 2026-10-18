@@ -60,7 +60,7 @@ func TestAddNodeDoesNotAskAddress(t *testing.T) {
 	r = runAddr(t, f, dualDetector{}, "3", "1", "2", "0", "0")
 	for _, want := range []string{
 		"═ 主菜单 › 分享节点 ═", " 主机地址: 203.0.113.10（另有 1 个）", " 1   Reality-443  Reality-443  ● 启用",
-		" 1. 查看链接和二维码", " 2. 显示全部链接", " 3. 主机地址\n",
+		" 1. 导出单个链接", " 2. 导出全部链接", " 3. 配置主机地址\n",
 		"选择链接使用的地址", "@[2001:db8::10]:443?", "#Reality-443-IPv6", "▀",
 	} {
 		if !strings.Contains(r.stdout, want) {
@@ -101,7 +101,7 @@ func TestShareAddressPage(t *testing.T) {
 		"4", "3",
 		"0", "0", "0")
 	for _, want := range []string{
-		"════════ 主菜单 › 分享节点 › 主机地址 ════════",
+		"══════ 主菜单 › 分享节点 › 配置主机地址 ══════",
 		"  [1] 203.0.113.10  IPv4  默认",
 		"  [2] 2001:db8::10  IPv6",
 		"地址已添加。",
