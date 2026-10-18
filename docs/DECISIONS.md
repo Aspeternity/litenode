@@ -560,6 +560,26 @@
   - 清屏后逐步显示：D-017 已否决，会冲掉链接。
   - 用 ANSI 控制光标改写已完成的步骤（如 clack 把活动步骤改为完成状态）：管道和 VNC 下容易错乱，收益有限。
 
+### D-070 nftables 表结构和基础规则（由 Claude 决定（用户授权））
+
+- **内容**：
+  - 一个文件 `/etc/litenode/nftables.nft`，开头 `table inet litenode` + `delete table inet litenode`，加载时在一个事务中替换整张表；不需要表时只保留这两行，等于删除表。
+  - input 链 `policy drop`，始终放行：已建立 / 相关连接（丢弃 invalid）、回环、ICMPv6 邻居发现和路由器报文（`nd-neighbor-solicit/advert`、`nd-router-solicit/advert`、`mld-listener-query`）、DHCP 回复（`udp sport 67 dport 68`）、DHCPv6 回复（`fe80::/10` 的 `udp 547 → 546`）。
+  - ping 开关只影响 `echo-request`。
+  - 每条放行规则带注释 `litenode:<所有者>`（`ssh`、`node:<ID>`、`manual:<ID>`、以后的 `forward:<ID>`），供"检查并修复"对比。
+  - 有来源限制时 IPv4、IPv6 分成两条规则。`tcp+udp` 用 `meta l4proto { tcp, udp } th dport`。
+  - 状态文件 `firewall`：`enabled`、`block_ping`、`rules`（手动规则）、`auto_sources`（自动规则的来源限制，按所有者保存，随端口变化保留，P-004）。自动规则本身不保存，由 SSH、节点、转发生成。
+  - SSH 端口：状态中管理了端口时用它（将要切换到的端口），否则用 `sshd -T` 的实际端口。
+  - `litenode-nft.service` 仿照 Debian 的 `nftables.service`（`DefaultDependencies=no`，在 `network-pre.target` 之前加载），只在有表时启用，不修改 `/etc/nftables.conf`。
+- **原因**：
+  - 测试机 Ubuntu 的 IPv6 路由来自路由器通告，挡掉就会断网。
+  - 使用 DHCP 的 VPS 挡掉 DHCP 回复后，租约到期会失去地址（ufw 默认也放行这两项）。
+  - 数据包要经过所有 input 钩子链，Debian 自带的 `table inet filter`（全部 accept）不影响 LiteNode 的过滤。
+- **否决**：
+  - 逐条增删规则：无法原子替换，失败时难以恢复。
+  - 修改 `/etc/nftables.conf`：会和用户或系统自己的配置混在一起。
+  - 用一条规则同时写 IPv4、IPv6 来源：nft 的 `ip saddr` 和 `ip6 saddr` 不能写在同一个集合里。
+
 
 ### D-071 节省 token 的开发方式（用户同意，2026-10-18）
 
