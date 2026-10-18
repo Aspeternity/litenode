@@ -31,6 +31,10 @@ func (d *DryRun) Exec(ctx context.Context, name string, args ...string) (Result,
 	return Result{}, nil
 }
 
+func (d *DryRun) ExecInput(ctx context.Context, _ []byte, name string, args ...string) (Result, error) {
+	return d.Exec(ctx, name, args...)
+}
+
 func (d *DryRun) ReadFile(path string) ([]byte, error) {
 	return d.Inner.ReadFile(path)
 }

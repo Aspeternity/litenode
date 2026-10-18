@@ -481,3 +481,38 @@
 - **"能登录"的依据**：管理员 = root + `sudo` 组成员（Debian / Ubuntu 的 sudo 组），且有登录 shell；公钥数量来自各自的 `authorized_keys`；密码是否可用来自 `/etc/shadow`；登录设置以 `sshd -T` 的生效值为准。不考虑 `AllowUsers`、`DenyUsers`、`AuthenticationMethods`、`Match` 等少见配置，这些情况由限时确认兜底。
 - **否决**：只实现 DESIGN 列出的三条规则（存在规则之外的锁死组合）；把所有可登录的普通用户都算作出路（非 sudo 用户登录后无法恢复 SSH 设置）；检查 `AllowUsers` 等全部 sshd 选项（复杂，收益小，限时确认已经兜底）。
 
+### D-065 修改 SSH 端口：用 ListenAddress 避开 Port 叠加，Ubuntu 按需重启 ssh.socket（由 Claude 决定（用户授权））
+
+- **问题**：`Port` 在 sshd 的所有配置文件中叠加生效。商家在主配置中写的 `Port`（Debian 测试机的 `Port 61234`）会让旧端口继续开放，LiteNode 的核对因此失败（M2-01 实测）。DESIGN 要求不修改主配置。
+- **内容**：
+  - `00-litenode.conf` 同时写 `ListenAddress 0.0.0.0:N` 和 `[::]:N`（有 IPv6 时）。每个 `ListenAddress` 都带端口时 sshd 忽略 `Port`。
+  - 生效端口以 `sshd -T` 的 `listenaddress` 为准，并确认新端口确实在监听。
+  - Ubuntu 套接字激活：在 `daemon-reload` 之前读取套接字当前的端口，端口变化时重启 `ssh.socket`，否则只 reload。
+  - 改端口时 `ufw` 在 `sshd` 之前应用。
+  - 旧端口的用户规则只列出简单规则，经同意才删除，删除不走限时确认：sshd 已不监听旧端口，删除不会影响登录。
+- **验证**：
+  - Ubuntu 24.04（ufw 运行中）：不确认时 60 秒后恢复到 22，新端口规则被删除；确认后旧的 `22/tcp` 规则经同意删除，新端口可连、旧端口不可连；再改回 22 时规则随之更新。
+  - Debian 12：主配置有 `Port 61234` 时改到 2222，只监听 2222，旧端口不可连；改回成功。
+- **否决**：
+  - 注释掉主配置中的 `Port`：违背"不修改主配置"，而且要用户同意修改设计。
+  - 发现其他 `Port` 时拒绝修改，让用户手动处理：对新手不友好，而 `ListenAddress` 能完全避开这个问题。
+  - 每次 sshd 变更都重启 `ssh.socket`：没有必要，只在端口变化时重启。
+  - 在 `daemon-reload` 之后读取套接字端口：实测读到的已是新配置，会漏掉重启。
+
+### D-066 创建 sudo 用户（由 Claude 决定（用户授权））
+
+- **内容**：
+  - 加入 `sudo` 组，用 `chpasswd` 从标准输入设置密码。为此 Runner 新增 `ExecInput`，输入不记录日志。
+  - 密码由用户输入或自动生成 16 位（去掉易混淆字符，约 93 位熵），只显示一次。
+  - 可以复制 root 的公钥。
+  - sudo 需要密码。
+  - 不走限时确认，失败时删除已创建的用户。
+- **原因**：
+  - 用公钥登录的 sudo 用户也需要密码才能使用 sudo。
+  - 免密 sudo 会让公钥泄露直接等于 root 权限。
+  - 把密码放在命令行（`usermod -p` 或 `chpasswd` 的参数）会被 `ps` 和操作日志看到。
+- **否决**：
+  - 免密 sudo（NOPASSWD）。
+  - 只用公钥、不设密码：无法使用 sudo。
+  - 自己实现 SHA-512 crypt 再 `usermod -p`：代码多，而且哈希会出现在命令行。
+

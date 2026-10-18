@@ -14,7 +14,10 @@ import (
 // Effective is what sshd actually uses, from "sshd -T" (DESIGN section 13:
 // the menu shows these, not what LiteNode wrote).
 type Effective struct {
-	// Ports may hold several: sshd listens on every Port line it reads.
+	// Ports are the ports sshd listens on: those of its ListenAddress
+	// values, or of its Port values when it reports no ListenAddress.
+	// sshd listens on every Port line of every file, so there may be
+	// several.
 	Ports           []int
 	PubkeyAuth      bool
 	PasswordAuth    bool
@@ -25,6 +28,7 @@ type Effective struct {
 // ParseEffective reads "sshd -T" output.
 func ParseEffective(out string) (Effective, error) {
 	var e Effective
+	var listen []int
 	seen := map[string]bool{}
 	sc := bufio.NewScanner(strings.NewReader(out))
 	for sc.Scan() {
@@ -41,6 +45,15 @@ func ParseEffective(out string) (Effective, error) {
 			}
 			if !slices.Contains(e.Ports, p) {
 				e.Ports = append(e.Ports, p)
+			}
+		case "listenaddress":
+			i := strings.LastIndexByte(value, ':')
+			p, err := strconv.Atoi(value[i+1:])
+			if i < 0 || err != nil {
+				return Effective{}, fmt.Errorf("sshd -T listenaddress %q", value)
+			}
+			if !slices.Contains(listen, p) {
+				listen = append(listen, p)
 			}
 		case "pubkeyauthentication":
 			e.PubkeyAuth = value == "yes"
@@ -59,6 +72,9 @@ func ParseEffective(out string) (Effective, error) {
 		if !seen[k] {
 			return Effective{}, fmt.Errorf("sshd -T output has no %s", k)
 		}
+	}
+	if len(listen) > 0 {
+		e.Ports = listen
 	}
 	return e, nil
 }

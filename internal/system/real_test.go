@@ -176,3 +176,11 @@ func TestOpLogUnwritableIsIgnored(t *testing.T) {
 		t.Error("log should not create directories")
 	}
 }
+
+func TestRealExecInput(t *testing.T) {
+	r := NewReal(nil)
+	res, err := r.ExecInput(context.Background(), []byte("secret\n"), "cat")
+	if err != nil || res.Stdout != "secret\n" {
+		t.Errorf("got %q, %v", res.Stdout, err)
+	}
+}

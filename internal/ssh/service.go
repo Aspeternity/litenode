@@ -35,7 +35,7 @@ func (s *Service) Change(ctx context.Context, fn func(*state.SSH)) error {
 	}
 	fn(&st.SSH)
 	_, err = s.Confirmer.Apply(ctx, change.Change{
-		Parts: []change.Part{{Kind: Kind(s.Store), Files: []change.File{ConfigFile(st.SSH)}}},
+		Parts: []change.Part{{Kind: Kind(s.Store), Files: []change.File{ConfigFile(st.SSH, HasIPv6(s.runner()))}}},
 		State: st,
 	})
 	return err

@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 )
 
@@ -60,14 +60,21 @@ func (r Rule) Managed() bool { return strings.HasPrefix(r.Comment, Marker) }
 // NodeComment is the comment of a node's rule.
 func NodeComment(id int64) string { return Marker + "node:" + strconv.FormatInt(id, 10) }
 
-// Desired lists the rules the state calls for: one per enabled node.
-// Forwards (M4) and the SSH port (M2) are added by their tasks.
-func Desired(nodes []node.Node) []Rule {
+// SSHComment is the comment of the SSH port's rule.
+const SSHComment = Marker + "ssh"
+
+// Desired lists the rules the state calls for: one per enabled node, and
+// the SSH port when LiteNode manages it (M2-05). Forwards (M4) are added
+// by their task.
+func Desired(st *state.State) []Rule {
 	var out []Rule
-	for _, n := range nodes {
+	for _, n := range st.Nodes {
 		if n.Enabled {
 			out = append(out, Rule{Proto: "tcp", Port: n.Port, Comment: NodeComment(n.ID)})
 		}
+	}
+	if st.SSH.Port > 0 {
+		out = append(out, Rule{Proto: "tcp", Port: st.SSH.Port, Comment: SSHComment})
 	}
 	return out
 }
@@ -243,4 +250,111 @@ func Sync(ctx context.Context, r system.Runner, desired []Rule) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// UserRule is a rule the user added, found because it allows a port.
+type UserRule struct {
+	// Display is how the rule is shown, e.g. "22/tcp" or "OpenSSH".
+	Display string
+	// Delete is the ufw command line that deletes it.
+	Delete []string
+}
+
+// PortRules finds the user's simple allow rules for port (from anywhere
+// to any address, one port, or an application profile such as OpenSSH),
+// for the user to delete after the port moved (D-038, D-065). Rules
+// LiteNode manages are left out: reconciliation handles them. other
+// counts rules for the port that are more complex (source limits,
+// several ports), which are left for the user.
+func PortRules(r system.Runner, port int) (simple []UserRule, other int, err error) {
+	var files [][]byte
+	for _, p := range []string{UserRules, User6Rules} {
+		data, err := r.ReadFile(p)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, 0, fmt.Errorf("read %s: %w", p, err)
+		}
+		files = append(files, data)
+	}
+	seen := map[string]bool{}
+	for _, data := range files {
+		sc := bufio.NewScanner(bytes.NewReader(data))
+		for sc.Scan() {
+			t, ok := strings.CutPrefix(sc.Text(), "### tuple ### ")
+			if !ok {
+				continue
+			}
+			rule, match, simpleRule := portTuple(t, port)
+			if !match {
+				continue
+			}
+			if !simpleRule {
+				// The IPv4 and IPv6 copies of a rule count once.
+				key := "other:" + strings.ReplaceAll(t, "::/0", "0.0.0.0/0")
+				if !seen[key] {
+					seen[key] = true
+					other++
+				}
+				continue
+			}
+			if !seen[rule.Display] {
+				seen[rule.Display] = true
+				simple = append(simple, rule)
+			}
+		}
+	}
+	return simple, other, nil
+}
+
+// portTuple reads "<action> <proto> <dport> <dst> <sport> <src> [<dapp>
+// <sapp>] <dir> [comment=<hex>]" and reports whether it allows port and
+// whether it is simple enough to delete for the user.
+func portTuple(t string, port int) (UserRule, bool, bool) {
+	f := strings.Fields(t)
+	if len(f) < 7 || f[0] != "allow" {
+		return UserRule{}, false, false
+	}
+	for _, extra := range f[6:] {
+		if h, ok := strings.CutPrefix(extra, "comment="); ok {
+			if b, err := hex.DecodeString(h); err == nil && strings.HasPrefix(string(b), Marker) {
+				return UserRule{}, false, false
+			}
+		}
+	}
+	p := strconv.Itoa(port)
+	ports := strings.Split(f[2], ",")
+	if !slices.Contains(ports, p) {
+		return UserRule{}, false, false
+	}
+	anyDst := f[3] == "0.0.0.0/0" || f[3] == "::/0"
+	anySrc := (f[5] == "0.0.0.0/0" || f[5] == "::/0") && f[4] == "any"
+	if !anyDst || !anySrc {
+		return UserRule{}, true, false
+	}
+	// Application profile: dapp is not "in"/"out" and not "-".
+	if len(f) >= 9 && f[6] != "-" && !strings.HasPrefix(f[6], "in") && !strings.HasPrefix(f[6], "out") {
+		if !strings.HasPrefix(f[8], "in") {
+			return UserRule{}, true, false
+		}
+		app := strings.ReplaceAll(f[6], "%20", " ")
+		return UserRule{Display: app, Delete: []string{"delete", "allow", app}}, true, true
+	}
+	if len(ports) != 1 || !strings.HasPrefix(f[6], "in") {
+		return UserRule{}, true, false
+	}
+	spec := p
+	if f[1] != "any" {
+		spec += "/" + f[1]
+	}
+	return UserRule{Display: spec, Delete: []string{"delete", "allow", spec}}, true, true
+}
+
+// DeleteUserRule deletes a rule the user agreed to delete.
+func DeleteUserRule(ctx context.Context, r system.Runner, rule UserRule) error {
+	if _, err := r.Exec(ctx, "ufw", rule.Delete...); err != nil {
+		return fmt.Errorf("delete ufw rule %s: %w", rule.Display, err)
+	}
+	return nil
 }

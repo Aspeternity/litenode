@@ -35,16 +35,26 @@ const (
 )
 
 // managedKeys are the sshd keywords LiteNode writes, lowercase.
-var managedKeys = []string{"port", "pubkeyauthentication", "passwordauthentication", "kbdinteractiveauthentication", "challengeresponseauthentication", "permitrootlogin"}
+var managedKeys = []string{"port", "listenaddress", "pubkeyauthentication", "passwordauthentication", "kbdinteractiveauthentication", "challengeresponseauthentication", "permitrootlogin"}
 
 // Generate returns the drop-in for s, or nil when s manages nothing (the
 // file is then removed). Turning password login off also turns off
 // keyboard-interactive login, which otherwise still asks for the password
 // through PAM (D-061).
-func Generate(s state.SSH) []byte {
+//
+// The port is also given as ListenAddress lines with that port: sshd
+// listens on every Port line of every file, but ignores Port when each
+// ListenAddress names its own port, so a Port in the main config (some
+// providers add one) does not keep the old port open (D-065). ipv6 adds
+// the IPv6 wildcard; without IPv6 it would break Ubuntu's ssh.socket.
+func Generate(s state.SSH, ipv6 bool) []byte {
 	var lines []string
 	if s.Port > 0 {
-		lines = append(lines, "Port "+strconv.Itoa(s.Port))
+		p := strconv.Itoa(s.Port)
+		lines = append(lines, "Port "+p, "ListenAddress 0.0.0.0:"+p)
+		if ipv6 {
+			lines = append(lines, "ListenAddress [::]:"+p)
+		}
 	}
 	if s.PubkeyAuth != nil {
 		lines = append(lines, "PubkeyAuthentication "+yesNo(*s.PubkeyAuth))
