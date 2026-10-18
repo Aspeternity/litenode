@@ -146,7 +146,6 @@ const (
 	MenuSysopt       = "系统优化"
 	MenuMaint        = "维护"
 	MenuMaintHint    = "(备份 / 更新 / 卸载)"
-	InDevelopment    = "该功能开发中。"
 	StatusUnknown    = "-"
 	XrayNotInstalled = "○ 未安装"
 	XrayInstalled    = "● 已安装"

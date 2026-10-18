@@ -71,10 +71,10 @@ func hasDomain(st *state.State) bool {
 	return slices.ContainsFunc(st.Forwards, forward.Forward.IsDomain)
 }
 
-// syncTimer installs and starts the resolve timer while st has a domain
+// SyncTimer installs and starts the resolve timer while st has a domain
 // target, and removes it otherwise. When nothing needs to change this is
 // two file reads and a status query.
-func (s *Service) syncTimer(ctx context.Context, st *state.State) error {
+func (s *Service) SyncTimer(ctx context.Context, st *state.State) error {
 	r := s.Runner
 	svcPath, timerPath := filepath.Join(s.unitDir(), ResolveService), filepath.Join(s.unitDir(), ResolveTimer)
 	if !hasDomain(st) {
@@ -151,7 +151,7 @@ func (s *Service) Resolve(ctx context.Context) (ResolveResult, error) {
 	}
 	if len(res.Changed) == 0 {
 		// Also repairs a timer that is missing or no longer needed.
-		if err := s.syncTimer(ctx, st); err != nil {
+		if err := s.SyncTimer(ctx, st); err != nil {
 			return res, &TimerError{Err: err}
 		}
 		return res, nil
