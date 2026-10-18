@@ -147,11 +147,7 @@ func (f *Fake) Exec(_ context.Context, name string, args ...string) (system.Resu
 
 // ExecInput records the input in the call's Data.
 func (f *Fake) ExecInput(_ context.Context, input []byte, name string, args ...string) (system.Result, error) {
-	res, err := f.command(OpExec, name, args)
-	f.mu.Lock()
-	f.calls[len(f.calls)-1].Data = append([]byte(nil), input...)
-	f.mu.Unlock()
-	return res, err
+	return f.commandInput(OpExec, name, args, append([]byte(nil), input...))
 }
 
 // OnCommand runs fn after each run of the command line, e.g. to change a
@@ -166,6 +162,11 @@ func (f *Fake) OnCommand(line string, fn func()) {
 }
 
 func (f *Fake) command(op Op, name string, args []string) (system.Result, error) {
+	return f.commandInput(op, name, args, nil)
+}
+
+// commandInput records the call, with its input, before a hook runs.
+func (f *Fake) commandInput(op Op, name string, args []string, input []byte) (system.Result, error) {
 	line := system.CommandLine(name, args...)
 	f.mu.Lock()
 	hook := f.hooks[line]
@@ -175,7 +176,7 @@ func (f *Fake) command(op Op, name string, args []string) (system.Result, error)
 		}
 	}()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, Call{Op: op, Command: line})
+	f.calls = append(f.calls, Call{Op: op, Command: line, Data: input})
 	resp := f.Responses[line]
 	if resp.Err == nil && resp.Result.ExitCode != 0 {
 		resp.Err = fmt.Errorf("exit status %d", resp.Result.ExitCode)

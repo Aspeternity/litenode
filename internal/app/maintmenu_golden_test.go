@@ -33,9 +33,9 @@ func TestMenusHaveNoBracketHints(t *testing.T) {
 	for i := 1; i <= 9; i++ {
 		in = append(in, strconv.Itoa(i), "0")
 	}
-	// Pages one level further down: share > host address, SSH > keys,
-	// Xray > logs.
-	in = append(in, "3", "3", "0", "0", "6", "1", "0", "0", "5", "4", "0", "0", "0")
+	// Pages one level further down: share > host address, SSH > keys and
+	// accounts, Xray > logs.
+	in = append(in, "3", "3", "0", "0", "6", "4", "0", "5", "0", "0", "5", "4", "0", "0", "0")
 	r := runNodes(t, f, strings.Join(in, "\n")+"\n")
 	item := regexp.MustCompile(`^ +\d+\. .*\(`)
 	for _, line := range strings.Split(r.stdout, "\n") {
@@ -43,7 +43,7 @@ func TestMenusHaveNoBracketHints(t *testing.T) {
 			t.Errorf("bracket hint: %q", line)
 		}
 	}
-	if !strings.Contains(r.stdout, " › 配置主机地址 ══") || !strings.Contains(r.stdout, " › 密钥管理 ══") || !strings.Contains(r.stdout, " › 查看日志 ══") {
+	if !strings.Contains(r.stdout, " › 配置主机地址 ══") || !strings.Contains(r.stdout, " › 密钥管理 ══") || !strings.Contains(r.stdout, " › 账户管理 ══") || !strings.Contains(r.stdout, " › 查看日志 ══") {
 		t.Errorf("pages not visited:\n%s", r.stdout)
 	}
 }
