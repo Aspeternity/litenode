@@ -41,7 +41,7 @@ func service(t *testing.T) (*systemtest.Fake, *Service) {
 	if err := store.Save(st); err != nil {
 		t.Fatal(err)
 	}
-	return f, &Service{Runner: f, Store: store, Changes: change.NewManager(f, store), Resolver: fakeResolver{
+	return f, &Service{Runner: f, Store: store, Changes: change.NewManager(f, store), Executable: "/usr/local/bin/litenode", Resolver: fakeResolver{
 		"ip4 la.example.com": {net.ParseIP("203.0.113.20")},
 		"ip6 la.example.com": {net.ParseIP("2001:db8::20")},
 	}}

@@ -14,6 +14,7 @@
 - **测试防火墙时从另一台测试机探测端口**：WSL 到 VPS 的直连经过用户的中国代理，代理会自己完成 TCP 握手，被拦截的端口也显示"open"（M3-01 实测）。
 - 测试"检查并修复"：用 `nft -a list chain inet litenode input` 找到规则的 handle，`nft delete rule inet litenode input handle <N>` 删除或 `nft insert rule ...` 加入带 `litenode:` 注释的规则，制造差异后再运行菜单。探测端口可在探测机上用 `timeout 4 bash -c "</dev/tcp/<IP>/<端口>"`，被测端口用 `python3 -m http.server <端口>` 监听。
 - **测试端口转发**（M4-01）：Ubuntu 当线路机、Debian 当落地机。`forwardmgr` 的实机测试程序用 `LN_FWD=add|delete|fw-on|fw-off|link|golden` 直接修改测试机的真实状态（用法见 `internal/forwardmgr/vps_test.go` 开头）。在落地机上用 `LN_FWD=link LN_ADDR=<线路机 IP> LN_PORT=<转发端口>` 生成经线路机的链接，交给 `/tmp/vprobe.sh`（出口 IP 为落地机即通）；UDP 用落地机上的 Python 回显服务，回复中的来源地址为线路机 IP 说明 masquerade 生效。开 ufw 前先 `ufw allow 22/tcp`，并用 `systemd-run --on-active=20m ufw disable` 做保险。
+- **测试域名转发的重新解析**（M4-02）：在线路机 `/etc/hosts` 写入测试域名（纯 Go 解析器读取 hosts，只有 A 记录时 AAAA 查询返回 `no suitable address found`），用 `LN_FWD=add` 添加指向该域名的转发，再修改 hosts 中的 IP，循环检查 `nft list table inet litenode` 中的 DNAT 地址并看 `journalctl -u litenode-resolve.service`。持锁跳过：`flock /run/litenode.lock sleep 3 & litenode internal resolve`。测试后删除 hosts 中的测试行。
 - 测试防火墙重启后的状态：先装一个开机 10 分钟后 `nft delete table inet litenode` 的临时服务（`Type=simple`，oneshot 会拖住 `multi-user.target`）作为应急，验证后删除。远程 `pkill -f` 的模式会匹配执行它的 shell，按端口结束进程用 `fuser -k <端口>/tcp`。
 - 测试机上用户可能开着 `lnode`（实例锁）：运行菜单前先 `pgrep -x lnode` 检查，不要结束用户的进程；远程 `pkill -f` 的匹配模式不能匹配到执行它的 shell 命令本身。
 - 验证脚本只输出结论（PASS / FAIL、关键几行），不要把整屏菜单或完整日志拿回会话（节省 token，见 CLAUDE.md）。
