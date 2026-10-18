@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/Aspeternity/litenode/internal/sysopt"
@@ -37,11 +38,19 @@ func (u *sysoptUI) menu() ui.Menu {
 	if u.caps.Has(system.CapBBR) {
 		fields = append(fields, text.StatusBBR(u.mark(bbr.Active)))
 	}
+	if u.caps.Has(system.CapSwap) {
+		v := text.SwapNone
+		if sw, err := u.svc.SwapStatus(); err == nil && sw.TotalMB() > 0 {
+			v = sysopt.FormatMB(sw.TotalMB())
+		}
+		fields = append(fields, text.StatusSwap(v))
+	}
 	m := ui.Menu{
 		Heading: text.MenuSysopt,
 		Status:  []string{strings.Join(fields, "   ")},
 		Items: []ui.Item{
 			{Label: text.SysoptBBR, Hidden: !u.caps.Has(system.CapBBR), Action: func() error { return u.bbr(bbr) }},
+			{Label: text.SysoptSwap, Hint: text.SysoptSwapHint, Hidden: !u.caps.Has(system.CapSwap), Action: u.swap},
 		},
 	}
 	for _, it := range m.Items {
@@ -78,4 +87,101 @@ func (u *sysoptUI) bbr(b sysopt.BBR) error {
 	}
 	u.s.Done(text.BBREnabledDone)
 	return nil
+}
+
+// describeSysopt maps system optimization errors to text; ok is false for
+// other errors.
+func describeSysopt(err error) (string, bool) {
+	for target, msg := range map[error]string{
+		sysopt.ErrSwapExists: text.ErrSwapExists, sysopt.ErrNoSwap: text.ErrNoSwap,
+		sysopt.ErrSwapInUse: text.ErrSwapInUse, sysopt.ErrNoDiskSpace: text.ErrNoDiskSpace,
+		sysopt.ErrSwapSize: text.ErrSwapSize(sysopt.FormatMB(sysopt.MinSwapMB), sysopt.FormatMB(sysopt.MaxSwapMB)),
+	} {
+		if errors.Is(err, target) {
+			return msg, true
+		}
+	}
+	return "", false
+}
+
+func (u *sysoptUI) swap() error {
+	sw, err := u.svc.SwapStatus()
+	if err != nil {
+		return err
+	}
+	for _, e := range sw.Entries {
+		u.s.Println(text.SwapLine(e.Path, sysopt.FormatMB(e.SizeMB), e.UsedMB, e.Path == sysopt.SwapPath))
+	}
+	if sw.Own == nil {
+		suggest := ""
+		if mb := sysopt.SuggestMB(sw.MemMB); mb > 0 {
+			suggest = sysopt.FormatMB(mb)
+		}
+		u.s.Println(text.SwapMemory(sysopt.FormatMB(sw.MemMB), suggest))
+		mb, ok, err := u.promptSwapSize(sysopt.SuggestMB(sw.MemMB))
+		if err != nil || !ok {
+			return err
+		}
+		u.s.Println(text.SwapCreating)
+		if err := u.svc.CreateSwap(u.ctx, mb); err != nil {
+			return err
+		}
+		u.s.Done(text.SwapCreated(sysopt.FormatMB(mb)))
+		return nil
+	}
+	c, err := u.s.Choose(ui.Menu{Items: []ui.Item{{Label: text.SwapResize}, {Label: text.SwapDelete}}})
+	switch {
+	case err != nil || c == 0:
+		return err
+	case c == 2:
+		ok, err := u.s.Confirm(text.ConfirmSwapDelete)
+		if err != nil || !ok {
+			return err
+		}
+		if err := u.svc.DeleteSwap(u.ctx); err != nil {
+			return err
+		}
+		u.s.Done(text.SwapDeleted)
+		return nil
+	}
+	mb, ok, err := u.promptSwapSize(sw.Own.SizeMB)
+	if err != nil || !ok {
+		return err
+	}
+	u.s.Println(text.SwapCreating)
+	if err := u.svc.ResizeSwap(u.ctx, mb); err != nil {
+		return err
+	}
+	u.s.Done(text.SwapResized(sysopt.FormatMB(mb)))
+	return nil
+}
+
+// promptSwapSize asks for a size within what the disk can hold; ok is
+// false when the disk has no room. def (MiB) is the default when it
+// fits, 1G otherwise.
+func (u *sysoptUI) promptSwapSize(def int) (mb int, ok bool, err error) {
+	limit, err := u.svc.MaxCreateMB(u.ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	if limit < sysopt.MinSwapMB {
+		u.s.End(u.s.Colors.Warn(text.ErrNoDiskSpace))
+		return 0, false, nil
+	}
+	u.s.Println(text.SwapMax(sysopt.FormatMB(limit)))
+	if def <= 0 {
+		def = 1024
+	}
+	def = max(min(def, limit), sysopt.MinSwapMB)
+	for {
+		in, err := u.s.PromptDefault(text.PromptSwapSize, sysopt.FormatMB(def))
+		if err != nil {
+			return 0, false, err
+		}
+		mb, err := sysopt.ParseSize(in)
+		if err == nil && mb >= sysopt.MinSwapMB && mb <= limit {
+			return mb, true, nil
+		}
+		u.s.Println(u.s.Colors.Warn(text.ErrSwapSize(sysopt.FormatMB(sysopt.MinSwapMB), sysopt.FormatMB(limit))))
+	}
 }

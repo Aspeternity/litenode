@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/sysctl"
+	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 	"github.com/Aspeternity/litenode/internal/text"
 )
@@ -39,4 +40,21 @@ func TestSysoptMenuHidesUnavailable(t *testing.T) {
 		t.Errorf("BBR shown without kernel support\n%s", r.stdout)
 	}
 	wantOutput(t, r.stdout, "部分功能在当前环境")
+}
+
+func TestSysoptMenuSwap(t *testing.T) {
+	f := supported()
+	const header = "Filename Type Size Used Priority\n"
+	f.Files["/proc/meminfo"] = []byte("MemTotal: 996720 kB\nMemAvailable: 600000 kB\n")
+	f.Files["/proc/swaps"] = []byte(header)
+	f.Files["/etc/fstab"] = []byte("UUID=x / ext4 defaults 0 1\n")
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Filesystem 1M-blocks Used Available Capacity Mounted on\n/dev/vda1 6900 2500 4300 37% /\n"}}, "df", "-P", "-B1M", "/")
+	f.OnCommand("swapon /litenode.swap", func() { f.Files["/proc/swaps"] = []byte(header + "/litenode.swap file 1048572 0 -2\n") })
+	f.OnCommand("swapoff /litenode.swap", func() { f.Files["/proc/swaps"] = []byte(header) })
+	// main: 6; 2 swap, default size; 2 swap, 2 delete, yes; back; quit.
+	r := runSysopt(t, f, "6", "2", "", "2", "2", "y", "0", "0")
+	wantOutput(t, r.stdout, "swap: 无", "内存 973M，建议创建 1G swap。", "最多可创建 4044M", text.SwapCreated("1G"), "swap: 1G", text.SwapDeleted)
+	if strings.Contains(string(f.Files["/etc/fstab"]), "litenode.swap") {
+		t.Errorf("fstab:\n%s", f.Files["/etc/fstab"])
+	}
 }
