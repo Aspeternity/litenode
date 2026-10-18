@@ -91,7 +91,7 @@ func (u *nodeUI) modTarget(id int64, current string) error {
 		u.s.Println(text.Checking)
 		u.printCheck(u.checker.Check(u.ctx, current))
 	}
-	target, err := u.chooseTarget()
+	target, err := u.chooseTarget(0, 0)
 	if err != nil || target == "" {
 		return err
 	}
@@ -144,7 +144,7 @@ func (u *nodeUI) modFallback(id int64, target string) error {
 	if err := u.svc.SetFallbackLimit(u.ctx, id, l); err != nil {
 		return err
 	}
-	u.s.Println(text.Done)
+	u.s.Done(text.Done)
 	return nil
 }
 
@@ -156,7 +156,7 @@ func (u *nodeUI) modRegenKeys(id int64) error {
 	if err := u.svc.RegenerateKeys(u.ctx, id); err != nil {
 		return err
 	}
-	u.s.Println(text.KeysRegenerated)
+	u.s.Done(text.KeysRegenerated)
 	u.printLinks(id)
 	return nil
 }
@@ -185,6 +185,6 @@ func (u *nodeUI) modRemark(id int64, current string) error {
 	if err := u.svc.SetRemark(u.ctx, id, r); err != nil {
 		return err
 	}
-	u.s.Println(text.Done)
+	u.s.Done(text.Done)
 	return nil
 }

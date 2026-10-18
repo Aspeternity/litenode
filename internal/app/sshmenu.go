@@ -187,10 +187,10 @@ func (u *sshUI) addKey() error {
 		return err
 	}
 	if n == 0 {
-		u.s.Println(text.SSHKeyExists)
+		u.s.End(text.SSHKeyExists)
 		return nil
 	}
-	u.s.Println(u.s.Colors.Good(text.KeysAdded(n, len(keys))))
+	u.s.Done(text.KeysAdded(n, len(keys)))
 	return nil
 }
 
@@ -273,6 +273,7 @@ func (u *sshUI) generateKey() error {
 	if err != nil {
 		return err
 	}
+	u.s.Done(text.KeyGenerated)
 	u.s.Println("\n" + text.PrivateKeyTitle)
 	u.s.Println(strings.TrimRight(string(priv), "\n"))
 	u.s.Println(u.s.Colors.Warn(text.PrivateKeyHint))
@@ -282,9 +283,14 @@ func (u *sshUI) generateKey() error {
 }
 
 // confirmed asks the user to test a new login and reports the outcome
-// (awaitConfirm).
-func (u *sshUI) confirmed() (bool, error) {
-	return awaitConfirm(u.ctx, u.s, u.svc.Confirmer, u.reg)
+// (awaitConfirm); a kept change closes the flow with done (nothing if
+// done is "", for callers with more to do).
+func (u *sshUI) confirmed(done string) (bool, error) {
+	kept, err := awaitConfirm(u.ctx, u.s, u.svc.Confirmer, u.reg)
+	if kept && done != "" {
+		u.s.Done(done)
+	}
+	return kept, err
 }
 
 func (u *sshUI) effective() (ssh.Effective, error) {
@@ -303,7 +309,7 @@ func (u *sshUI) togglePubkey() error {
 	if err := u.svc.SetPubkeyAuth(u.ctx, !e.PubkeyAuth); err != nil {
 		return err
 	}
-	_, err = u.confirmed()
+	_, err = u.confirmed(text.ChangeKept)
 	return err
 }
 
@@ -319,7 +325,7 @@ func (u *sshUI) togglePassword() error {
 	if err := u.svc.SetPasswordAuth(u.ctx, !e.PasswordAuth); err != nil {
 		return err
 	}
-	_, err = u.confirmed()
+	_, err = u.confirmed(text.ChangeKept)
 	return err
 }
 
@@ -340,7 +346,7 @@ func (u *sshUI) rootPolicy() error {
 	if err := u.svc.SetRootLogin(u.ctx, policies[choice-1]); err != nil {
 		return err
 	}
-	_, err = u.confirmed()
+	_, err = u.confirmed(text.ChangeKept)
 	return err
 }
 
@@ -361,12 +367,15 @@ func (u *sshUI) changePort() error {
 	if _, err := u.svc.SetPort(u.ctx, port); err != nil {
 		return err
 	}
-	kept, err := u.confirmed()
+	kept, err := u.confirmed("")
 	if err != nil || !kept {
 		return err
 	}
-	u.s.Println(text.PortChanged(port))
-	return u.oldPortRules(old)
+	if err := u.oldPortRules(old); err != nil {
+		return err
+	}
+	u.s.Done(text.PortChanged(port))
+	return nil
 }
 
 // oldPortRules offers to delete the user's ufw rules for the old port;
@@ -443,7 +452,7 @@ func (u *sshUI) createSudoUser() error {
 	if err := u.svc.CreateSudoUser(u.ctx, name, password, keys); err != nil {
 		return err
 	}
-	u.s.Println(u.s.Colors.Good(text.SudoUserCreated(name)))
+	u.s.Done(text.SudoUserCreated(name))
 	if generated {
 		u.s.Println(u.s.Colors.Warn(text.GeneratedPassword(name, password)))
 	}
@@ -486,7 +495,7 @@ func (u *sshUI) deleteKey() error {
 	if err := u.svc.DeleteKey(u.ctx, k.account, k.key.Fingerprint()); err != nil {
 		return err
 	}
-	_, err = u.confirmed()
+	_, err = u.confirmed(text.ChangeKept)
 	return err
 }
 
@@ -498,7 +507,7 @@ func (u *sshUI) rollback() error {
 	if _, err := u.svc.RollBackLast(u.ctx); err != nil {
 		return err
 	}
-	_, err = u.confirmed()
+	_, err = u.confirmed(text.ChangeKept)
 	return err
 }
 

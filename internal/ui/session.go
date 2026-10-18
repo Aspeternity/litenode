@@ -38,6 +38,7 @@ type Session struct {
 	Echo func(on bool)
 
 	lines <-chan string
+	flow  *flowState
 
 	mu        sync.Mutex
 	prompting bool
@@ -94,7 +95,7 @@ func (s *Session) Prompt(label string) (string, error) {
 		s.mu.Unlock()
 	}()
 
-	fmt.Fprint(s.Out, label)
+	fmt.Fprint(s.Out, s.promptLabel(label))
 	select {
 	case line, ok := <-s.lines:
 		if !ok {
@@ -134,8 +135,13 @@ func (s *Session) Confirm(question string) (bool, error) {
 	return false, nil
 }
 
-// Println prints a line.
+// Println prints a line; in a flow, in the gutter.
 func (s *Session) Println(a ...any) {
+	if s.flow != nil {
+		s.flushStep()
+		fmt.Fprintln(s.Out, s.gutter(strings.TrimSuffix(fmt.Sprintln(a...), "\n")))
+		return
+	}
 	fmt.Fprintln(s.Out, a...)
 }
 
@@ -154,7 +160,16 @@ func (s *Session) Run(build func() Menu) error {
 		if choice == 0 {
 			return nil
 		}
-		if err := items[choice-1].Action(); err != nil {
+		it := items[choice-1]
+		flow := !it.Page && s.flow == nil
+		if flow {
+			s.openFlow(it.Label)
+		}
+		err = it.Action()
+		if flow {
+			s.closeFlow(err)
+		}
+		if err != nil {
 			if errors.Is(err, ErrBack) {
 				return nil
 			}
@@ -179,6 +194,10 @@ func (s *Session) describe(err error) string {
 // Choose shows m once and returns the chosen option: 1..n for visible
 // items in order, 0 for back.
 func (s *Session) Choose(m Menu) (int, error) {
+	if s.flow != nil {
+		fmt.Fprint(s.Out, s.renderFlow(m))
+		return s.choose(len(m.Visible()))
+	}
 	fmt.Fprint(s.Out, "\n"+m.Render())
 	return s.choose(len(m.Visible()))
 }
@@ -229,6 +248,6 @@ func (s *Session) choose(maxChoice int) (int, error) {
 		if err == nil && n >= 0 && n <= maxChoice {
 			return n, nil
 		}
-		fmt.Fprintln(s.Out, s.Colors.Warn(text.InvalidChoice(maxChoice)))
+		s.Println(s.Colors.Warn(text.InvalidChoice(maxChoice)))
 	}
 }

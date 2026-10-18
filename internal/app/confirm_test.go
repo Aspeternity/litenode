@@ -59,7 +59,7 @@ func passwordOff(t *testing.T, f *systemtest.Fake) bool {
 func TestAwaitConfirmKeeps(t *testing.T) {
 	f, c, reg := pendingSSHChange(t)
 	kept, err, out := confirmWith(t, c, reg, "y\n")
-	if err != nil || !kept || !strings.Contains(out, "请新开一个终端测试能否登录") || !strings.Contains(out, "60 秒内未确认将自动恢复。 [y/N]: ") || !strings.Contains(out, "已确认，修改已保留。") {
+	if err != nil || !kept || !strings.Contains(out, "请新开一个终端测试能否登录") || !strings.Contains(out, "60 秒内未确认将自动恢复。 [y/N]: ") {
 		t.Fatalf("kept=%v err=%v\n%s", kept, err, out)
 	}
 	if !passwordOff(t, f) {

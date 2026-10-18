@@ -92,8 +92,7 @@ func (u *nodeUI) addClient(id int64) error {
 		if err != nil {
 			return err
 		}
-		u.s.Println(u.s.Colors.Good(text.ClientAdded))
-		u.showClientLink(id, c.ID)
+		u.showClientLink(id, c.ID, text.ClientAdded)
 		return nil
 	}
 }
@@ -122,7 +121,7 @@ func (u *nodeUI) modifyClient(id int64) error {
 				continue
 			}
 			if err == nil {
-				u.s.Println(text.Done)
+				u.s.Done(text.Done)
 			}
 			return err
 		}
@@ -134,8 +133,7 @@ func (u *nodeUI) modifyClient(id int64) error {
 	if err := u.svc.ResetClientUUID(u.ctx, n.ID, c.ID); err != nil {
 		return err
 	}
-	u.s.Println(text.ClientUUIDReset)
-	u.showClientLink(n.ID, c.ID)
+	u.showClientLink(n.ID, c.ID, text.ClientUUIDReset)
 	return nil
 }
 
@@ -148,9 +146,9 @@ func (u *nodeUI) toggleClient(id int64) error {
 		return err
 	}
 	if c.Enabled {
-		u.s.Println(text.ClientDisabled)
+		u.s.Done(text.ClientDisabled)
 	} else {
-		u.s.Println(text.ClientEnabled)
+		u.s.Done(text.ClientEnabled)
 	}
 	return nil
 }
@@ -160,16 +158,24 @@ func (u *nodeUI) clientLink(id int64) error {
 	if err != nil || c == nil {
 		return err
 	}
-	u.showClientLink(id, c.ID)
+	u.showClientLink(id, c.ID, "")
 	return nil
 }
 
 // showClientLink prints a client's link with its QR code, for the
-// address the user picks when there are several (D-068).
-func (u *nodeUI) showClientLink(nodeID, clientID int64) {
+// address the user picks when there are several (D-068). It closes the
+// flow first, with done as success ("" : just the link), so that the
+// link and QR code are printed without the gutter.
+func (u *nodeUI) showClientLink(nodeID, clientID int64, done string) {
 	addr, isDefault, err := u.chooseLinkAddress()
+	if done != "" {
+		u.s.Done(done)
+	}
 	if err != nil || addr == "" {
 		return
+	}
+	if done == "" {
+		u.s.End(text.LinkBelow)
 	}
 	for _, n := range u.state().Nodes {
 		if n.ID != nodeID {
@@ -201,6 +207,6 @@ func (u *nodeUI) deleteClient(id int64) error {
 	if err := u.svc.DeleteClient(u.ctx, n.ID, c.ID); err != nil {
 		return err
 	}
-	u.s.Println(text.ClientDeleted)
+	u.s.Done(text.ClientDeleted)
 	return nil
 }
