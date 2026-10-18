@@ -4,13 +4,13 @@
 
 ## 当前状态
 
-- **阶段**：M1 节点管理已完成并发布 `v0.0.2`（2026-10-18）。用户实机验收发现 5 个菜单问题，修复方案已获批准，正在修复。
-- **当前任务**：无。M1 验收修复已合并（`fix/M1-05` D-059、`fix/M1-07` D-060），等待用户复验。
-- **下一个任务**：修复合并后在 Ubuntu 测试机上重跑 M0 / M1 的测试机验证，请用户复验，然后开始 M2 SSH 管理。
+- **阶段**：M1 已由用户实机验收通过（含验收修复 D-059、D-060）。M2 SSH 管理开始。
+- **M2 前的测试机复验**（D-048，2026-10-18）：在 Ubuntu 24.04 测试机上用一行命令安装 v0.0.2，节点添加、常用目标、客户端增删均端到端连通；`vps` 集成测试 `reality`、`share`、`ports`、`firewall`、`ufw`、`change`（systemd-run 定时器回滚）、`xray`（安装 / 更新 / 回退 / 卸载、生成配置、密钥）全部通过。
+- **当前任务**：M2-01 sshd 配置读写。
 
 ## 下次会话从这里开始
 
-1. 修复合并后请用户复验 M1（重点：标题线、选择目标网站的返回、删除最后一个客户端）。
+1. 从 M2-01 开始按顺序做 M2。
 2. M2 用到的待确认提议：P-003（root 设为禁止前要求有 sudo 用户）。P-004、P-005、P-007 分别在 M3、M6 用到。按 D-050 由 Claude 决定并记录。
 
 ## 测试 VPS 的当前状态（2026-10-18）
@@ -27,7 +27,7 @@
 - **使用场景**：LiteNode 主要用作落地机。WSL 到 VPS 的直连经过中国，是用户在软路由上特意配置的模拟环境；直连被干扰不作为取舍依据，以 VPS 本机的协议检测为准（D-059）。
 - 客户端连通性：在 WSL 下载官方 Xray（放在 scratchpad 的独立目录，校验 `.dgst`），`scripts/dev/link2client.py` 把链接转成客户端配置，经 SOCKS 访问 `https://www.cloudflare.com/cdn-cgi/trace`，出口 IP 为 VPS 即连通。
 - **WSL 到 VPS 的直连经过 GFW（中国移动）**：所以"从中国大陆能连"和"协议上可用"要分开测；后者把 `scripts/dev/link2client.py` 和 `scripts/dev/vprobe.sh` 传到 VPS 的 `/tmp`，在 VPS 本机运行（注意测试机重启会清空 `/tmp`）。
-- 带 `vps` 构建标签的集成测试：`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o x.test ./internal/<包>`，传到测试机以 root 运行 `./x.test -test.v -test.run TestVPS`。已有：`xray`、`change`、`share`、`reality`、`ufw`、`ports`、`firewall`。
+- 带 `vps` 构建标签的集成测试（`ports` 用 `VPS_SSH_PORT` 指定 sshd 端口，默认 22）：`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o x.test ./internal/<包>`，传到测试机以 root 运行 `./x.test -test.v -test.run TestVPS`。已有：`xray`、`change`、`share`、`reality`、`ufw`、`ports`、`firewall`。
 
 ## 未解决的问题
 
