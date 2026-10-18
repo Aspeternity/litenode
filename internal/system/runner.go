@@ -28,6 +28,9 @@ type Runner interface {
 	Query(ctx context.Context, name string, args ...string) (Result, error)
 	// Exec runs a command that changes the system.
 	Exec(ctx context.Context, name string, args ...string) (Result, error)
+	// ExecInput is Exec with input on stdin. The input is never logged or
+	// shown, so secrets (chpasswd) go here, not on the command line.
+	ExecInput(ctx context.Context, input []byte, name string, args ...string) (Result, error)
 	// ReadFile reads a file. It always executes, even in dry-run mode.
 	ReadFile(path string) ([]byte, error)
 	// ReadDir returns the sorted names of the entries in a directory. It

@@ -6,7 +6,7 @@
 
 - **阶段**：M1 已由用户实机验收通过（含验收修复 D-059、D-060）。M2 SSH 管理开始。
 - **M2 前的测试机复验**（D-048，2026-10-18）：在 Ubuntu 24.04 测试机上用一行命令安装 v0.0.2，节点添加、常用目标、客户端增删均端到端连通；`vps` 集成测试 `reality`、`share`、`ports`、`firewall`、`ufw`、`change`（systemd-run 定时器回滚）、`xray`（安装 / 更新 / 回退 / 卸载、生成配置、密钥）全部通过。
-- **当前任务**：M2-01 ~ M2-04 已完成；下一个 M2-05 修改端口和创建 sudo 用户。
+- **当前任务**：M2-01 ~ M2-05 已完成；下一个 M2-06 SSH 菜单和回滚到上次修改前（M2 的最后一个任务）。
 
 ## 下次会话从这里开始
 
@@ -17,8 +17,8 @@
 
 登录信息由用户在会话中提供，**不写入仓库或记忆**。用户授权两台都可以完全用于测试。
 
-- **Ubuntu 24.04.5**（M2 起的主测试机，D-048）：KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 203.0.113.181，有 IPv6。`/usr/local/bin/litenode` 是开发中的分支版本；没有节点、Xray 未安装；root 的 `authorized_keys` 中有从 GitHub 导入的 Aspeternity 公钥（即开发机 WSL 的 `~/.ssh/id_ed25519`），可以用密钥登录，M2-04 关闭密码登录时使用；装有 `litenode-rollback-boot.service`；`00-litenode.conf` 中有 `PasswordAuthentication yes`（M2-04 测试后的状态）；已安装 `python3`、`zbar-tools`；ufw 未启用。
-- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234，公网 IP 198.51.100.252。上面有用户验收时添加的节点。
+- **Ubuntu 24.04.5**（M2 起的主测试机，D-048）：KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 203.0.113.181，有 IPv6。`/usr/local/bin/litenode` 是开发中的分支版本；没有节点、Xray 未安装；root 的 `authorized_keys` 中有从 GitHub 导入的 Aspeternity 公钥（即开发机 WSL 的 `~/.ssh/id_ed25519`），可以用密钥登录，M2-04 关闭密码登录时使用；装有 `litenode-rollback-boot.service`；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`（M2-04、M2-05 测试后的状态）；ufw 已停用（测试时启用过）；已安装 `python3`、`zbar-tools`；ufw 未启用。
+- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234（主配置中有商家写的 `Port 61234`），公网 IP 198.51.100.252。上面有用户验收时添加的 2 个节点。`/usr/local/bin/litenode` 是开发中的分支版本；`00-litenode.conf` 管理着 `Port 61234`（带 `ListenAddress`）。
 
 ## 实机测试方法（M1 建立，后续沿用）
 
@@ -32,7 +32,6 @@
 
 ## 未解决的问题
 
-- **M2-05 必须处理 `Port` 叠加**：`Port` 在所有文件中都生效（Debian 测试机主配置 `Include` 之后有商家写的 `Port 61234`）。修改端口前需要决定如何处理主配置和其他文件中的 `Port`（DESIGN 第 13 节要求不修改主配置）。Ubuntu 的 `ssh.socket` 也要在 M2-05 实测处理。
 - 卸载 LiteNode（M6）时要删除 `litenode-rollback-boot.service` 和 `/etc/litenode/rollback/`（D-062）。
 - **Xray 被外部删除后无法删除节点**：Xray 程序被手动删除（测试中出现）时，删除节点会因 `xray run -test` 无法执行而失败，恢复也失败。没有节点需要运行时应允许跳过校验，或提示先在 Xray 菜单重新安装。M2 结束前或 M6 维护功能中处理。
 

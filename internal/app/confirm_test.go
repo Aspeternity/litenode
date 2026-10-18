@@ -22,6 +22,7 @@ func pendingSSHChange(t *testing.T) (*systemtest.Fake, *change.Confirmer, change
 	t.Helper()
 	f := systemtest.New()
 	f.Files[ssh.MainConfigPath] = []byte("Include /etc/ssh/sshd_config.d/*.conf\n")
+	f.Respond(systemtest.Response{Result: system.Result{ExitCode: 3}}, "systemctl", "is-active", "--quiet", ssh.SocketUnit)
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "port 22\npubkeyauthentication yes\npasswordauthentication no\nkbdinteractiveauthentication no\npermitrootlogin yes\n"}}, ssh.SshdPath, "-T")
 	store := state.NewStore(f)
 	c := change.NewConfirmer(change.NewManager(f, store), "/usr/local/bin/litenode")

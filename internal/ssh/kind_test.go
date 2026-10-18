@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -14,8 +15,16 @@ import (
 
 const effectiveDefault = "port 22\npubkeyauthentication yes\npasswordauthentication yes\nkbdinteractiveauthentication no\npermitrootlogin yes\n"
 
+// procTCP lists port 22222 (0x56CE) as listening.
+const procTCP = "  sl  local_address rem_address   st\n   0: 00000000:56CE 00000000:0000 0A\n"
+
+func init() { Sleep = func(time.Duration) {} }
+
 func sshSystem(effective string) *systemtest.Fake {
 	f := systemtest.New()
+	f.Files["/proc/net/tcp"] = []byte(procTCP)
+	// Debian: ssh.socket masked, ssh.service running.
+	f.Respond(systemtest.Response{Result: system.Result{ExitCode: 3}}, "systemctl", "is-active", "--quiet", SocketUnit)
 	f.Files[MainConfigPath] = []byte("Include /etc/ssh/sshd_config.d/*.conf\nKbdInteractiveAuthentication no\n")
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: effective}}, SshdPath, "-T")
 	return f
@@ -28,7 +37,7 @@ func apply(t *testing.T, f *systemtest.Fake, s state.SSH) error {
 	st := state.New()
 	st.SSH = s
 	_, err := change.NewManager(f, store).Apply(context.Background(), change.Change{
-		Parts: []change.Part{{Kind: Kind(store), Files: []change.File{ConfigFile(s)}}},
+		Parts: []change.Part{{Kind: Kind(store), Files: []change.File{ConfigFile(s, true)}}},
 		State: st,
 	})
 	return err
@@ -41,7 +50,7 @@ func TestKindApplies(t *testing.T) {
 	if err := apply(t, f, keysOnly); err != nil {
 		t.Fatal(err)
 	}
-	if string(f.Files[ConfigPath]) != string(Generate(keysOnly)) {
+	if string(f.Files[ConfigPath]) != string(Generate(keysOnly, true)) {
 		t.Errorf("drop-in = %q", f.Files[ConfigPath])
 	}
 	var order []string
@@ -172,5 +181,72 @@ func TestPrivsepDirCreatedWhenMissing(t *testing.T) {
 		if c.Op == systemtest.OpMkdir || c.Op == systemtest.OpChmod {
 			t.Errorf("existing /run/sshd touched: %+v", c)
 		}
+	}
+}
+
+const effective22222 = "port 22222\nlistenaddress 0.0.0.0:22222\nlistenaddress [::]:22222\npubkeyauthentication yes\npasswordauthentication no\nkbdinteractiveauthentication no\npermitrootlogin prohibit-password\n"
+
+// ubuntu is sshSystem with socket activation and the socket listening on
+// socketListen.
+func ubuntu(effective, socketListen string) *systemtest.Fake {
+	f := sshSystem(effective)
+	f.Respond(systemtest.Response{}, "systemctl", "is-active", "--quiet", SocketUnit)
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: socketListen}}, "systemctl", "show", "--property=Listen", "--value", SocketUnit)
+	return f
+}
+
+func TestKindSocketRestartsOnPortChange(t *testing.T) {
+	f := ubuntu(effective22222, "[::]:22 (Stream)\n0.0.0.0:22 (Stream)\n")
+	if err := apply(t, f, keysOnly); err != nil {
+		t.Fatal(err)
+	}
+	// The socket's ports are read before daemon-reload, which would load
+	// the new ones (found on Ubuntu 24.04).
+	show, daemonReload := -1, -1
+	for i, c := range f.Calls() {
+		switch c.Command {
+		case "systemctl show --property=Listen --value " + SocketUnit:
+			show = i
+		case "systemctl daemon-reload":
+			daemonReload = i
+		}
+	}
+	if show < 0 || show > daemonReload {
+		t.Errorf("socket ports read after daemon-reload")
+	}
+	execs := f.Execs()
+	reloadAt := slices.Index(execs, "systemctl daemon-reload")
+	restartAt := slices.Index(execs, "systemctl restart "+SocketUnit)
+	if reloadAt < 0 || restartAt < reloadAt {
+		t.Errorf("want daemon-reload then restart ssh.socket: %v", execs)
+	}
+	if slices.Contains(execs, "systemctl reload "+Unit) {
+		t.Error("ssh.service reloaded although the socket restart restarts it")
+	}
+}
+
+func TestKindSocketSamePortsReloads(t *testing.T) {
+	f := ubuntu(effective22222, "[::]:22222 (Stream)\n0.0.0.0:22222 (Stream)\n")
+	if err := apply(t, f, keysOnly); err != nil {
+		t.Fatal(err)
+	}
+	execs := f.Execs()
+	if slices.Contains(execs, "systemctl restart "+SocketUnit) || !slices.Contains(execs, "systemctl reload "+Unit) {
+		t.Errorf("execs = %v", execs)
+	}
+}
+
+func TestKindNothingListeningRestores(t *testing.T) {
+	f := sshSystem(effective22222)
+	f.Files["/proc/net/tcp"] = []byte("  sl  local_address rem_address   st\n")
+	restored(t, f, apply(t, f, keysOnly), ErrNotEffective)
+}
+
+func TestParseEffectiveListenAddress(t *testing.T) {
+	// Debian with "Port 61234" in the main config and LiteNode's
+	// ListenAddress lines: sshd listens only on 2222.
+	e, err := ParseEffective("port 2222\nport 61234\nlistenaddress [::]:2222\nlistenaddress 0.0.0.0:2222\npubkeyauthentication yes\npasswordauthentication yes\npermitrootlogin yes\n")
+	if err != nil || !slices.Equal(e.Ports, []int{2222}) {
+		t.Errorf("ports = %v, %v", e.Ports, err)
 	}
 }

@@ -1,0 +1,7 @@
+# Real tuples from Ubuntu 24.04 ufw (ufw allow 22/tcp, OpenSSH, 22, from 1.2.3.4 ..., 22,80/tcp,
+# then a litenode:ssh rule that relabeled 22/tcp).
+### tuple ### allow tcp 22 0.0.0.0/0 any 0.0.0.0/0 in comment=6c6974656e6f64653a737368
+### tuple ### allow tcp 22 0.0.0.0/0 any 0.0.0.0/0 OpenSSH - in
+### tuple ### allow any 22 0.0.0.0/0 any 0.0.0.0/0 in
+### tuple ### allow tcp 22 0.0.0.0/0 any 1.2.3.4 in
+### tuple ### allow tcp 22,80 0.0.0.0/0 any 0.0.0.0/0 in

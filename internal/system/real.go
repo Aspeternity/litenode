@@ -33,6 +33,12 @@ func (r *Real) Exec(ctx context.Context, name string, args ...string) (Result, e
 	return res, err
 }
 
+func (r *Real) ExecInput(ctx context.Context, input []byte, name string, args ...string) (Result, error) {
+	res, err := runInput(ctx, input, name, args)
+	r.Log.Record("exec "+CommandLine(name, args...)+" (with input)", err)
+	return res, err
+}
+
 func (r *Real) ReadFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
@@ -86,7 +92,14 @@ func (r *Real) MkdirAll(path string, perm fs.FileMode) error {
 }
 
 func run(ctx context.Context, name string, args []string) (Result, error) {
+	return runInput(ctx, nil, name, args)
+}
+
+func runInput(ctx context.Context, input []byte, name string, args []string) (Result, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if input != nil {
+		cmd.Stdin = bytes.NewReader(input)
+	}
 	// Force a stable locale so command output can be parsed reliably.
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	var stdout, stderr bytes.Buffer
