@@ -58,13 +58,17 @@ type Server struct {
 	ScanWarned bool `json:"scan_warned,omitempty"`
 }
 
-// Xray holds the installed Xray version and whether the user stopped it.
+// Xray holds the installed Xray version, whether the user stopped it and
+// the node outbound IP mode.
 type Xray struct {
 	// Version is empty when Xray is not installed.
 	Version string `json:"version"`
 	// Stopped is set when the user stopped Xray from the menu. Changes
 	// then keep it stopped, also across reboots (D-045).
 	Stopped bool `json:"stopped"`
+	// OutboundIP is the node outbound IP mode (xray.Outbound*; empty is
+	// the default AsIs), independent of the system preference (D-084).
+	OutboundIP string `json:"outbound_ip,omitempty"`
 }
 
 // SSH holds the sshd settings LiteNode manages, written to

@@ -76,8 +76,13 @@ type inbound struct {
 }
 
 type outbound struct {
-	Tag      string `json:"tag"`
-	Protocol string `json:"protocol"`
+	Tag      string           `json:"tag"`
+	Protocol string           `json:"protocol"`
+	Settings *freedomSettings `json:"settings,omitempty"`
+}
+
+type freedomSettings struct {
+	DomainStrategy string `json:"domainStrategy"`
 }
 
 // GenerateConfig builds the Xray configuration from the nodes in the
@@ -86,8 +91,12 @@ type outbound struct {
 // route that blocks private and reserved addresses. The domain strategy
 // IPIfNonMatch resolves domains so that names pointing at such addresses
 // are blocked too (D-049). Disabled nodes and nodes without enabled
-// clients get no inbound.
-func GenerateConfig(reg *node.Registry, nodes []node.Node) ([]byte, error) {
+// clients get no inbound. outboundIP is the node outbound IP mode (D-084).
+func GenerateConfig(reg *node.Registry, nodes []node.Node, outboundIP string) ([]byte, error) {
+	strategy, err := domainStrategy(outboundIP)
+	if err != nil {
+		return nil, err
+	}
 	cfg := config{
 		Log: logConfig{LogLevel: "warning", Access: "none"},
 		Routing: routing{
@@ -100,6 +109,9 @@ func GenerateConfig(reg *node.Registry, nodes []node.Node) ([]byte, error) {
 		Inbounds: []inbound{},
 		// The first outbound is the default.
 		Outbounds: []outbound{{Tag: tagDirect, Protocol: "freedom"}, {Tag: tagBlock, Protocol: "blackhole"}},
+	}
+	if strategy != "" {
+		cfg.Outbounds[0].Settings = &freedomSettings{DomainStrategy: strategy}
 	}
 	for _, n := range nodes {
 		if !n.Enabled || !hasEnabledClient(n) {

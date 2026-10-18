@@ -261,7 +261,8 @@ docs/
   },
   "xray": {
     "version": "v25.x.x",
-    "stopped": false
+    "stopped": false,
+    "outbound_ip": "ipv6_only"
   },
   "ssh": {
     "port": 22222,
@@ -742,13 +743,15 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 ```
 ═════════════════ Xray 服务 ══════════════════
  Xray v25.x  ● 运行中  已运行 3天2小时  内存 28M
+ 节点出站: 默认（由系统决定）
 ──────────────────────────────────────────────
  1. 启动
  2. 停止
  3. 重启
  4. 查看日志
- 5. 更新 Xray       (可选指定版本)
- 6. 卸载 Xray       (同时删除所有节点和客户端)
+ 5. 节点出站 IP     (与系统优先级独立)
+ 6. 更新 Xray       (可选指定版本)
+ 7. 卸载 Xray       (同时删除所有节点和客户端)
 ──────────────────────────────────────────────
  0. 返回
 ```
@@ -762,7 +765,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
   - 程序本身不走第 6 节的变更流程（体积大，不保留 10 份备份），见下方"更新"。
 - **服务**：`litenode-xray.service`，以专用系统用户 `litenode-xray` 运行，通过 `AmbientCapabilities=CAP_NET_BIND_SERVICE` 允许绑定 443 等低端口（`CapabilityBoundingSet` 也只保留这一项），另加 `NoNewPrivileges`、`ProtectSystem=full`、`ProtectHome`、`PrivateTmp`。配置 `/etc/litenode/xray.json` 为 640、属组 `litenode-xray`。
 - **启动 / 停止**（D-045）：Xray 默认按节点自动启停（有启用的节点时运行，否则停止并取消开机启动）。用户在菜单中"停止"时，在状态文件中记为手动停止（`xray.stopped`），停止服务并取消开机启动；之后的配置变更照常写入和校验配置，但不启动 Xray，重启机器后也不启动。"启动"清除这个标记并按节点情况运行；没有启用的节点时提示"没有启用的节点，Xray 无需运行"。
-- **节点出站 IP**（D-084）：设置 freedom 出站的 `domainStrategy`，与系统 `gai.conf` 的优先级互相独立（节点可以仅 IPv6 出站，系统工具仍用 IPv4）。选项：默认（AsIs，不写该字段）、优先 IPv4（UseIPv4v6）、优先 IPv6（UseIPv6v4）、仅 IPv4（ForceIPv4）、仅 IPv6（ForceIPv6）。存在状态文件 `xray.outbound_ip`，走 Xray 变更流程。选"仅"之前检查本机有该协议的公网地址和默认路由，没有则拒绝；并提示目标网站没有该协议的地址时无法访问。Xray 服务菜单状态区显示"节点出站: <模式>"。
+- **节点出站 IP**（D-084）：设置 freedom 出站的 `domainStrategy`，与系统 `gai.conf` 的优先级互相独立（节点可以仅 IPv6 出站，系统工具仍用 IPv4）。选项：默认（AsIs，不写该字段）、优先 IPv4（UseIPv4v6）、优先 IPv6（UseIPv6v4）、仅 IPv4（ForceIPv4）、仅 IPv6（ForceIPv6）。存在状态文件 `xray.outbound_ip`，走 Xray 变更流程。选"仅"之前检查本机有该协议的公网地址和默认路由，没有则拒绝；并提示目标网站没有该协议的地址时无法访问。Xray 服务菜单状态区显示"节点出站: <模式>"。状态值为 `""`（默认）、`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only`；"本机可用"指有该协议的默认路由和 global 地址，IPv4 允许 NAT 后的私有地址，IPv6 要求公网地址（D-085）。
 - **查看日志**：显示最近 50 行（`journalctl -u litenode-xray -n 50`），并提示实时查看可运行 `journalctl -u litenode-xray -f`（D-057：在菜单内持续跟踪需要按 Ctrl+C 结束，会与 LiteNode 自身的中断处理冲突）。
 - **状态行**：版本、运行状态（运行中 / 已停止 / 已停止（手动））、已运行时间（`ActiveEnterTimestampMonotonic` 与 `/proc/uptime` 计算）、内存（`MemoryCurrent`）。Xray 未安装时只显示"首次添加节点时会自动安装"。
 - **更新**时可输入版本（回车为默认版本，D-054）；输入的版本低于 v26.9.8 时警告 ML-KEM 目标将无法使用。

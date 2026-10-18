@@ -163,7 +163,7 @@ func TestSysoptMenuContainer(t *testing.T) {
 	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")
 	f.Files["/proc/sys/net/ipv4/tcp_available_congestion_control"] = []byte("reno cubic\n")
 	got := sysoptMenu(t, f, system.Virt{Type: "lxc", Container: true})
-	for _, want := range []string{"部分功能在当前环境（LXC）中不可用，已隐藏。", " 优先: IPv4   时区: UTC\n", " 1. IPv4 / IPv6 优先级", " 3. 时区与时间同步"} {
+	for _, want := range []string{"部分功能在当前环境（LXC）中不可用，已隐藏。", " 优先: IPv4   时区: UTC\n", " 1. 系统 IPv4 / IPv6 优先级", " 3. 时区与时间同步"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q:\n%s", want, got)
 		}

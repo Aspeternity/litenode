@@ -180,3 +180,27 @@ func (s *Service) UninstallXray(ctx context.Context) error {
 	st.Xray.Version = ""
 	return s.Store.Save(st)
 }
+
+// ErrFamilyUnavailable means an "only" outbound mode was chosen but the
+// host has no address or default route of that family.
+var ErrFamilyUnavailable = errors.New("address family unavailable")
+
+// SetOutboundIP sets the node outbound IP mode (D-084). The "only" modes
+// first check that the host can reach the internet over that family.
+func (s *Service) SetOutboundIP(ctx context.Context, mode string) error {
+	if ipv6, only := xray.OnlyIPv6(mode); only {
+		ok, err := xray.FamilyReady(ctx, s.Runner, ipv6)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrFamilyUnavailable
+		}
+	}
+	st, err := s.Store.Load()
+	if err != nil {
+		return err
+	}
+	st.Xray.OutboundIP = mode
+	return s.apply(ctx, st)
+}

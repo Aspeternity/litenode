@@ -77,10 +77,10 @@ const ErrNoDiskSpace = "磁盘空间不足（创建后需保留 256M 空闲空�
 
 // IP preference (DESIGN section 15).
 const (
-	SysoptPreference   = "IPv4 / IPv6 优先级"
+	SysoptPreference   = "系统 IPv4 / IPv6 优先级"
 	PreferIPv4         = "优先 IPv4"
 	PreferIPv6         = "优先 IPv6（系统默认）"
-	PreferenceHint     = "影响系统程序（curl、apt 等）解析域名后的出站顺序，写入 /etc/gai.conf。"
+	PreferenceHint     = "影响系统程序（curl、apt 等）解析域名后的出站顺序，写入 /etc/gai.conf。不影响节点出站，节点出站在\"Xray 服务\"的\"节点出站 IP\"中设置。"
 	PreferIPv4Done     = "已设置为优先 IPv4。"
 	PreferIPv6Done     = "已恢复为优先 IPv6（系统默认）。"
 	PreferenceUnchange = "设置未变化。"

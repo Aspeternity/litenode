@@ -62,7 +62,7 @@ func (s *Service) Kinds() []*change.Kind {
 // apply writes the Xray config for st and applies it with the ufw and
 // firewall sync.
 func (s *Service) apply(ctx context.Context, st *state.State) error {
-	f, err := xray.ConfigFile(s.Registry, st.Nodes)
+	f, err := xray.ConfigFile(s.Registry, st)
 	if err != nil {
 		return err
 	}
