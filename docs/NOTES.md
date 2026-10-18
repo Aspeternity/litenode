@@ -12,6 +12,7 @@
 - **WSL 到 VPS 的直连经过 GFW（中国移动）**：所以"从中国大陆能连"和"协议上可用"要分开测；后者把 `scripts/dev/link2client.py` 和 `scripts/dev/vprobe.sh` 传到 VPS 的 `/tmp`，在 VPS 本机运行（注意测试机重启会清空 `/tmp`）。
 - 带 `vps` 构建标签的集成测试（`ports` 用 `VPS_SSH_PORT` 指定 sshd 端口，默认 22；`ssh` 会真实修改 sshd 配置，带 3 分钟自动恢复定时器）：`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o x.test ./internal/<包>`，传到测试机以 root 运行 `./x.test -test.v -test.run TestVPS`。已有：`xray`、`change`、`share`、`reality`、`ufw`、`ports`、`firewall`、`ssh`。
 - **测试防火墙时从另一台测试机探测端口**：WSL 到 VPS 的直连经过用户的中国代理，代理会自己完成 TCP 握手，被拦截的端口也显示"open"（M3-01 实测）。
+- 测试"检查并修复"：用 `nft -a list chain inet litenode input` 找到规则的 handle，`nft delete rule inet litenode input handle <N>` 删除或 `nft insert rule ...` 加入带 `litenode:` 注释的规则，制造差异后再运行菜单。探测端口可在探测机上用 `timeout 4 bash -c "</dev/tcp/<IP>/<端口>"`，被测端口用 `python3 -m http.server <端口>` 监听。
 - 测试防火墙重启后的状态：先装一个开机 10 分钟后 `nft delete table inet litenode` 的临时服务（`Type=simple`，oneshot 会拖住 `multi-user.target`）作为应急，验证后删除。远程 `pkill -f` 的模式会匹配执行它的 shell，按端口结束进程用 `fuser -k <端口>/tcp`。
 - 测试机上用户可能开着 `lnode`（实例锁）：运行菜单前先 `pgrep -x lnode` 检查，不要结束用户的进程；远程 `pkill -f` 的匹配模式不能匹配到执行它的 shell 命令本身。
 - 验证脚本只输出结论（PASS / FAIL、关键几行），不要把整屏菜单或完整日志拿回会话（节省 token，见 CLAUDE.md）。

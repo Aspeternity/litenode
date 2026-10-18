@@ -21,7 +21,7 @@ func firewallSystem() *systemtest.Fake {
 func TestFirewallMenu(t *testing.T) {
 	f := firewallSystem()
 	// main: 5 firewall; enable, yes, keep; disable, yes, keep; back; quit.
-	r := runSSH(t, f, "5", "1", "y", "y", "1", "y", "y", "0", "0")
+	r := runSSH(t, f, "5", "1", "y", "y", "6", "y", "y", "0", "0")
 	for _, want := range []string{
 		" 防火墙: ○ 未启用",
 		" 1. 安装并启用防火墙  (自动放行当前 SSH、节点、转发端口)",
@@ -29,8 +29,13 @@ func TestFirewallMenu(t *testing.T) {
 		"[1]  22/tcp  任意来源  SSH",
 		"防火墙已启用。",
 		" 防火墙: ● 已启用   默认: 拒绝入站   ping: 允许",
-		" 1. 关闭防火墙",
-		" 2. 重置所有规则",
+		" 1. 放行端口        (可指定来源 IP)",
+		" 2. 修改规则        (端口 / 来源 IP)",
+		" 3. 允许 / 禁止 ping",
+		" 4. 检查并修复规则  (对比 SSH、节点、转发端口)",
+		" 5. 删除规则",
+		" 6. 关闭防火墙",
+		" 7. 重置所有规则",
 		"防火墙已关闭。",
 	} {
 		if !strings.Contains(r.stdout, want) {
@@ -60,5 +65,85 @@ func TestFirewallMenuUFWActive(t *testing.T) {
 	r = runSSH(t, f, "0")
 	if !strings.Contains(r.stdout, "LiteNode 防火墙和 ufw 同时启用") || !strings.Contains(r.stdout, "防火墙: ● 已启用") {
 		t.Errorf("main menu:\n%s", r.stdout)
+	}
+}
+
+// enabledFirewall is a system with the LiteNode firewall on.
+func enabledFirewall(t *testing.T) *systemtest.Fake {
+	t.Helper()
+	f := firewallSystem()
+	store := state.NewStore(f)
+	st, _ := store.Load()
+	st.Firewall.Enabled = true
+	if err := store.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+func TestFirewallRuleManagement(t *testing.T) {
+	f := enabledFirewall(t)
+	r := runSSH(t, f,
+		"5",
+		// open: bad port, range, TCP, bad source, two sources, note.
+		"1", "99999", "28000-28010", "2", "1.2.3", "1.2.3.4, 10.0.0.0/8", "备注",
+		// the same again is refused.
+		"1", "28000-28010", "2",
+		// modify rule 2: sources to anyone, then back twice.
+		"2", "2", "3", "", "0",
+		// ping off.
+		"3",
+		// delete SSH (automatic): refused; delete rule 2, yes.
+		"5", "1", "5", "2", "y",
+		"0", "0")
+	for _, want := range []string{
+		"端口无效",
+		"来源 IP 无效",
+		"[2]  28000-28010/tcp  1.2.3.4,10.0.0.0/8  手动 备注",
+		"已放行。",
+		"已有相同端口和协议的手动规则",
+		"规则已修改。",
+		"[2]  28000-28010/tcp  任意来源",
+		"已禁止 ping",
+		"ping: 禁止",
+		"该规则由 SSH 自动管理，请在 SSH 管理中修改。",
+		"确定删除规则 [2] 28000-28010/tcp？",
+		"规则已删除。",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
+	}
+	conf := string(f.Files[nft.ConfigPath])
+	if strings.Contains(conf, "28000") || strings.Contains(conf, "icmp type echo-request accept") {
+		t.Errorf("rules after delete and ping off:\n%s", conf)
+	}
+}
+
+func TestFirewallAutoSources(t *testing.T) {
+	f := enabledFirewall(t)
+	// modify rule 1 (SSH): set the source, keep it (the change limits SSH).
+	r := runSSH(t, f, "5", "2", "1", "1", "1.2.3.4", "y", "0", "0", "0")
+	for _, want := range []string{
+		"该规则由 SSH 自动管理，这里只能设置来源 IP 限制",
+		"规则已修改。",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
+	}
+	if !strings.Contains(string(f.Files[nft.ConfigPath]), `ip saddr { 1.2.3.4 } tcp dport 22 accept comment "litenode:ssh"`) {
+		t.Errorf("SSH not limited:\n%s", f.Files[nft.ConfigPath])
+	}
+}
+
+func TestFirewallCheck(t *testing.T) {
+	f := enabledFirewall(t)
+	f.Respond(systemtest.Response{Result: system.Result{ExitCode: 1}}, nft.NftPath, "list", "chain", "inet", "litenode", "input")
+	r := runSSH(t, f, "5", "4", "y", "y", "0", "0")
+	for _, want := range []string{"防火墙规则没有加载", "重新应用防火墙规则？", "已重新应用防火墙规则。"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
 	}
 }

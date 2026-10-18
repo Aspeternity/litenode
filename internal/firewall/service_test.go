@@ -162,3 +162,53 @@ func TestEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestEdit(t *testing.T) {
+	ctx := context.Background()
+	f, s := service(t)
+	if _, err := s.Edit(ctx, func(*state.State) error { return nil }); !errors.Is(err, ErrDisabled) {
+		t.Errorf("disabled: %v", err)
+	}
+	if err := s.Enable(ctx); err != nil {
+		t.Fatal(err)
+	}
+	s.Confirmer.Disarm(ctx)
+	timers := func() int {
+		return len(slices.DeleteFunc(f.Execs(), func(e string) bool { return !strings.HasPrefix(e, "systemd-run") }))
+	}
+	armed := timers()
+	confirm, err := s.Edit(ctx, func(st *state.State) error {
+		return AddRule(st, state.FirewallRule{Port: "8080", Protocol: "tcp"})
+	})
+	if err != nil || confirm || timers() != armed {
+		t.Errorf("open a port: confirm %v, %v, %v", confirm, err, f.Execs())
+	}
+	if !strings.Contains(string(f.Files[nft.ConfigPath]), `tcp dport 8080 accept comment "litenode:manual:`) {
+		t.Errorf("rule not written:\n%s", f.Files[nft.ConfigPath])
+	}
+	confirm, err = s.Edit(ctx, func(st *state.State) error { return SetSources(st, OwnerSSH, []string{"1.2.3.4"}) })
+	if err != nil || !confirm || timers() != armed+1 {
+		t.Errorf("limit SSH: confirm %v, %v", confirm, err)
+	}
+}
+
+func TestInspect(t *testing.T) {
+	ctx := context.Background()
+	f, s := service(t)
+	if err := s.Enable(ctx); err != nil {
+		t.Fatal(err)
+	}
+	list := []string{nft.NftPath, "list", "chain", "inet", "litenode", "input"}
+	f.Respond(systemtest.Response{Result: system.Result{ExitCode: 1}}, list[0], list[1:]...)
+	if rep, err := s.Inspect(ctx); err != nil || !rep.NotLoaded {
+		t.Errorf("not loaded: %+v, %v", rep, err)
+	}
+	st, _ := s.Store.Load()
+	lines, _ := nft.InputRules(Config(st, []int{22}).Firewall)
+	listing := "table inet litenode {\n\tchain input {\n\t\ttype filter hook input priority filter; policy drop;\n\t\t" +
+		strings.Join(lines, "\n\t\t") + "\n\t}\n}\n"
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: listing}}, list[0], list[1:]...)
+	if rep, err := s.Inspect(ctx); err != nil || !rep.OK() {
+		t.Errorf("loaded: %+v, %v", rep, err)
+	}
+}
