@@ -104,10 +104,10 @@ func (u *nodeUI) menu() ui.Menu {
 		Status:  status,
 		Items: []ui.Item{
 			{Label: text.NodeAdd, Action: u.add},
-			{Label: text.NodeModify, Hidden: none, Action: u.modify},
+			{Label: text.NodeModify, Hidden: none, Page: true, Action: u.modify},
 			{Label: text.NodeToggle, Hidden: none, Action: u.toggle},
-			{Label: text.NodeClients, Hidden: none, Action: u.clients},
-			{Label: text.NodeShareAddress, Hint: text.NodeShareAddrHint, Action: u.shareAddress},
+			{Label: text.NodeClients, Hidden: none, Page: true, Action: u.clients},
+			{Label: text.NodeShareAddress, Hint: text.NodeShareAddrHint, Page: true, Action: u.shareAddress},
 			{Label: text.NodeDelete, Hidden: none, Action: u.delete},
 		},
 	}
@@ -130,6 +130,7 @@ func (u *nodeUI) chooseNode() (*node.Node, error) {
 // add runs the add-node flow (DESIGN section 9.2).
 func (u *nodeUI) add() error {
 	presets := u.svc.Registry.Presets()
+	u.s.Step(1, 4, text.ChoosePreset)
 	m := ui.Menu{Heading: text.ChoosePreset}
 	for _, p := range presets {
 		m.Items = append(m.Items, ui.Item{Label: p.Label})
@@ -144,14 +145,16 @@ func (u *nodeUI) add() error {
 	if err != nil || addr == "" {
 		return err // "" : the user went back
 	}
+	u.s.Step(2, 4, text.PromptPort)
 	port, err := u.askNewPort(addr)
 	if err != nil {
 		return err
 	}
-	target, err := u.chooseTarget()
+	target, err := u.chooseTarget(3, 4)
 	if err != nil || target == "" {
 		return err
 	}
+	u.s.Step(4, 4, text.PromptRemark)
 	remark, err := u.askRemark(u.defaultRemark(port), 0, true)
 	if err != nil {
 		return err
@@ -164,7 +167,7 @@ func (u *nodeUI) add() error {
 	if err != nil {
 		return err
 	}
-	u.s.Println(u.s.Colors.Good(text.NodeAdded))
+	u.s.Done(text.NodeAdded)
 	u.showLink(n, n.Clients[0], addr, true, true)
 	if len(u.state().Server.ShareAddresses) > 1 {
 		u.s.Println(text.OtherAddressesHint)
@@ -305,12 +308,14 @@ func (u *nodeUI) prepareChecker() {
 
 // chooseTarget lets the user pick a checked REALITY target (DESIGN
 // section 10.1). Going back from a method, or a method finding nothing,
-// returns to this menu; "" means the user left it (back).
-func (u *nodeUI) chooseTarget() (string, error) {
+// returns to this menu; "" means the user left it (back). In a flow it
+// is step n of total (0: unnumbered).
+func (u *nodeUI) chooseTarget(n, total int) (string, error) {
 	u.prepareChecker()
 	m := ui.Menu{Heading: text.ChooseTarget, Items: []ui.Item{
 		{Label: text.TargetScan, Hint: text.TargetScanHint}, {Label: text.TargetCommon}, {Label: text.TargetManual}}}
 	for {
+		u.s.Step(n, total, text.ChooseTarget)
 		choice, err := u.s.Choose(m)
 		if err != nil || choice == 0 {
 			return "", err
@@ -481,9 +486,9 @@ func (u *nodeUI) toggle() error {
 		return err
 	}
 	if n.Enabled {
-		u.s.Println(text.NodeDisabled)
+		u.s.Done(text.NodeDisabled)
 	} else {
-		u.s.Println(text.NodeEnabled)
+		u.s.Done(text.NodeEnabled)
 	}
 	return nil
 }
@@ -501,7 +506,7 @@ func (u *nodeUI) delete() error {
 	if err := u.svc.Delete(u.ctx, n.ID); err != nil {
 		return err
 	}
-	u.s.Println(text.NodeDeleted)
+	u.s.Done(text.NodeDeleted)
 	return nil
 }
 

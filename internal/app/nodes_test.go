@@ -65,8 +65,9 @@ func TestAddNodeFlow(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	for _, want := range []string{
-		"═ 节点管理 ═", "═ 选择节点类型 ═", "═ 选择目标网站 (SNI) ═", // headings (D-060)
-		" 1. VLESS + TCP + Reality (Vision)\n", // no recommendation (D-060)
+		"═ 节点管理 ═", // page heading (D-060)
+		"┌─ 添加节点\n│\n◆ 1/4 节点类型\n│   1. VLESS + TCP + Reality (Vision)\n│   0. 取消\n", // flow (D-069)
+		"◆ 2/4 端口 [443]: ", "◆ 3/4 目标网站 (SNI)\n", "◆ 4/4 备注 [Reality-443]: ", "└─ ✓ 节点已添加。\n",
 		"检测到公网地址：203.0.113.10",
 		"www.example.com     3 ms  TLS1.3 ✓  H2 ✓  X25519 ✓  证书 ✓",
 		"节点已添加。",
@@ -153,11 +154,11 @@ func TestChooseTargetReturnsToMenu(t *testing.T) {
 	// default remark.
 	input := strings.Join([]string{"1", "1", "1", "", "2", "0", "3", "", "2", "1", "", "0", "0"}, "\n") + "\n"
 	r := runNodes(t, f, input)
-	if got := strings.Count(r.stdout, "═ 选择目标网站 (SNI) ═"); got != 3 {
+	if got := strings.Count(r.stdout, "目标网站 (SNI)\n│   1. 扫描附近网站"); got != 3 {
 		t.Errorf("target menu shown %d times, want 3:\n%s", got, r.stdout)
 	}
 	for _, want := range []string{
-		"═ 常用目标网站 ═", " 1.  www.microsoft.com ", " 14. www.xbox.com ", "\n 0. 返回\n",
+		"│   ◇ 常用目标网站\n", "│   1.  www.microsoft.com ", "│   14. www.xbox.com ", "\n│   0. 返回\n",
 		"节点已添加。", "sni=www.microsoft.com",
 	} {
 		if !strings.Contains(r.stdout, want) {
@@ -218,7 +219,7 @@ func TestScanTargetFlow(t *testing.T) {
 	// menu, where 0 cancels adding.
 	r := runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "n", "0", "0", "0"}, "\n")+"\n")
 	if !strings.Contains(r.stdout, "部分 VPS 商家禁止端口扫描") || sc.calls != 0 ||
-		strings.Count(r.stdout, "═ 选择目标网站 (SNI) ═") != 2 || strings.Contains(r.stdout, "常用目标网站") {
+		strings.Count(r.stdout, "目标网站 (SNI)\n│   1. 扫描附近网站") != 2 || strings.Contains(r.stdout, "常用目标网站") {
 		t.Fatalf("declined warning: calls=%d\n%s", sc.calls, r.stdout)
 	}
 	if st, _ := state.NewStore(f).Load(); st.Server.ScanWarned {
@@ -226,7 +227,7 @@ func TestScanTargetFlow(t *testing.T) {
 	}
 	// Accept, scan, pick result 1, default remark.
 	r = runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "y", "1", "", "0", "0"}, "\n")+"\n")
-	for _, want := range []string{"扫描附近网站    (推荐，约 1 分钟)", "正在扫描 203.0.113.0/24 的 443 端口", "正在扫描 253/253", "═ 附近的网站 ═", " 1. near.example.net", "节点已添加。", "sni=near.example.net"} {
+	for _, want := range []string{"扫描附近网站    (推荐，约 1 分钟)", "正在扫描 203.0.113.0/24 的 443 端口", "正在扫描 253/253", "◇ 附近的网站", "│   1. near.example.net", "节点已添加。", "sni=near.example.net"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
 		}

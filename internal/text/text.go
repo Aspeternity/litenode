@@ -201,3 +201,18 @@ const Help = `LiteNode：轻量的 VPS 节点部署与管理工具
 
 // DryRunBanner is shown when the menu starts in dry-run mode.
 const DryRunBanner = "[dry-run] 当前为 dry-run 模式：所有修改操作只打印，不会实际执行。"
+
+// Flow endings (D-069).
+const (
+	FlowCanceled = "已取消"
+	FlowFailed   = "✗ 未完成"
+	// Cancel is option 0 of a flow step.
+	Cancel = "取消"
+)
+
+// LinkBelow ends the "share link" flow; the link follows it.
+const LinkBelow = "分享链接如下"
+
+// KeyGenerated ends the key generation flow; the private key follows it.
+const KeyGenerated = "密钥对已生成，公钥已加入 authorized_keys。"
+
