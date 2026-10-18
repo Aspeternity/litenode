@@ -42,9 +42,8 @@ func (s *Service) CurrentPort(ctx context.Context) (int, error) {
 
 // SetPort moves sshd to port under confirm-or-rollback (DESIGN section
 // 13). The port must be free; sshd's own current port does not count.
-// The ufw rule for the new port is part of the same change and comes
-// first, so the port is open before sshd moves, and a rollback removes it
-// again. It returns the old port.
+// The ufw and firewall rules for the port are part of the same change
+// (portParts), so a rollback removes them again. It returns the old port.
 func (s *Service) SetPort(ctx context.Context, port int) (int, error) {
 	if port < 1 || port > 65535 {
 		return 0, ErrPortRange
@@ -76,10 +75,7 @@ func (s *Service) SetPort(ctx context.Context, port int) (int, error) {
 	old := e.Ports[0]
 	st.SSH.Port = port
 	_, err = s.Confirmer.Apply(ctx, change.Change{
-		Parts: []change.Part{
-			{Kind: ufw.Kind(s.Store)},
-			{Kind: Kind(s.Store), Files: []change.File{ConfigFile(st.SSH, HasIPv6(r))}},
-		},
+		Parts: s.portParts(ConfigFile(st.SSH, HasIPv6(r))),
 		State: st,
 	})
 	return old, err

@@ -104,6 +104,7 @@ func (env Env) kinds(r system.Runner, store *state.Store) change.Registry {
 	for _, k := range (&firewall.Service{Store: store}).Kinds() {
 		reg.Register(k) // replaces ufw with an identical kind
 	}
+	reg.Register(firewall.SyncKind(store))
 	return reg
 }
 
@@ -199,7 +200,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		nodes.detector = share.NewDetector()
 	}
 	sshSvc := &ssh.Service{Store: store, Confirmer: change.NewConfirmer(change.NewManager(r, store), env.Executable),
-		Fetcher: env.fetcher(), Rand: env.rand()}
+		Fetcher: env.fetcher(), Rand: env.rand(), Firewall: firewall.SyncKind(store)}
 	reg := env.kinds(r, store)
 	sshMenu := &sshUI{ctx: ctx, s: s, svc: sshSvc, reg: reg}
 	fwSvc := &firewall.Service{Store: store, Confirmer: sshSvc.Confirmer}

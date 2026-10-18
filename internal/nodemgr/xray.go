@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/xray"
 )
 
@@ -149,8 +150,8 @@ func (s *Service) UpdateXray(ctx context.Context, version string) (string, error
 }
 
 // UninstallXray deletes all nodes and clients and removes Xray (D-020).
-// The node deletion is one change, so ufw node rules go and Xray stops;
-// then the program, unit, config and user are removed.
+// The node deletion is one change, so ufw and firewall node rules go and
+// Xray stops; then the program, unit, config and user are removed.
 func (s *Service) UninstallXray(ctx context.Context) error {
 	st, err := s.Store.Load()
 	if err != nil {
@@ -162,8 +163,12 @@ func (s *Service) UninstallXray(ctx context.Context) error {
 		if err := s.apply(ctx, st); err != nil {
 			return err
 		}
-	} else if err := s.Store.Save(st); err != nil {
-		return err
+	} else {
+		// Without Xray only the port rules change.
+		k := s.Kinds()
+		if _, err := s.Changes.Apply(ctx, change.Change{Parts: []change.Part{{Kind: k[1]}, {Kind: k[2]}}, State: st}); err != nil {
+			return err
+		}
 	}
 	if err := s.Xray.Uninstall(ctx); err != nil {
 		return err

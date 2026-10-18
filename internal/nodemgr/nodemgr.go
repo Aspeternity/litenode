@@ -1,8 +1,8 @@
 // Package nodemgr implements node operations (DESIGN section 9): adding,
 // modifying, enabling, disabling and deleting nodes. Each operation loads
 // the current state, checks the input, and applies the new state as one
-// change of the "xray" and "ufw" kinds (D-040), so a failure anywhere
-// restores everything.
+// change of the "xray", "ufw" and "firewall" kinds (D-040, D-074), so a
+// failure anywhere restores everything.
 package nodemgr
 
 import (
@@ -14,6 +14,7 @@ import (
 	"slices"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/ports"
@@ -55,10 +56,11 @@ type Service struct {
 // Kinds are the configuration kinds node operations change, in apply
 // order. The rollback subcommand registers the same kinds.
 func (s *Service) Kinds() []*change.Kind {
-	return []*change.Kind{xray.Kind(s.Store, s.Xray), ufw.Kind(s.Store)}
+	return []*change.Kind{xray.Kind(s.Store, s.Xray), ufw.Kind(s.Store), firewall.SyncKind(s.Store)}
 }
 
-// apply writes the Xray config for st and applies it with the ufw sync.
+// apply writes the Xray config for st and applies it with the ufw and
+// firewall sync.
 func (s *Service) apply(ctx context.Context, st *state.State) error {
 	f, err := xray.ConfigFile(s.Registry, st.Nodes)
 	if err != nil {
@@ -66,7 +68,7 @@ func (s *Service) apply(ctx context.Context, st *state.State) error {
 	}
 	k := s.Kinds()
 	_, err = s.Changes.Apply(ctx, change.Change{
-		Parts: []change.Part{{Kind: k[0], Files: []change.File{f}}, {Kind: k[1]}},
+		Parts: []change.Part{{Kind: k[0], Files: []change.File{f}}, {Kind: k[1]}, {Kind: k[2]}},
 		State: st,
 	})
 	return err
