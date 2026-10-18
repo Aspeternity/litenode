@@ -136,6 +136,12 @@ func MainTitle(version string) string {
 	return "LiteNode 节点管理  " + version
 }
 
+// MainMenuName is the main menu's name in page paths (D-096).
+const MainMenuName = "主菜单"
+
+// PathSeparator joins page names in a page heading: 主菜单 › 分享节点.
+const PathSeparator = " › "
+
 // Main menu items.
 const (
 	MenuNodes        = "节点管理"

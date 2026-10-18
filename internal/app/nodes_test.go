@@ -66,7 +66,7 @@ func TestAddNodeFlow(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	for _, want := range []string{
-		"═ 节点管理 ═", // page heading (D-060)
+		"═ 主菜单 › 节点管理 ═", // page heading (D-060)
 		"┌─ 添加节点\n│\n◆ 1/4 节点类型\n│   1. VLESS + TCP + Reality (Vision)\n│   0. 取消\n", // flow (D-069)
 		"◆ 2/4 端口 [443]: ", "◆ 3/4 目标网站 (SNI)\n", "◆ 4/4 备注 [Reality-443]: ", "└─ ✓ 节点已添加。\n",
 		"检测到公网地址：203.0.113.10",
@@ -124,7 +124,7 @@ func TestClientMenuFlow(t *testing.T) {
 	input := strings.Join([]string{"2", "1", "", "4", "1", "y", "4", "1", "y", "1", "", "0", "0"}, "\n") + "\n"
 	r := runNodes(t, f, input)
 	for _, want := range []string{
-		"═ 客户端管理 ═",
+		"═ 主菜单 › 客户端管理 ═",
 		" ID  节点         备注           状态",
 		" 2   Reality-443  Reality-443-2  ● 启用",
 		" 1. 添加客户端", " 2. 修改客户端\n", " 3. 启用 / 禁用客户端", " 4. 删除客户端",
@@ -294,7 +294,7 @@ func TestXrayMenuStateAndLogs(t *testing.T) {
 	r := runNodes(t, f, "5\n1\n4\n1\n2000\n80\n2\n0\n0\n0\n")
 	for _, want := range []string{
 		"Xray 已在运行，没有重启。",
-		"══ 查看日志 ══", " 1. 最近日志", " 2. 实时日志",
+		"══ 主菜单 › Xray 服务 › 查看日志 ══", " 1. 最近日志", " 2. 实时日志",
 		"显示行数（最多 1000，0 返回） [50]: ", "请输入 0 到 1000 之间的数字。",
 		"最近 80 行日志：", "log line",
 		"实时日志（按 Ctrl+C 回到菜单）：", "live line",

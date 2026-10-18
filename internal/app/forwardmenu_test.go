@@ -55,7 +55,7 @@ func TestForwardMenuAddToggleDelete(t *testing.T) {
 	r := runForward(t, f, nil, "4", "1", "30001", "1", "203.0.113.5", "", "LA",
 		"3", "1", "5", "1", "y", "0", "0")
 	wantOutput(t, r.stdout,
-		"══════════════════ 端口转发 ══════════════════",
+		"═════════════ 主菜单 › 端口转发 ══════════════",
 		text.ForwardNone,
 		"◆ 1/5 本机端口",
 		"◆ 2/5 协议",

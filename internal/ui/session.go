@@ -39,13 +39,19 @@ type Session struct {
 	Echo func(on bool)
 	// Interactive means input and output are a terminal. Only then does
 	// an operation that showed something to read wait for Enter before
-	// the menu comes back (D-096); piped input runs straight through.
+	// the menu comes back, and a page clear the screen (D-096); piped
+	// input runs straight through.
 	Interactive bool
+	// HoldAll makes every operation wait for Enter (dry-run mode, where
+	// each operation prints the commands it would run).
+	HoldAll bool
 
 	lines <-chan string
 	flow  *flowState
 	// hold: the running operation showed something to read.
 	hold bool
+	// pages are the names of the pages being shown, outermost first.
+	pages []string
 
 	mu        sync.Mutex
 	prompting bool
@@ -192,11 +198,24 @@ func (s *Session) Println(a ...any) {
 // every display so the status is current. Run returns nil when the user
 // goes back, ErrQuit when they quit. An action's error is shown with
 // Describe and the menu continues.
+//
+// A page (a menu shown outside a flow) clears the screen first when the
+// session is interactive, and its heading shows the path of pages that
+// led to it (D-096).
 func (s *Session) Run(build func() Menu) error {
+	depth := len(s.pages)
+	s.pages = append(s.pages, "")
+	defer func() { s.pages = s.pages[:depth] }()
 	for {
 		m := build()
 		items := m.Visible()
-		choice, err := s.Choose(m)
+		var choice int
+		var err error
+		if s.flow == nil {
+			choice, err = s.page(m, depth)
+		} else {
+			choice, err = s.Choose(m)
+		}
 		if err != nil {
 			return err
 		}
@@ -213,7 +232,7 @@ func (s *Session) Run(build func() Menu) error {
 		if flow {
 			s.closeFlow(err)
 		}
-		hold := s.hold
+		hold := s.hold || (s.HoldAll && !it.Page)
 		s.hold = false
 		if errors.Is(err, ErrQuit) {
 			return err
@@ -233,11 +252,40 @@ func (s *Session) Run(build func() Menu) error {
 	}
 }
 
+// page shows m as the page at depth: the screen is cleared and the
+// heading carries the names of the pages above it.
+func (s *Session) page(m Menu, depth int) (int, error) {
+	name := m.Heading
+	if m.Title != "" {
+		name = text.MainMenuName
+	}
+	s.pages[depth] = name
+	for _, p := range s.pages[:depth] {
+		if p != "" {
+			m.Path = append(m.Path, p)
+		}
+	}
+	if s.Interactive {
+		fmt.Fprint(s.Out, clearScreen+m.Render())
+	} else {
+		fmt.Fprint(s.Out, "\n"+m.Render())
+	}
+	return s.choose(len(m.Visible()))
+}
+
+// clearScreen moves the cursor home and clears the screen.
+const clearScreen = "\x1b[H\x1b[2J"
+
 // Hold marks the running operation as having shown something to read
 // (links, logs, keys, results): when it ends, the menu comes back only
 // after Enter (D-096). An operation that ends with a one-line result
 // does not call it; an error always holds.
 func (s *Session) Hold() { s.hold = true }
+
+// Pause waits for Enter when the session is interactive, so that what was
+// printed outside an operation (e.g. a warning at startup) is read before
+// the next page clears the screen.
+func (s *Session) Pause() error { return s.pause() }
 
 // pause waits for Enter when the session is interactive.
 func (s *Session) pause() error {

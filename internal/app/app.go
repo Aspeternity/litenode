@@ -202,8 +202,14 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	}
 	s := env.Session
 	s.Describe = describe
+	// Startup output is read before the main menu clears the screen.
+	pause := false
 	if dryRun {
 		s.Println(s.Colors.Warn(text.DryRunBanner))
+		// Every operation then holds so the commands it would run can be
+		// read (D-098).
+		s.HoldAll = true
+		pause = true
 	}
 	nodes := &nodeUI{ctx: ctx, s: s, svc: svc, checker: env.TargetChecker, detector: env.AddressDetector, dns: env.Resolver}
 	if nodes.checker == nil {
@@ -236,6 +242,10 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))
+		pause = true
+	}
+	if pause && s.Pause() != nil {
+		return 0
 	}
 	// Both going back from the main menu and quitting end the program.
 	s.Run(func() ui.Menu {

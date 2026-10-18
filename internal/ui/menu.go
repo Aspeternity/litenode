@@ -42,6 +42,10 @@ type Menu struct {
 	// Heading, if set, is shown in a bar at the top of a submenu so it
 	// stands out from the output above it (D-060).
 	Heading string
+	// Path holds the names of the pages above this one; the heading shows
+	// them before its own name (主菜单 › 分享节点, D-096). Session.Run
+	// sets it.
+	Path []string
 	// Status lines are shown above the options.
 	Status []string
 	// Notice is shown below the status, e.g. why some options are hidden.
@@ -85,7 +89,7 @@ func (m Menu) Render() string {
 		line("╚" + strings.Repeat("═", lineWidth) + "╝")
 	}
 	if m.Heading != "" {
-		line(HeadingBar(m.Heading))
+		line(HeadingBar(strings.Join(append(append([]string{}, m.Path...), m.Heading), text.PathSeparator)))
 	}
 	for _, s := range m.Status {
 		line(" " + s)
