@@ -76,7 +76,7 @@ const (
 	TargetCommon      = "从常用列表选择"
 	TargetManual      = "手动输入"
 	TargetNoneUsable  = "常用列表中没有通过检测的网站，请手动输入。"
-	CommonListHint    = "提示：常用列表是大型网站，在部分地区可能受到干扰，推荐使用\"扫描附近网站\"。"
+	CommonListHint    = "提示：常用列表中的大型网站被很多节点使用，且与本机 IP 不在同一网段，扫描附近网站得到的目标更不容易被识别。"
 	TargetScan        = "扫描附近网站"
 	TargetScanHint    = "(推荐，约 1 分钟)"
 	ScanWarning       = "扫描会连接本机所在 /24 网段其他服务器的 443 端口。部分 VPS 商家禁止端口扫描，可能导致滥用投诉。是否继续？"

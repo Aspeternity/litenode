@@ -30,11 +30,11 @@ func RiskyKeyword(host string) string {
 }
 
 // CommonTargets is the built-in list offered when the user does not scan
-// (DESIGN section 10.1, D-055). Each was verified end to end as a REALITY
-// target from a client in mainland China (2026-10-18); other large sites
-// (amazon, samsung, nvidia, tesla, yahoo, mozilla, bing, cloudflare...)
-// work as targets but their connections were interfered with there. Each
-// is still checked from the VPS before it can be used.
+// (DESIGN section 10.1, D-059). Each passed the check and worked end to end
+// as a REALITY target from the test VPSes (2026-10-18). LiteNode mainly
+// serves landing servers reached through a relay, so the list is chosen by
+// protocol checks on the VPS, not by direct reachability from one network.
+// Each is still checked from the VPS before it can be used.
 var CommonTargets = []string{
 	"www.microsoft.com",
 	"learn.microsoft.com",
@@ -42,6 +42,14 @@ var CommonTargets = []string{
 	"www.icloud.com",
 	"itunes.apple.com",
 	"gateway.icloud.com",
+	"www.amazon.com",
+	"www.samsung.com",
+	"www.nvidia.com",
+	"www.tesla.com",
+	"addons.mozilla.org",
+	"www.yahoo.com",
+	"www.bing.com",
+	"www.xbox.com",
 }
 
 // CheckAll checks targets concurrently (at most limit at a time) and
