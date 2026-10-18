@@ -63,43 +63,65 @@ func (s *Store) Load() (*State, error) {
 		return nil, fmt.Errorf("read state file: %w", err)
 	}
 
-	var doc map[string]any
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.UseNumber()
-	if err := dec.Decode(&doc); err != nil {
-		return nil, &CorruptError{Path: s.Path, Err: err}
-	}
-	version, err := schemaVersion(doc)
+	st, version, err := decode(data)
 	if err != nil {
-		return nil, &CorruptError{Path: s.Path, Err: err}
+		var ce *CorruptError
+		if errors.As(err, &ce) {
+			ce.Path = s.Path
+		}
+		var tn *TooNewError
+		if errors.As(err, &tn) {
+			tn.Path = s.Path
+		}
+		return nil, err
 	}
-	if version > SchemaVersion {
-		return nil, &TooNewError{Path: s.Path, FileVersion: version}
-	}
-
-	migrated := version < SchemaVersion
-	if migrated {
+	if version < SchemaVersion {
 		if err := s.backup(data, version); err != nil {
 			return nil, err
 		}
-		if err := migrate(doc, version, SchemaVersion, migrations); err != nil {
-			return nil, err
-		}
-		if data, err = json.Marshal(doc); err != nil {
-			return nil, fmt.Errorf("encode migrated state: %w", err)
-		}
-	}
-
-	st := New()
-	if err := json.Unmarshal(data, st); err != nil {
-		return nil, &CorruptError{Path: s.Path, Err: err}
-	}
-	if migrated {
 		if err := s.Save(st); err != nil {
 			return nil, fmt.Errorf("save migrated state: %w", err)
 		}
 	}
 	return st, nil
+}
+
+// Decode parses the content of a state file, e.g. one kept in a change
+// backup, migrating an older schema in memory only.
+func Decode(data []byte) (*State, error) {
+	st, _, err := decode(data)
+	return st, err
+}
+
+// decode parses data and migrates it to SchemaVersion. It returns the
+// version found in the file.
+func decode(data []byte) (*State, int, error) {
+	var doc map[string]any
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(&doc); err != nil {
+		return nil, 0, &CorruptError{Err: err}
+	}
+	version, err := schemaVersion(doc)
+	if err != nil {
+		return nil, 0, &CorruptError{Err: err}
+	}
+	if version > SchemaVersion {
+		return nil, 0, &TooNewError{FileVersion: version}
+	}
+	if version < SchemaVersion {
+		if err := migrate(doc, version, SchemaVersion, migrations); err != nil {
+			return nil, 0, err
+		}
+		if data, err = json.Marshal(doc); err != nil {
+			return nil, 0, fmt.Errorf("encode migrated state: %w", err)
+		}
+	}
+	st := New()
+	if err := json.Unmarshal(data, st); err != nil {
+		return nil, 0, &CorruptError{Err: err}
+	}
+	return st, version, nil
 }
 
 // Save atomically writes st with mode 0600. The state directory is set to

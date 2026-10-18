@@ -53,20 +53,27 @@ type Env struct {
 	Rand            io.Reader
 }
 
+func (env Env) fetcher() xray.Fetcher {
+	if env.XrayFetcher != nil {
+		return env.XrayFetcher
+	}
+	return xray.NewHTTPFetcher()
+}
+
+func (env Env) rand() io.Reader {
+	if env.Rand != nil {
+		return env.Rand
+	}
+	return rand.Reader
+}
+
 // services builds the node service and its dependencies on r.
 func (env Env) services(r system.Runner, store *state.Store) (*nodemgr.Service, error) {
 	reg, err := builtin.Registry()
 	if err != nil {
 		return nil, err
 	}
-	fetcher := env.XrayFetcher
-	if fetcher == nil {
-		fetcher = xray.NewHTTPFetcher()
-	}
-	rnd := env.Rand
-	if rnd == nil {
-		rnd = rand.Reader
-	}
+	fetcher, rnd := env.fetcher(), env.rand()
 	return &nodemgr.Service{
 		Runner:   r,
 		Store:    store,
@@ -186,6 +193,9 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	if nodes.detector == nil {
 		nodes.detector = share.NewDetector()
 	}
+	sshSvc := &ssh.Service{Store: store, Confirmer: change.NewConfirmer(change.NewManager(r, store), env.Executable),
+		Fetcher: env.fetcher(), Rand: env.rand()}
+	sshMenu := &sshUI{ctx: ctx, s: s, svc: sshSvc, reg: env.kinds(r, store)}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))
@@ -198,9 +208,10 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		if installed {
 			active, _ = system.ServiceActive(ctx, r, xray.UnitName)
 		}
-		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st),
+		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st), sshMainStatus(ctx, sshSvc),
 			func() error { return s.Run(nodes.menu) },
-			func() error { return s.Run(nodes.xrayMenu) })
+			func() error { return s.Run(nodes.xrayMenu) },
+			func() error { return s.Run(sshMenu.menu) })
 	})
 	return 0
 }

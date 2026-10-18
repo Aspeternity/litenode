@@ -56,6 +56,7 @@ type Fake struct {
 	// Responses maps a command line (as formatted by system.CommandLine) to
 	// its answer. Commands without an entry succeed with empty output.
 	Responses map[string]Response
+	hooks     map[string]func()
 	// Files holds file contents by path. Writes and removals update it.
 	Files map[string][]byte
 	// Dirs holds directories created by MkdirAll. Directories that contain
@@ -145,9 +146,26 @@ func (f *Fake) ExecInput(_ context.Context, input []byte, name string, args ...s
 	return res, err
 }
 
+// OnCommand runs fn after each run of the command line, e.g. to change a
+// response once a service has been reloaded.
+func (f *Fake) OnCommand(line string, fn func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.hooks == nil {
+		f.hooks = map[string]func(){}
+	}
+	f.hooks[line] = fn
+}
+
 func (f *Fake) command(op Op, name string, args []string) (system.Result, error) {
 	line := system.CommandLine(name, args...)
 	f.mu.Lock()
+	hook := f.hooks[line]
+	defer func() {
+		if hook != nil {
+			hook()
+		}
+	}()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, Call{Op: op, Command: line})
 	resp := f.Responses[line]
