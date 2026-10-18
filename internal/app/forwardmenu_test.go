@@ -50,9 +50,9 @@ func wantOutput(t *testing.T, out string, wants ...string) {
 
 func TestForwardMenuAddToggleDelete(t *testing.T) {
 	f := supported()
-	// main: 2 forwards; add: port, tcp+udp, target, default port, remark;
+	// main: 4 forwards; add: port, tcp+udp, target, default port, remark;
 	// toggle 1; delete 1, yes; back; quit.
-	r := runForward(t, f, nil, "2", "1", "30001", "1", "203.0.113.5", "", "LA",
+	r := runForward(t, f, nil, "4", "1", "30001", "1", "203.0.113.5", "", "LA",
 		"3", "1", "5", "1", "y", "0", "0")
 	wantOutput(t, r.stdout,
 		"══════════════════ 端口转发 ══════════════════",
@@ -86,7 +86,7 @@ func TestForwardMenuMainStatus(t *testing.T) {
 func TestForwardMenuDomainAndRange(t *testing.T) {
 	f := supported()
 	// Target range of another length is asked again.
-	r := runForward(t, f, nil, "2", "1", "30000-30010", "2", "la.example.com", "40000", "40000-40010", "", "0", "0")
+	r := runForward(t, f, nil, "4", "1", "30000-30010", "2", "la.example.com", "40000", "40000-40010", "", "0", "0")
 	wantOutput(t, r.stdout, text.ErrTargetPortLength, "✓ 转发规则已添加。",
 		"30000-30010  tcp   la.example.com:40000-40010  仅 IPv4  ● 启用")
 	fs := loadForwards(t, f)
@@ -111,26 +111,26 @@ func TestForwardMenuPortConflict(t *testing.T) {
 	}
 	// A node's TCP port, then a disabled forward's UDP port (D-037), then
 	// cancel at the port step.
-	r := runForward(t, f, nil, "2", "1", "443", "2", "30003", "1", "0", "0", "0")
+	r := runForward(t, f, nil, "4", "1", "443", "2", "30003", "1", "0", "0", "0")
 	wantOutput(t, r.stdout, text.PortTaken(443, "tcp", "node:1"), text.PortTaken(30003, "udp", "forward:2"), "└─ 已取消")
 	if len(loadForwards(t, f)) != 1 {
 		t.Error("conflicting forward added")
 	}
 	// Enabling checks again; its own ports do not conflict with itself.
-	r = runForward(t, f, nil, "2", "3", "1", "0", "0")
+	r = runForward(t, f, nil, "4", "3", "1", "0", "0")
 	wantOutput(t, r.stdout, "✓ 转发规则已启用。")
 }
 
 func TestForwardMenuModify(t *testing.T) {
 	f := domainState(t)
 	// Modify 1: keep port, tcp, new target, keep port and remark.
-	r := runForward(t, f, nil, "2", "2", "1", "", "2", "198.51.100.7", "", "", "0", "0")
+	r := runForward(t, f, nil, "4", "2", "1", "", "2", "198.51.100.7", "", "", "0", "0")
 	wantOutput(t, r.stdout, "◆ 1/5 本机端口（单个端口或 起始-结束，0 返回） [30001]:", "2. TCP             (当前)", "✓ 转发规则已修改。")
 	if fs := loadForwards(t, f); fs[0].TargetHost != "198.51.100.7" || fs[0].ID != 1 || !fs[0].Enabled {
 		t.Errorf("%+v", fs)
 	}
 	// Nothing changed.
-	r = runForward(t, f, nil, "2", "2", "1", "", "2", "", "", "", "0", "0")
+	r = runForward(t, f, nil, "4", "2", "1", "", "2", "", "", "", "0", "0")
 	wantOutput(t, r.stdout, "└─ "+text.ForwardNoChange)
 }
 
@@ -152,7 +152,7 @@ func TestForwardMenuProbe(t *testing.T) {
 		}
 		return nil
 	})
-	r := runForward(t, f, d, "2", "4", "1", "4", "2", "0", "0")
+	r := runForward(t, f, d, "4", "4", "1", "4", "2", "0", "0")
 	wantOutput(t, r.stdout, text.ProbeTCPOnly, "203.0.113.20:443  连通，延迟",
 		"[2001:db8::20]:443  无法连接：i/o timeout", text.ProbeSomeFails, "└─ "+text.ProbeUDPOnly)
 }

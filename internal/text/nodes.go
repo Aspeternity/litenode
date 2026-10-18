@@ -20,9 +20,6 @@ const (
 	NodeAdd            = "添加节点"
 	NodeModify         = "修改节点"
 	NodeToggle         = "启用 / 禁用节点"
-	NodeClients        = "客户端管理"
-	NodeShareAddress   = "分享地址"
-	NodeShareAddrHint  = "(添加 / 设为默认 / 重新检测)"
 	NodeDelete         = "删除节点"
 	NodeNone           = "（暂无节点）"
 	ColID              = "ID"
@@ -31,6 +28,7 @@ const (
 	ColPort            = "端口"
 	ColClients         = "客户端"
 	ColState           = "状态"
+	ColNode            = "节点"
 	StateEnabled       = "● 启用"
 	StateDisabled      = "○ 禁用"
 	NotSet             = "未设置"
@@ -38,7 +36,7 @@ const (
 	PromptPort         = "端口"
 	PromptRemark       = "备注"
 	PromptTarget       = "目标网站域名（可带端口，默认 443；直接回车返回）"
-	PromptShareAddress = "分享地址（IP 或域名，直接回车返回）"
+	PromptShareAddress = "主机地址（IP 或域名，直接回车返回）"
 	PromptSharePort    = "分享端口（0 表示与监听端口相同）"
 	Checking           = "正在检测……"
 	InstallingXray     = "首次添加节点，正在安装 Xray……"
@@ -47,16 +45,16 @@ const (
 	Canceled           = "已取消。"
 )
 
-// ShareAddressLine is the status line of the node list: the default
+// ShareAddressLine is the status line of the share menu: the default
 // address and how many others there are.
 func ShareAddressLine(def string, n int) string {
 	if def == "" {
-		return "分享地址: " + NotSet
+		return "主机地址: " + NotSet
 	}
 	if n > 1 {
-		return fmt.Sprintf("分享地址: %s（另有 %d 个）", def, n-1)
+		return fmt.Sprintf("主机地址: %s（另有 %d 个）", def, n-1)
 	}
-	return "分享地址: " + def
+	return "主机地址: " + def
 }
 
 // SharePortCurrent describes the share port in the modify menu.
@@ -220,7 +218,7 @@ const (
 	ShareAddrDelete    = "删除地址"
 	ShareAddrDetect    = "重新检测"
 	ShareAddrNone      = "未能检测到公网地址，请手动输入。"
-	ShareAddrDefaultOK = "默认分享地址已修改，新添加节点的链接和\"修改节点\"后列出的链接使用这个地址。"
+	ShareAddrDefaultOK = "默认主机地址已修改，新添加节点的链接和\"修改节点\"后列出的链接使用这个地址。"
 	ShareAddrAdded     = "地址已添加。"
 	ShareAddrDeleted   = "地址已删除。"
 	ShareAddrExists    = "这个地址已经在列表中。"
@@ -228,7 +226,7 @@ const (
 	ShareAddrDetected  = "检测到公网地址："
 	PromptAddressNum   = "请输入地址序号 (0 返回)"
 	LinkAddressHeading = "选择链接使用的地址"
-	OtherAddressesHint = "其他分享地址（如 IPv6、域名）的链接：客户端管理 → 分享链接 / 二维码。"
+	OtherAddressesHint = "其他主机地址（如 IPv6、域名）的链接：主菜单 → 分享节点。"
 	KindDomain         = "域名"
 	DefaultMark        = "默认"
 )
@@ -313,7 +311,6 @@ const (
 	ClientModify       = "修改客户端"
 	ClientModifyHint   = "(备注 / UUID)"
 	ClientToggle       = "启用 / 禁用客户端"
-	ClientLink         = "分享链接 / 二维码"
 	ClientDelete       = "删除客户端"
 	ClientRemark       = "备注"
 	ClientResetUUID    = "重置 UUID"
@@ -324,13 +321,21 @@ const (
 	ClientDeleted      = "客户端已删除。"
 	ClientUUIDReset    = "UUID 已重置，该客户端的旧链接已失效，新链接如下。"
 	ConfirmResetUUID   = "重置后该客户端的旧链接立即失效（其他客户端不受影响），是否继续？"
-	ClientNone         = "（该节点没有客户端，当前不可用；添加客户端后即可使用）"
+	ClientNone         = "（暂无客户端）"
+	ClientNoNodes      = "（暂无节点，请先在\"节点管理\"中添加节点）"
+	ChooseNodeHeading  = "选择节点"
 	ErrClientNotFound  = "客户端不存在。"
 )
 
-// ClientsTitle heads the client menu, e.g. "节点 1: LA (VLESS-TCP-Reality :443)".
-func ClientsTitle(seq int, remark, proto string, port int) string {
-	return fmt.Sprintf("节点 %d: %s (%s :%d)", seq, remark, proto, port)
+// NodeChoice labels a node when choosing one, e.g. "LA (VLESS-TCP-Reality :443)".
+func NodeChoice(remark, proto string, port int) string {
+	return fmt.Sprintf("%s (%s :%d)", remark, proto, port)
+}
+
+// NodeWithoutClients warns that a node has no client and cannot be used
+// until one is added (D-060).
+func NodeWithoutClients(remark string) string {
+	return fmt.Sprintf("节点 %s 没有客户端，当前不可用；添加客户端后即可使用。", remark)
 }
 
 // ConfirmDeleteClient asks before deleting a client.
@@ -343,6 +348,16 @@ func ConfirmDeleteClient(remark string) string {
 func ConfirmDeleteLastClient(remark string) string {
 	return fmt.Sprintf("%s 是该节点最后一个客户端，删除后节点暂时不可用，直到添加新客户端。是否继续？", remark)
 }
+
+// Share menu (DESIGN section 9.5).
+const (
+	ShareLinkQR    = "查看链接和二维码"
+	ShareAllLinks  = "显示全部链接"
+	ShareNoClients = "（暂无客户端）"
+	ShareClientOff = "该客户端或其节点已禁用，链接暂时不能使用。"
+	ShareAllNone   = "没有启用的客户端。"
+	AllLinksTitle  = "全部链接："
+)
 
 // ClientLine names the client being modified.
 func ClientLine(remark string) string {

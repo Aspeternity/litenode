@@ -15,11 +15,11 @@ const (
 
 	PromptExportPath = "导出文件路径"
 	PromptImportPath = "导入文件路径（直接回车取消）"
-	ExportNote       = "导出文件不包含 SSH 设置、系统优化设置、分享地址和节点出站 IP。"
+	ExportNote       = "导出文件不包含 SSH 设置、系统优化设置、主机地址和节点出站 IP。"
 	ExportSecret     = "文件包含节点私钥和客户端 UUID，权限已设为 600，请妥善保管，不要发给他人。"
 	ImportNote       = "导入会替换当前的节点、客户端、转发规则和手动防火墙规则（导入前自动备份当前状态）；SSH、系统优化和防火墙开关保持不变。"
 	ImportDone       = "配置已导入。"
-	ImportShareHint  = "分享链接的地址按本机重新检测：在节点的分享链接中确认地址。"
+	ImportShareHint  = "分享链接的地址按本机重新检测：在\"分享节点\"中确认主机地址。"
 	ErrNotExportFile = "这不是 LiteNode 导出的配置文件。"
 	ErrImportTooNew  = "导出文件来自更新版本的 LiteNode，请先更新 LiteNode 再导入。"
 	ImportPortsTaken = "以下端口已被本机其他程序占用，请停止这些程序或修改导出文件后重试："

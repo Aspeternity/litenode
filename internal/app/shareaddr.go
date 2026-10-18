@@ -100,7 +100,7 @@ func addressHint(addr string, isDefault bool) string {
 	return k
 }
 
-// shareAddress is the share address page (DESIGN section 9.1).
+// shareAddress is the host address page (DESIGN section 9.5).
 func (u *nodeUI) shareAddress() error {
 	return u.s.Run(func() ui.Menu {
 		list := u.shareAddresses()
@@ -112,7 +112,7 @@ func (u *nodeUI) shareAddress() error {
 			status = append(status, text.ShareAddrItem(i+1, a, share.AddressKind(a), i == 0))
 		}
 		return ui.Menu{
-			Heading: text.NodeShareAddress,
+			Heading: text.MenuHostAddress,
 			Status:  status,
 			Items: []ui.Item{
 				{Label: text.ShareAddrAdd, Hint: text.ShareAddrAddHint, Action: u.addAddress},

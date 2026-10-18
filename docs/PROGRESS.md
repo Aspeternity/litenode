@@ -5,7 +5,7 @@
 ## 当前状态
 
 - **阶段**：M0 ~ M6 已完成。用户在做 M5 + M6 实机测试，已反馈第一批问题（菜单结构等），方案已确认（D-090）。M7 改为打磨阶段，更多节点类型暂缓（D-089）。
-- **当前任务**：M7-01（尚未开始）。
+- **当前任务**：M7-01 已完成（D-091），接着做 M7-02。
 
 ## 下次会话从这里开始
 
@@ -16,7 +16,7 @@
 
 ## 测试 VPS 的当前状态（2026-10-19）
 
-登录密码记在本机记忆中（用户同意），**不写入仓库**。用户授权两台都可以完全用于测试。两台的 `/usr/local/bin/litenode` 都是 M6-03 分支的编译版本（`/root/litenode.dev` 为同一文件）（之前的版本在 `/root/litenode.before-m5`）。
+登录密码记在本机记忆中（用户同意），**不写入仓库**。用户授权两台都可以完全用于测试。两台的 `/usr/local/bin/litenode` 都是 M6-03 分支的编译版本（M7 的测试版本放在 Debian 的 `/root/litenode.m7`，直接运行，不替换已安装的程序）（`/root/litenode.dev` 为同一文件）（之前的版本在 `/root/litenode.before-m5`）。
 
 - **Ubuntu 24.04.5**（KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 203.0.113.181，有 IPv6）：有用户验收时添加的节点 `Reality-443`，Xray 运行中；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`；root 的 `authorized_keys` 中**没有**开发机的公钥，只能用密码登录，不要关闭密码登录；装有 `litenode-rollback-boot.service`；ufw 已停用；没有转发规则，LiteNode 防火墙关闭。M5：BBR 由 LiteNode 开启（`sysopt.bbr`，`99-litenode.conf` 只有 BBR 两行；镜像自带的 `99-custom.conf` 也开启 BBR，已恢复原样）；没有 swap；`gai.conf`、DNS（systemd-resolved，无 LiteNode drop-in）、时区 Europe/Berlin 均为测试前的状态；节点出站 IP 为默认。
 - **Debian 12**（KVM、x86_64、约 1G 内存，SSH 端口 61234，公网 IP 198.51.100.252，磁盘只剩约 550M）：用户的 2 个节点（`Test`、`Test2`）和 Xray；没有 LiteNode 的 nftables 表，防火墙关闭；`00-litenode.conf` 管理着 `Port 61234`。M6-03 测试过全部卸载后已恢复（状态文件 + 导入备份，Xray 重新安装为 v26.10.17，`litenode-rollback-boot.service` 已删除，下次限时确认时自动重装）。M5：BBR 由镜像开启（LiteNode 未管理）；没有 swap；resolv.conf 已恢复为 resolvconf 链接（1.1.1.1）；**新装了 systemd-timesyncd，时间同步已开启**；时区 US/Eastern（原值）。
