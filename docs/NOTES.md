@@ -53,5 +53,7 @@
 - 端口 / ufw / 已有拦截（M1-07a）：`ports.Listening(r)` + `ports.NodeClaims(nodes)` → `ports.Checker{}.Check(want, self, selfPorts)`，`RandomFree`；`ufw.Desired(nodes)` + `ufw.Reconcile(ctx, r, desired, liteNodeFirewall)`（ufw 未运行或 LiteNode 防火墙启用时不操作；`Sync` 无条件执行）；`firewall.DetectForeignFilter(ctx, r)`。
 - 转发（M4-01）：业务在 `internal/forwardmgr`（`Service.Add/Update/SetEnabled/Delete`，错误 `PortTakenError`、`ErrNotFound`、`forward.Err*`），模型和校验在 `internal/forward`（`Check`、`CheckFields`、`IPv4()` / `IPv6()`、`Resolve`）。表由 `firewall.Config(st, sshPorts)` 生成（防火墙关闭时也包含转发链），`firewall.SyncKind` 无论防火墙是否启用都按状态应用；内核转发由 `sysctl.Desired(st, sysctl.ReadEnv(r))` 决定。防火墙条目 `Entry.ForwardIndex` 用于显示"转发 N"。端口冲突检查统一用 `ports.StateClaims(nodes, forwards)`。
 - 菜单动作返回 `ui.ErrBack` 可退出当前菜单（如删除节点后离开该节点的子菜单）。
-- 能力探测注册在 `internal/system/probe.go` 的 `probes`，目前只有 BBR；swap、sysctl、nftables 在对应任务中加入。
+- 能力探测注册在 `internal/system/probe.go` 的 `probes`：`CapBBR`、`CapSwap`（M5-02）。
+- 系统优化（M5）：业务在 `internal/sysopt`（`Service.SetBBR/CreateSwap/ResizeSwap/DeleteSwap/SetPreference/SetDNS/ResetDNS/SetTimezone/EnableNTP`），菜单在 `internal/app/sysoptmenu.go`。BBR 在状态文件（`sysopt.bbr`，sysctl 文件由 `sysctl.Desired` 整体生成）；其余从系统读取。文件修改走变更流程：`sysctl`、`swap`（fstab，应用步骤按 fstab 启停 swap）、`gai`、`dns`（应用步骤重启 systemd-resolved）。测试 DNS 服务器用 `Env.DNSProber`。
+- **测试系统优化**（M5）：两台测试机的镜像都已由服务商开启 BBR（Ubuntu 在 `/etc/sysctl.d/99-custom.conf`），测试开启和重启保持前先去掉这两行（备份在 `/root/99-custom.conf.bak`）。Ubuntu 使用 systemd-resolved 且有 IPv6（测优先级：`curl https://www.cloudflare.com/cdn-cgi/trace` 的 `ip=`）；Debian 不用 resolved（resolv.conf 是 resolvconf 的链接，测试后 `ln -sf ../run/resolvconf/resolv.conf /etc/resolv.conf` 恢复），原本没有 NTP 服务，磁盘只剩约 550M。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。

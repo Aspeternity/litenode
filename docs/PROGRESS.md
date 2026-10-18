@@ -4,21 +4,22 @@
 
 ## 当前状态
 
-- **阶段**：M4 端口转发**已完成**（M4-03 端口转发菜单已合并），等待用户实机验收。
-- **当前任务**：无。用户验收 M4 后开始 M5 系统优化。
+- **阶段**：M5 系统优化**已完成**（M5-01 ~ M5-06，PR #39 ~ #44），等待用户实机验收。
+- **当前任务**：无。用户验收 M5 后开始 M6 维护。
 
 ## 下次会话从这里开始
 
-1. 等用户实机验收 M4（验收步骤见 M4-03 的 PR 描述）；有问题先修。验收通过后开始 M5-01。
-2. 打标签 `v0.0.3` 前先问用户（尚未同意）。
-3. 实机测试前读 `docs/NOTES.md` 的"实机测试方法"。
+1. 等用户实机验收 M5（验收步骤见 M5-06 的 PR 描述）；有问题先修。验收通过后开始 M6-01。
+2. 打标签前先问用户（v0.0.3 尚未同意）。
+3. 待用户决定：IPv4 / IPv6 优先级是否也作用于 Xray 出站（`domainStrategy`，D-080 已知限制）。
+4. 实机测试前读 `docs/NOTES.md` 的"实机测试方法"（含 M5 的测试注意事项）。
 
-## 测试 VPS 的当前状态（2026-10-18）
+## 测试 VPS 的当前状态（2026-10-19）
 
-登录密码记在本机记忆中（用户同意），**不写入仓库**。用户授权两台都可以完全用于测试。
+登录密码记在本机记忆中（用户同意），**不写入仓库**。用户授权两台都可以完全用于测试。两台的 `/usr/local/bin/litenode` 都是 M5-06 分支的编译版本（之前的版本在 `/root/litenode.before-m5`）。
 
-- **Ubuntu 24.04.5**（KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 203.0.113.181，有 IPv6）：有用户验收时添加的节点 `Reality-443`，Xray 运行中；分享地址有 IPv4 和 IPv6；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`；root 的 `authorized_keys` 中**已没有**开发机的公钥（用户验收时改过），只能用密码登录，不要在这台机器上关闭密码登录；装有 `litenode-rollback-boot.service`；ufw 已停用。`/usr/local/bin/litenode` 是 M4-03 分支的编译版本（之前的版本备份在 `/root/litenode.before-m403`）；M4-03 测试的转发规则已全部删除（没有 LiteNode 的 nftables 表，`litenode-nft.service` 仍为 active 但只加载删除表的文件，没有 `99-litenode.conf`，没有 `litenode-resolve` 单元；`ip_forward` 本来就是 1；`/etc/hosts` 的测试行已删除）；ufw 已停用且没有规则；LiteNode 防火墙已关闭。
-- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234（主配置中有商家写的 `Port 61234`），公网 IP 198.51.100.252。上面有用户的 2 个节点（`Test`、`Test2`）和 Xray；分享地址列表有 IPv4 和 `216-23-88-252.sslip.io`（M1-06 测试时添加）；没有 LiteNode 的 nftables 表（M3-01 重启测试后已移除，`/etc/litenode/nftables.nft` 只含删除表的两行，`litenode-nft.service` 已停用）；系统自带的 `table inet filter`（全部 accept）保持不变。`/usr/local/bin/litenode` 是 M3-04 的编译版本；LiteNode 防火墙测试后已关闭（表已删除）；`00-litenode.conf` 管理着 `Port 61234`（带 `ListenAddress`）。M4-01 测试时作为落地机（`/root/probe.sh` 经 Ubuntu 测试 TCP / UDP 转发，`/root/udpecho.py` 是 UDP 回显服务，已停止）。
+- **Ubuntu 24.04.5**（KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 203.0.113.181，有 IPv6）：有用户验收时添加的节点 `Reality-443`，Xray 运行中；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`；root 的 `authorized_keys` 中**没有**开发机的公钥，只能用密码登录，不要关闭密码登录；装有 `litenode-rollback-boot.service`；ufw 已停用；没有转发规则，LiteNode 防火墙关闭。M5：BBR 由 LiteNode 开启（`sysopt.bbr`，`99-litenode.conf` 只有 BBR 两行；镜像自带的 `99-custom.conf` 也开启 BBR，已恢复原样）；没有 swap；`gai.conf`、DNS（systemd-resolved，无 LiteNode drop-in）、时区 Europe/Berlin 均为测试前的状态。
+- **Debian 12**（KVM、x86_64、约 1G 内存，SSH 端口 61234，公网 IP 198.51.100.252，磁盘只剩约 550M）：用户的 2 个节点（`Test`、`Test2`）和 Xray；没有 LiteNode 的 nftables 表，防火墙关闭；`00-litenode.conf` 管理着 `Port 61234`。M5：BBR 由镜像开启（LiteNode 未管理）；没有 swap；resolv.conf 已恢复为 resolvconf 链接（1.1.1.1）；**新装了 systemd-timesyncd，时间同步已开启**；时区 US/Eastern（原值）。
 
 ## 未解决的问题
 
@@ -27,4 +28,5 @@
 
 - 附近网站扫描在测试机网段没找到可用网站（邻居多为代理服务器）。
 - 默认安装的 Xray 目前是预发布版 v26.10.17（D-054）；正式版达到 v26.9.8 后会自动改用正式版。
+- IPv4 / IPv6 优先级只影响 glibc 程序，Xray（Go 解析器）不受影响（D-080），是否改 Xray 的 `domainStrategy` 待用户决定。
 - DESIGN 第 18 节待讨论事项只剩第 2 项（TLS 证书来源），在 M7 前讨论。
