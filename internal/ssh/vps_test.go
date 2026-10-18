@@ -23,6 +23,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
+	"github.com/Aspeternity/litenode/internal/ufw"
 	"github.com/Aspeternity/litenode/internal/xray"
 )
 
@@ -58,7 +59,7 @@ func vpsApply(ctx context.Context, r system.Runner, store *state.Store, s state.
 	st := state.New()
 	st.SSH = s
 	_, err := change.NewManager(r, store).Apply(ctx, change.Change{
-		Parts: []change.Part{{Kind: Kind(store), Files: []change.File{ConfigFile(s)}}},
+		Parts: []change.Part{{Kind: Kind(store), Files: []change.File{ConfigFile(s, HasIPv6(r))}}},
 		State: st,
 	})
 	return err
@@ -330,5 +331,91 @@ func TestVPSPasswordLogin(t *testing.T) {
 	}
 	if got := passwordAuth(t, ctx, r); got != (want == "on") {
 		t.Errorf("sshd password login = %v", got)
+	}
+}
+
+// TestVPSPortChange (M2-05) moves sshd to LN_PORT. LN_CONFIRM=1 keeps the
+// change (otherwise the timer restores it after 60 seconds);
+// LN_DELETE_OLD=1 then also deletes the user's ufw rules for the old
+// port. Connections are checked from the development machine.
+func TestVPSPortChange(t *testing.T) {
+	port, _ := strconv.Atoi(os.Getenv("LN_PORT"))
+	if port == 0 {
+		t.Skip("set LN_PORT")
+	}
+	ctx, r, svc := keySetup(t)
+	old, err := svc.SetPort(ctx, port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := ReadEffective(ctx, r)
+	t.Logf("moved %d -> %d; sshd listens on %v", old, port, e.Ports)
+	if out, err := r.Query(ctx, "sh", "-c", "ufw status | grep -E '^(Status|[0-9A-Za-z])'"); err == nil {
+		t.Logf("ufw:\n%s", out.Stdout)
+	}
+	if os.Getenv("LN_CONFIRM") != "1" {
+		return
+	}
+	if err := svc.Confirmer.Disarm(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rules, other, err := svc.OldPortRules(ctx, old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("old port rules: %+v (complex: %d)", rules, other)
+	if os.Getenv("LN_DELETE_OLD") == "1" {
+		for _, rule := range rules {
+			if err := ufw.DeleteUserRule(ctx, r, rule); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+// TestVPSSudoUser (M2-05) creates a sudo user with root's keys and a
+// password, checks sudo works with the password, then removes the user
+// unless LN_KEEP_USER=1.
+func TestVPSSudoUser(t *testing.T) {
+	ctx, r, svc := keySetup(t)
+	const name = "lnsudo"
+	root, err := LookupAccount(r, "root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, err := svc.Keys(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pass, err := GeneratePassword(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.CreateSudoUser(ctx, name, pass, keys); err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv("LN_KEEP_USER") != "1" {
+		t.Cleanup(func() {
+			r.Exec(ctx, "pkill", "-KILL", "-u", name)
+			r.Exec(ctx, "userdel", "-r", "-f", name)
+		})
+	} else {
+		t.Logf("password of %s: %s", name, pass)
+	}
+	out, err := r.Query(ctx, "id", name)
+	t.Logf("%s", out.Stdout)
+	if err != nil || !strings.Contains(out.Stdout, "(sudo)") {
+		t.Errorf("not in sudo: %q %v", out.Stdout, err)
+	}
+	// sudo -S reads the password from stdin.
+	res, err := r.ExecInput(ctx, []byte(pass+"\n"), "su", "-", name, "-c", "sudo -S -p '' id -u")
+	if err != nil || strings.TrimSpace(res.Stdout) != "0" {
+		t.Errorf("sudo with the password: %q %q %v", res.Stdout, res.Stderr, err)
+	}
+	admins, _ := svc.Admins(ctx)
+	t.Logf("admins: %+v", admins)
+	a, _ := LookupAccount(r, name)
+	if k, _ := svc.Keys(a); len(k) != len(keys) {
+		t.Errorf("keys copied: %d of %d", len(k), len(keys))
 	}
 }

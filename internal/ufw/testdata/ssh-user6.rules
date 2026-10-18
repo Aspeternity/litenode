@@ -1,0 +1,4 @@
+### tuple ### allow tcp 22 ::/0 any ::/0 in comment=6c6974656e6f64653a737368
+### tuple ### allow tcp 22 ::/0 any ::/0 OpenSSH - in
+### tuple ### allow any 22 ::/0 any ::/0 in
+### tuple ### allow tcp 22,80 ::/0 any ::/0 in

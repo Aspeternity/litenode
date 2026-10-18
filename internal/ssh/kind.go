@@ -3,17 +3,21 @@ package ssh
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/ports"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 )
 
 // ConfigFile is the change of the drop-in for s; it is removed when s
 // manages nothing.
-func ConfigFile(s state.SSH) change.File {
-	data := Generate(s)
+func ConfigFile(s state.SSH, ipv6 bool) change.File {
+	data := Generate(s, ipv6)
 	if data == nil {
 		return change.File{Path: ConfigPath, Remove: true}
 	}
@@ -42,6 +46,96 @@ func ReadEffective(ctx context.Context, r system.Runner) (Effective, error) {
 		return Effective{}, fmt.Errorf("sshd -T: %w (%s)", err, strings.TrimSpace(res.Stderr))
 	}
 	return ParseEffective(res.Stdout)
+}
+
+// Sleep waits between checks; tests replace it.
+var Sleep = time.Sleep
+
+// SocketUnit is Ubuntu's socket activation for sshd (masked on Debian).
+const SocketUnit = "ssh.socket"
+
+// HasIPv6 reports whether the kernel has IPv6.
+func HasIPv6(r system.Runner) bool {
+	data, err := r.ReadFile("/proc/net/if_inet6")
+	return err == nil && len(strings.TrimSpace(string(data))) > 0
+}
+
+// socketPorts are the ports ssh.socket listens on.
+func socketPorts(ctx context.Context, r system.Runner) ([]int, error) {
+	res, err := r.Query(ctx, "systemctl", "show", "--property=Listen", "--value", SocketUnit)
+	if err != nil {
+		return nil, fmt.Errorf("systemctl show %s: %w", SocketUnit, err)
+	}
+	var out []int
+	for _, f := range strings.Fields(res.Stdout) {
+		i := strings.LastIndexByte(f, ':')
+		if i < 0 {
+			continue // "(Stream)"
+		}
+		if p, err := strconv.Atoi(f[i+1:]); err == nil && !slices.Contains(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func samePorts(a, b []int) bool {
+	a, b = slices.Clone(a), slices.Clone(b)
+	slices.Sort(a)
+	slices.Sort(b)
+	return slices.Equal(a, b)
+}
+
+// reload makes sshd use the configuration on disk. Under socket
+// activation (Ubuntu) a generator turns sshd's ports into ssh.socket's
+// ListenStream at daemon-reload, and the socket is restarted when its
+// ports change (D-065); established sessions survive.
+func reload(ctx context.Context, r system.Runner) error {
+	socket, err := system.ServiceActive(ctx, r, SocketUnit)
+	if err != nil {
+		return err
+	}
+	if socket {
+		// The socket's ports as loaded, before daemon-reload loads the
+		// generator's new ones: what it listens on now.
+		have, err := socketPorts(ctx, r)
+		if err != nil {
+			return err
+		}
+		if err := system.DaemonReload(ctx, r); err != nil {
+			return err
+		}
+		e, err := ReadEffective(ctx, r)
+		if err != nil {
+			return err
+		}
+		if !samePorts(have, e.Ports) {
+			return system.Systemctl(ctx, r, system.ServiceRestart, SocketUnit)
+		}
+	}
+	active, err := system.ServiceActive(ctx, r, Unit)
+	if err != nil || !active {
+		return err // not running yet: it reads the configuration when it starts
+	}
+	return system.Systemctl(ctx, r, system.ServiceReload, Unit)
+}
+
+// waitListening waits up to two seconds for sshd (or ssh.socket) to
+// listen on port.
+func waitListening(r system.Runner, port int, sleep func(time.Duration)) error {
+	for i := 0; ; i++ {
+		l, err := ports.Listening(r)
+		if err != nil {
+			return err
+		}
+		if l[ports.Key{Proto: ports.TCP, Port: port}] {
+			return nil
+		}
+		if i == 10 {
+			return fmt.Errorf("%w: nothing listens on port %d", ErrNotEffective, port)
+		}
+		sleep(200 * time.Millisecond)
+	}
 }
 
 // Kind is the "sshd" configuration kind. sshd cannot check a file
@@ -74,22 +168,20 @@ func Kind(store *state.Store) *change.Kind {
 			if err != nil {
 				return err
 			}
-			// Under socket activation (Ubuntu) sshd may not be running; it
-			// reads the new configuration when it starts.
-			active, err := system.ServiceActive(ctx, r, Unit)
-			if err != nil {
+			if err := reload(ctx, r); err != nil {
 				return err
-			}
-			if active {
-				if err := system.Systemctl(ctx, r, system.ServiceReload, Unit); err != nil {
-					return err
-				}
 			}
 			e, err := ReadEffective(ctx, r)
 			if err != nil {
 				return err
 			}
-			return Check(st.SSH, e)
+			if err := Check(st.SSH, e); err != nil {
+				return err
+			}
+			if st.SSH.Port > 0 {
+				return waitListening(r, st.SSH.Port, Sleep)
+			}
+			return nil
 		},
 	}
 }

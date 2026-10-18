@@ -2,11 +2,13 @@ package ufw
 
 import (
 	"context"
+	"os"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 )
@@ -93,9 +95,14 @@ func TestArgs(t *testing.T) {
 }
 
 func TestDesired(t *testing.T) {
-	nodes := []node.Node{{ID: 3, Port: 443, Enabled: true}, {ID: 4, Port: 8443, Enabled: false}}
-	if got := Desired(nodes); !slices.Equal(got, []Rule{{Proto: "tcp", Port: 443, Comment: "litenode:node:3"}}) {
+	st := state.New()
+	st.Nodes = []node.Node{{ID: 3, Port: 443, Enabled: true}, {ID: 4, Port: 8443, Enabled: false}}
+	if got := Desired(st); !slices.Equal(got, []Rule{{Proto: "tcp", Port: 443, Comment: "litenode:node:3"}}) {
 		t.Errorf("got %v (disabled nodes get no rule)", got)
+	}
+	st.SSH.Port = 22222
+	if got := Desired(st); !slices.Contains(got, Rule{Proto: "tcp", Port: 22222, Comment: "litenode:ssh"}) {
+		t.Errorf("got %v, want the SSH port's rule", got)
 	}
 }
 
@@ -136,4 +143,40 @@ func inactive() *systemtest.Fake {
 	f := systemtest.New()
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Status: inactive\n"}}, "ufw", "status")
 	return f
+}
+
+func TestPortRules(t *testing.T) {
+	f := systemtest.New()
+	for path, name := range map[string]string{UserRules: "ssh-user.rules", User6Rules: "ssh-user6.rules"} {
+		data, err := os.ReadFile("testdata/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Files[path] = data
+	}
+	simple, other, err := PortRules(f, 22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// "22/tcp" became litenode:ssh and is left to reconciliation; the
+	// source-limited and multi-port rules are counted, not offered.
+	want := []UserRule{
+		{Display: "OpenSSH", Delete: []string{"delete", "allow", "OpenSSH"}},
+		{Display: "22", Delete: []string{"delete", "allow", "22"}},
+	}
+	if !slices.EqualFunc(simple, want, func(a, b UserRule) bool { return a.Display == b.Display && slices.Equal(a.Delete, b.Delete) }) {
+		t.Errorf("simple = %+v", simple)
+	}
+	if other != 2 {
+		t.Errorf("other = %d, want 2", other)
+	}
+	if simple, other, _ := PortRules(f, 2222); len(simple) != 0 || other != 0 {
+		t.Errorf("port 2222: %v %d", simple, other)
+	}
+	// A plain proto-specific rule is offered as port/proto.
+	f.Files[UserRules] = []byte("### tuple ### allow tcp 61234 0.0.0.0/0 any 0.0.0.0/0 in\n")
+	delete(f.Files, User6Rules)
+	if simple, _, _ := PortRules(f, 61234); len(simple) != 1 || simple[0].Display != "61234/tcp" {
+		t.Errorf("61234/tcp: %+v", simple)
+	}
 }

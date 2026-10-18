@@ -136,6 +136,15 @@ func (f *Fake) Exec(_ context.Context, name string, args ...string) (system.Resu
 	return f.command(OpExec, name, args)
 }
 
+// ExecInput records the input in the call's Data.
+func (f *Fake) ExecInput(_ context.Context, input []byte, name string, args ...string) (system.Result, error) {
+	res, err := f.command(OpExec, name, args)
+	f.mu.Lock()
+	f.calls[len(f.calls)-1].Data = append([]byte(nil), input...)
+	f.mu.Unlock()
+	return res, err
+}
+
 func (f *Fake) command(op Op, name string, args []string) (system.Result, error) {
 	line := system.CommandLine(name, args...)
 	f.mu.Lock()

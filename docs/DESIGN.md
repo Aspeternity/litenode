@@ -784,7 +784,24 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 **修改端口**：按第 2 节检查新端口是否被占用 → 先放行新端口（LiteNode 防火墙已启用时加入防火墙；未启用且 ufw 在运行时添加 `litenode:ssh` 规则）→ 应用 SSH 配置并走限时确认 → 用户确认新端口可用后关闭旧端口。
 
 - 限时确认超时回滚时，新端口的放行规则随之删除（ufw 通过对账实现，见第 2 节）。
-- 使用 ufw 时，旧端口的放行规则通常是用户自己加的（如 `22/tcp` 或 `OpenSSH`），不带 `litenode:` 标记：确认新端口可用后，列出 ufw 中涉及旧端口的规则，**经用户同意**才删除，默认不删除。旧规则如果是 LiteNode 之前添加的 `litenode:ssh`，对账时自动更新。Ubuntu 22.10 起默认使用 `ssh.socket` 套接字激活，改端口后需要 `systemctl daemon-reload` 并重启 `ssh.socket`，具体行为在 Ubuntu 24.04 上实测确认后补充到本节。
+- 使用 ufw 时，旧端口的放行规则通常是用户自己加的（如 `22/tcp` 或 `OpenSSH`），不带 `litenode:` 标记：确认新端口可用后，列出 ufw 中涉及旧端口的规则，**经用户同意**才删除，默认不删除。旧规则如果是 LiteNode 之前添加的 `litenode:ssh`，对账时自动更新。
+
+**修改端口的实现**（M2-05，D-065，两台测试机实测）：
+
+- `00-litenode.conf` 除 `Port N` 外写 `ListenAddress 0.0.0.0:N` 和 `ListenAddress [::]:N`（没有 IPv6 时不写后者）。原因：`Port` 在所有文件中叠加生效（Debian 测试机的商家在主配置写了 `Port 61234`），但每个 `ListenAddress` 都带端口时 sshd 忽略所有 `Port`，所以不用修改主配置也只监听新端口。`Include` 检查同样要求 `ListenAddress` 不出现在 `Include` 之前。
+- 生效的端口以 `sshd -T` 的 `listenaddress` 为准（没有时用 `port`）。应用后核对端口只有新端口，并确认新端口确实在监听（最多等 2 秒），否则整体恢复。
+- **Ubuntu 24.04 的 `ssh.socket`**：`sshd-socket-generator` 在 `daemon-reload` 时根据 sshd 配置（含 `ListenAddress`）生成套接字的 `ListenStream`。应用时，如果 `ssh.socket` 在运行，先读出它当前监听的端口（必须在 `daemon-reload` 之前读，之后读到的已经是新配置），然后 `daemon-reload`；端口变了就 `systemctl restart ssh.socket`（会连带重启 `ssh.service`，已建立的会话不受影响），否则只 `reload ssh.service`。Debian 12 的 `ssh.socket` 被屏蔽，直接 `reload ssh.service`。
+- 新端口的检查：超出 1～65535、与当前端口相同、被其他程序监听或被节点占用时拒绝；sshd 自己当前监听的端口不算占用。
+- ufw：`ufw.Desired` 包含 `litenode:ssh`（状态中管理了端口时），所以节点同步不会删掉它。改端口是一次 `ufw` + `sshd` 的多类变更，`ufw` 在前，新端口先放行再切换；超时回滚时规则随状态恢复被删除。
+- 旧端口的规则：确认后列出用户自己的、简单的 ufw 规则（任意来源、单端口，或 `OpenSSH` 这类应用配置），经用户同意用 `ufw delete allow 22/tcp`、`ufw delete allow OpenSSH` 等删除；限制来源或多端口的规则只提示数量，请用户自行处理。LiteNode 自己的规则由对账处理，不在列表中。
+
+**创建 sudo 用户**（M2-05，D-066）：
+
+- 用户名只接受小写字母、数字、`_`、`-`，以字母或 `_` 开头，最多 32 个字符；已存在时拒绝。
+- `useradd --create-home --shell /bin/bash --groups sudo`，再用 `chpasswd` 设置密码（密码从标准输入传入，不出现在命令行和操作日志中）。密码至少 8 个字符，不能含 `:` 和控制字符；菜单可以选择自动生成 16 位随机密码（只显示一次）。
+- 可以同时把 root 的公钥复制给新用户（`authkeys` 变更，属主和权限自动修正）。
+- 新用户 `sudo` 时需要输入密码（不设置免密 sudo）。
+- 创建用户只增加登录途径，不会把人锁在外面，所以不走限时确认；中途任何一步失败，删除已创建的用户。
 
 **回滚到上次修改前**：恢复上一次修改前备份的 `00-litenode.conf`，同样走限时确认流程。
 
