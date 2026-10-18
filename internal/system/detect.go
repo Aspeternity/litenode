@@ -127,7 +127,7 @@ func Detect(ctx context.Context, r Runner) (Info, error) {
 		OS:         osr,
 		Arch:       runtime.GOARCH,
 		Virt:       DetectVirt(ctx, r),
-		BBREnabled: bbrEnabled(r),
+		BBREnabled: BBREnabled(r),
 	}
 	if data, err := r.ReadFile("/proc/meminfo"); err == nil {
 		info.MemTotalMB = ParseMemTotalMB(data)
@@ -163,7 +163,8 @@ func ParseMemTotalMB(data []byte) int {
 	return 0
 }
 
-func bbrEnabled(r Runner) bool {
+// BBREnabled reports whether BBR is the current TCP congestion control.
+func BBREnabled(r Runner) bool {
 	data, err := r.ReadFile("/proc/sys/net/ipv4/tcp_congestion_control")
 	return err == nil && strings.TrimSpace(string(data)) == "bbr"
 }

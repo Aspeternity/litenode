@@ -29,7 +29,8 @@ type Env struct {
 	AcceptRA []string
 }
 
-// Desired lists the settings the state calls for. IPv4 forwarding is on
+// Desired lists the settings the state calls for. BBR comes with the fq
+// queueing discipline (DESIGN section 15). IPv4 forwarding is on
 // while an enabled forward has an IPv4 target, IPv6 forwarding while one
 // has an IPv6 target. Turning on IPv6 forwarding makes the kernel ignore
 // router advertisements on interfaces with accept_ra = 1, which would
@@ -44,6 +45,9 @@ func Desired(st *state.State, env Env) []Setting {
 		}
 	}
 	var out []Setting
+	if st.Sysopt.BBR {
+		out = append(out, Setting{"net.core.default_qdisc", "fq"}, Setting{"net.ipv4.tcp_congestion_control", "bbr"})
+	}
 	if v4 {
 		out = append(out, Setting{"net.ipv4.ip_forward", "1"})
 	}

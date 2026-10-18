@@ -24,7 +24,7 @@ var virtNames = map[string]string{
 // SystemLine renders the system line of the main menu status area,
 // e.g. "Debian 12 | KVM | 973M | BBR ✓".
 func SystemLine(info system.Info) string {
-	parts := []string{osName(info.OS), virtName(info.Virt)}
+	parts := []string{osName(info.OS), VirtName(info.Virt)}
 	if info.MemTotalMB > 0 {
 		parts = append(parts, memSize(info.MemTotalMB))
 	}
@@ -39,7 +39,8 @@ func osName(o system.OSRelease) string {
 	return text.UnknownOS
 }
 
-func virtName(v system.Virt) string {
+// VirtName is the display name of a virtualization type.
+func VirtName(v system.Virt) string {
 	switch v.Type {
 	case "":
 		return text.VirtUnknown

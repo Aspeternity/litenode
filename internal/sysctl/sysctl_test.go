@@ -33,6 +33,11 @@ func TestDesired(t *testing.T) {
 	if got := string(Generate(Desired(st, env))); got != want {
 		t.Errorf("IPv6 target:\n%s", got)
 	}
+	st.Forwards = nil
+	st.Sysopt.BBR = true
+	if got := Desired(st, env); !slices.Equal(got, []Setting{{"net.core.default_qdisc", "fq"}, {"net.ipv4.tcp_congestion_control", "bbr"}}) {
+		t.Errorf("BBR: %v", got)
+	}
 }
 
 func TestReadEnv(t *testing.T) {
