@@ -7,23 +7,20 @@ import (
 
 // SSH menu (DESIGN section 13).
 const (
-	SSHKeyAdd         = "添加公钥"
-	SSHKeyAddHint     = "(粘贴 / 从 GitHub 用户名导入)"
-	SSHKeyGen         = "生成密钥对"
-	SSHKeyGenHint     = "(私钥只显示一次)"
-	SSHPubkeyToggle   = "密钥登录"
-	SSHPasswordToggle = "密码登录"
-	SSHToggleHint     = "(开启 / 关闭)"
-	SSHRootPolicy     = "root 登录策略"
-	SSHRootHint       = "(允许 / 仅密钥 / 禁止)"
-	SSHPortChange     = "修改 SSH 端口"
-	SSHPortHint       = "(自动同步防火墙)"
-	SSHSudoUser       = "创建 sudo 用户"
-	SSHKeyDelete      = "删除公钥"
-	SSHRollback       = "回滚到上次修改前"
+	SSHKeys         = "密钥管理"
+	SSHKeyAdd       = "添加公钥"
+	SSHKeyGen       = "生成密钥对"
+	SSHLoginMethod  = "登录方式"
+	SSHRootPolicy   = "root 登录"
+	SSHPortChange   = "修改 SSH 端口"
+	SSHSudoUser     = "创建 sudo 用户"
+	SSHKeyDelete    = "删除公钥"
+	SSHRollback     = "回滚到上次修改前"
+	SSHKeysOnly     = "仅密钥"
+	SSHPasswordOnly = "仅密码"
+	SSHKeysPassword = "密钥 + 密码"
+	SSHNoLogin      = "无法登录"
 
-	SSHOn        = "开启"
-	SSHOff       = "关闭"
 	SSHRootYes   = "允许"
 	SSHRootKeys  = "仅密钥"
 	SSHRootNo    = "禁止"
@@ -57,9 +54,25 @@ const (
 	PasswordWarn      = "⚠"
 )
 
-// SSHStatusLine is the first status line of the SSH menu.
-func SSHStatusLine(ports, pubkey, password, root string) string {
-	return fmt.Sprintf("端口: %s   密钥登录: %s   密码登录: %s   root 登录: %s", ports, pubkey, password, root)
+// SSHStatusLines are the status lines of the SSH menu (D-090).
+func SSHStatusLines(ports, method, root string, keys int) []string {
+	return []string{
+		fmt.Sprintf("端口: %s   登录方式: %s", ports, method),
+		fmt.Sprintf("root 登录: %s   公钥: %d 个", root, keys),
+	}
+}
+
+// LoginMethod names a combination of key and password login.
+func LoginMethod(pubkey, password bool) string {
+	switch {
+	case pubkey && password:
+		return SSHKeysPassword
+	case pubkey:
+		return SSHKeysOnly
+	case password:
+		return SSHPasswordOnly
+	}
+	return SSHNoLogin
 }
 
 // SSHMainStatus is the SSH value in the main menu, e.g. "22222 / 仅密钥".
@@ -104,17 +117,8 @@ func KeysAdded(added, total int) string {
 	return fmt.Sprintf("已添加 %d 个公钥，其余 %d 个已经存在。", added, total-added)
 }
 
-// ConfirmToggle asks before turning a login method on or off.
-func ConfirmToggle(what string, on bool) string {
-	verb := "关闭"
-	if on {
-		verb = "开启"
-	}
-	return verb + what + "？"
-}
-
-// RootPolicyCurrent marks the current root policy.
-func RootPolicyCurrent(label string) string { return "当前: " + label }
+// SSHCurrent marks the current login method or root policy.
+func SSHCurrent(label string) string { return "当前: " + label }
 
 // PortChangeNotice reminds about the provider's firewall before moving
 // the SSH port.
