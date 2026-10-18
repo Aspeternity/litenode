@@ -11,6 +11,7 @@ package system
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"strings"
 )
@@ -26,6 +27,10 @@ type Result struct {
 type Runner interface {
 	// Query runs a read-only command. It always executes, even in dry-run mode.
 	Query(ctx context.Context, name string, args ...string) (Result, error)
+	// Stream runs a read-only command with its output going to out as it
+	// arrives, until the command ends or ctx is canceled (a canceled ctx is
+	// not an error). It always executes, even in dry-run mode.
+	Stream(ctx context.Context, out io.Writer, name string, args ...string) error
 	// Exec runs a command that changes the system.
 	Exec(ctx context.Context, name string, args ...string) (Result, error)
 	// ExecInput is Exec with input on stdin. The input is never logged or

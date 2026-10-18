@@ -364,6 +364,9 @@ func ClientLine(remark string) string {
 	return "客户端: " + remark
 }
 
+// XrayLogsTitle heads the recent log lines.
+func XrayLogsTitle(n int) string { return fmt.Sprintf("最近 %d 行日志：", n) }
+
 // Xray service menu (DESIGN section 12).
 const (
 	XrayStart            = "启动"
@@ -380,7 +383,12 @@ const (
 	XrayRestarted        = "Xray 已重启。"
 	XrayNoNodes          = "没有启用的节点，Xray 无需运行。"
 	XrayStoppedByUserErr = "Xray 已被手动停止，请先选择\"启动\"。"
-	XrayLogsTitle        = "最近 50 行日志（实时查看可运行 journalctl -u litenode-xray -f）："
+	XrayAlreadyRunning   = "Xray 已在运行，没有重启。需要重启请选择\"重启\"。"
+	XrayAlreadyStopped   = "Xray 已经是停止状态。"
+	XrayRecentLogs       = "最近日志"
+	XrayLiveLogs         = "实时日志"
+	PromptLogLines       = "显示行数（最多 1000，0 返回）"
+	XrayLiveLogsTitle    = "实时日志（按 Ctrl+C 回到菜单）："
 	PromptXrayVersion    = "要安装的版本（直接回车为默认版本）"
 	XrayUpdating         = "正在下载并校验……"
 	XrayUninstalled      = "Xray 已卸载，所有节点和客户端已删除。"

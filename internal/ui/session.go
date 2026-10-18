@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +45,9 @@ type Session struct {
 	prompting bool
 	quit      bool
 	wake      chan struct{}
+	// follow cancels the running Follow operation; Ctrl+C ends it instead
+	// of quitting.
+	follow context.CancelFunc
 }
 
 // NewSession reads lines from in and interrupts from sigs. The caller
@@ -63,8 +67,15 @@ func NewSession(in io.Reader, out io.Writer, sigs <-chan os.Signal, colors Color
 }
 
 func (s *Session) watch(sigs <-chan os.Signal) {
-	for range sigs {
+	for sig := range sigs {
 		s.mu.Lock()
+		if s.follow != nil {
+			s.follow()
+			if sig == os.Interrupt {
+				s.mu.Unlock()
+				continue
+			}
+		}
 		already := s.quit
 		s.quit = true
 		prompting := s.prompting
@@ -78,6 +89,32 @@ func (s *Session) watch(sigs <-chan os.Signal) {
 			fmt.Fprintln(s.Out, "\n"+s.Colors.Warn(text.BusyInterrupt))
 		}
 	}
+}
+
+// Follow runs fn, an open-ended operation such as following a log, until it
+// returns. Ctrl+C cancels fn's context and returns to the menu instead of
+// quitting (D-090); other quit signals still quit.
+func (s *Session) Follow(ctx context.Context, fn func(context.Context) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	s.mu.Lock()
+	if s.quit {
+		s.mu.Unlock()
+		return ErrQuit
+	}
+	s.follow = cancel
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.follow = nil
+		s.mu.Unlock()
+	}()
+	err := fn(ctx)
+	if ctx.Err() != nil {
+		fmt.Fprintln(s.Out)
+		return nil
+	}
+	return err
 }
 
 // Prompt prints label and returns the trimmed input line.

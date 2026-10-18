@@ -60,3 +60,4 @@
 - **测试更新脚本**（M6-02）：用 `-ldflags "-X main.version=v0.0.1"` 编译旧版本装到测试机，再在菜单中更新（会装上 GitHub 上的最新 Release）；失败路径用 `maint` 的 `vps` 测试（篡改下载内容，检查程序未被替换）。测试后装回开发版本并删除 `litenode.bak`。
 - **测试导入导出**（M6-01）：两台测试机先各自导出一份作为备份，测试后导入各自的备份恢复，再删除 `/root` 下的导出文件（含私钥）。
 - `--dry-run` 参数的接入在 M0-07（子命令框架）完成，届时用 `system.NewDryRun(system.NewReal(nil), os.Stdout)`。
+- 需要真终端的验证（如实时日志的 Ctrl+C）：在测试机上用 Python `pty.fork()` 驱动程序，按步骤发送按键和 `\x03`，只取关键行（M7-02 用的脚本在 scratchpad 的 `ptydrive.py`，可放 `/root/ptydrive.py`）。

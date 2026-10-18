@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -34,7 +35,7 @@ func (u *nodeUI) xrayMenu() ui.Menu {
 			{Label: text.XrayStart, Action: u.xrayStart},
 			{Label: text.XrayStop, Action: u.xrayStop},
 			{Label: text.XrayRestart, Action: u.xrayRestart},
-			{Label: text.XrayLogs, Action: u.xrayLogs},
+			{Label: text.XrayLogs, Page: true, Action: u.xrayLogs},
 			{Label: text.XrayOutboundIP, Hint: text.XrayOutboundIPHint, Action: u.xrayOutboundIP},
 			{Label: text.XrayUpdate, Hint: text.XrayUpdateHint, Action: u.xrayUpdate},
 			{Label: text.XrayUninstall, Hint: text.XrayUninstallHint, Action: u.xrayUninstall},
@@ -44,8 +45,12 @@ func (u *nodeUI) xrayMenu() ui.Menu {
 
 func (u *nodeUI) xrayStart() error {
 	err := u.svc.StartXray(u.ctx)
-	if errors.Is(err, nodemgr.ErrNoEnabledNodes) {
+	switch {
+	case errors.Is(err, nodemgr.ErrNoEnabledNodes):
 		u.s.End(text.XrayNoNodes)
+		return nil
+	case errors.Is(err, nodemgr.ErrAlreadyRunning):
+		u.s.End(text.XrayAlreadyRunning)
 		return nil
 	}
 	if err == nil {
@@ -55,7 +60,12 @@ func (u *nodeUI) xrayStart() error {
 }
 
 func (u *nodeUI) xrayStop() error {
-	if err := u.svc.StopXray(u.ctx); err != nil {
+	err := u.svc.StopXray(u.ctx)
+	if errors.Is(err, nodemgr.ErrAlreadyStopped) {
+		u.s.End(text.XrayAlreadyStopped)
+		return nil
+	}
+	if err != nil {
 		return err
 	}
 	u.s.Done(text.XrayStoppedMsg)
@@ -77,14 +87,39 @@ func (u *nodeUI) xrayRestart() error {
 	return err
 }
 
+// xrayLogs is the log submenu: recent lines, or following the journal
+// until Ctrl+C (D-090).
 func (u *nodeUI) xrayLogs() error {
-	logs, err := u.svc.XrayLogs(u.ctx, 50)
+	return u.s.Run(func() ui.Menu {
+		return ui.Menu{
+			Heading: text.XrayLogs,
+			Items: []ui.Item{
+				{Label: text.XrayRecentLogs, Action: u.xrayRecentLogs},
+				{Label: text.XrayLiveLogs, Action: u.xrayLiveLogs},
+			},
+		}
+	})
+}
+
+func (u *nodeUI) xrayRecentLogs() error {
+	n, err := u.s.PromptNumber(text.PromptLogLines, 50, 0, nodemgr.MaxLogLines)
+	if err != nil || n == 0 {
+		return err
+	}
+	logs, err := u.svc.XrayLogs(u.ctx, n)
 	if err != nil {
 		return err
 	}
-	u.s.End(text.XrayLogsTitle)
+	u.s.End(text.XrayLogsTitle(n))
 	u.s.Println(strings.TrimRight(logs, "\n"))
 	return nil
+}
+
+func (u *nodeUI) xrayLiveLogs() error {
+	u.s.End(text.XrayLiveLogsTitle)
+	return u.s.Follow(u.ctx, func(ctx context.Context) error {
+		return u.svc.FollowXrayLogs(ctx, u.s.Out)
+	})
 }
 
 func (u *nodeUI) xrayUpdate() error {
