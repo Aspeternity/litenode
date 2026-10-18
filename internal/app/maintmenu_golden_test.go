@@ -43,7 +43,7 @@ func TestMenusHaveNoBracketHints(t *testing.T) {
 			t.Errorf("bracket hint: %q", line)
 		}
 	}
-	if !strings.Contains(r.stdout, " › 主机地址 ══") || !strings.Contains(r.stdout, " › 密钥管理 ══") || !strings.Contains(r.stdout, " › 查看日志 ══") {
+	if !strings.Contains(r.stdout, " › 配置主机地址 ══") || !strings.Contains(r.stdout, " › 密钥管理 ══") || !strings.Contains(r.stdout, " › 查看日志 ══") {
 		t.Errorf("pages not visited:\n%s", r.stdout)
 	}
 }
