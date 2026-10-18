@@ -41,7 +41,7 @@ func TestVPSForward(t *testing.T) {
 	r := system.NewReal(nil)
 	store := state.NewStore(r)
 	m := change.NewManager(r, store)
-	s := &Service{Runner: r, Store: store, Changes: m}
+	s := &Service{Runner: r, Store: store, Changes: m, Executable: "/usr/local/bin/litenode"}
 	switch mode {
 	case "golden":
 		paths, _ := filepath.Glob(filepath.Join(os.Getenv("LN_GOLDEN"), "*.nft"))

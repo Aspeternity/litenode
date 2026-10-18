@@ -41,6 +41,10 @@ type Service struct {
 	Changes *change.Manager
 	// Resolver looks up domain targets; nil uses net.DefaultResolver.
 	Resolver forward.Resolver
+	// Executable is the litenode binary the resolve timer runs.
+	Executable string
+	// UnitDir holds the resolve timer units; empty uses DefaultUnitDir.
+	UnitDir string
 }
 
 // Kinds are the configuration kinds forward operations change, in apply
@@ -58,7 +62,7 @@ func (s *Service) resolver() forward.Resolver {
 }
 
 // apply writes the sysctl file for st and applies it with the table and
-// the ufw reconciliation.
+// the ufw reconciliation, then sets up or removes the resolve timer.
 func (s *Service) apply(ctx context.Context, st *state.State) error {
 	if slices.ContainsFunc(st.Forwards, func(f forward.Forward) bool { return f.Enabled }) {
 		if err := firewall.EnsureNft(ctx, s.Runner); err != nil {
@@ -79,8 +83,13 @@ func (s *Service) apply(ctx context.Context, st *state.State) error {
 		parts = append(parts, change.Part{Kind: k[0], Files: []change.File{f}})
 	}
 	parts = append(parts, change.Part{Kind: k[1]}, change.Part{Kind: k[2]})
-	_, err = s.Changes.Apply(ctx, change.Change{Parts: parts, State: st})
-	return err
+	if _, err := s.Changes.Apply(ctx, change.Change{Parts: parts, State: st}); err != nil {
+		return err
+	}
+	if err := s.syncTimer(ctx, st); err != nil {
+		return &TimerError{Err: err}
+	}
+	return nil
 }
 
 // Input is what the add and modify flows collect.
