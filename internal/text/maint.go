@@ -72,7 +72,7 @@ func UpdateDone(latest, bak string) string {
 
 // UpdateFailed explains a failed query or download (D-042).
 func UpdateFailed(err error) string {
-	return fmt.Sprintf("更新失败，未做任何修改：%v\n如果这台机器无法访问 GitHub，请参考 README 中的手动安装说明。", err)
+	return fmt.Sprintf("更新失败，未做任何修改：%v\n如果这台机器无法访问 GitHub，手动更新方法见 %s", err, NoGitHubURL)
 }
 
 // ErrUpdateBadBinary explains a downloaded program that does not run.

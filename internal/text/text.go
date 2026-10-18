@@ -73,6 +73,10 @@ func Warning(s string) string {
 // AlreadyRunning is shown when another LiteNode instance holds the lock.
 const AlreadyRunning = "另一个 LiteNode 正在运行。请先退出另一个窗口中的 LiteNode，再重新执行。"
 
+// NoGitHubURL is the README section on machines that cannot reach
+// GitHub, including the manual install steps (D-042).
+const NoGitHubURL = "https://github.com/Aspeternity/litenode#无法访问-github-的机器"
+
 // LockFailed is shown when the lock file cannot be created.
 func LockFailed(err error) string {
 	return fmt.Sprintf("无法创建锁文件：%v", err)
