@@ -29,6 +29,7 @@ type State struct {
 	NextID int64       `json:"next_id"`
 	Server Server      `json:"server"`
 	Xray   Xray        `json:"xray"`
+	SSH    SSH         `json:"ssh"`
 	Nodes  []node.Node `json:"nodes"`
 }
 
@@ -49,6 +50,17 @@ type Xray struct {
 	// Stopped is set when the user stopped Xray from the menu. Changes
 	// then keep it stopped, also across reboots (D-045).
 	Stopped bool `json:"stopped"`
+}
+
+// SSH holds the sshd settings LiteNode manages, written to
+// /etc/ssh/sshd_config.d/00-litenode.conf (DESIGN section 13, D-061). A
+// zero field is not managed: LiteNode leaves that setting to the system.
+type SSH struct {
+	Port         int   `json:"port,omitempty"`
+	PubkeyAuth   *bool `json:"pubkey_authentication,omitempty"`
+	PasswordAuth *bool `json:"password_authentication,omitempty"`
+	// PermitRootLogin is "yes", "prohibit-password" or "no".
+	PermitRootLogin string `json:"permit_root_login,omitempty"`
 }
 
 // New returns the state used when no state file exists yet.

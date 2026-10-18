@@ -238,6 +238,7 @@ docs/
 - 文件损坏（无法解析）时提示文件路径和备份目录，让用户手动恢复，**不自动覆盖**。`schema_version` 比程序支持的新（程序被降级）时提示更新 LiteNode 并退出。
 - 文件锁：`flock` 锁 `/run/litenode.lock`，菜单会话全程持有，进程退出或被终止时由内核自动释放。第二个实例提示"另一个 LiteNode 正在运行"并退出。`version`、`help` 不加锁；`internal rollback` 不受锁限制（安全机制必须执行，见第 6 节）；`internal resolve` 遇到锁时跳过本轮（见第 11 节）。
 - `xray.stopped`：用户在 Xray 菜单中手动停止后为 `true`（D-045，见第 12 节）。
+- `ssh`：LiteNode 管理的 sshd 设置（D-061，见第 13 节）。每个字段不写表示不管理，交给系统原有配置；全部不写时不生成 `00-litenode.conf`。
 - 节点的 `share_port`：分享链接使用的端口，不写（或 0）表示与 `port` 相同（NAT 机，D-043）。
 - 转发的 `resolved_ipv4` / `resolved_ipv6`：目标为域名时分别解析的 A / AAAA 记录（D-046，见第 11 节）。
 - `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。
@@ -256,6 +257,12 @@ docs/
   "xray": {
     "version": "v25.x.x",
     "stopped": false
+  },
+  "ssh": {
+    "port": 22222,
+    "pubkey_authentication": true,
+    "password_authentication": false,
+    "permit_root_login": "prohibit-password"
   },
   "nodes": [
     {
@@ -733,6 +740,17 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 - 先确认 `/etc/ssh/sshd_config` 中有 `Include /etc/ssh/sshd_config.d/*.conf` 且位于其他配置之前；没有时提示用户，不自动修改主配置。
 - 每次修改：`sshd -t` 校验 → 应用 → 用 `sshd -T` 确认实际生效值 → 限时确认回滚（第 6 节）。
 - 顶部状态区显示的是 `sshd -T` 的实际生效值，而不是 LiteNode 写入的值。
+
+**实现细节**（M2-01，D-061）：
+
+- 状态文件的 `ssh` 记录 LiteNode 管理的设置（端口、密钥登录、密码登录、root 登录策略），`00-litenode.conf` 由它生成，只写被管理的项；没有被管理的项时删除该文件。文件权限 600。
+- 关闭密码登录时同时写 `KbdInteractiveAuthentication no`：否则通过 PAM 的键盘交互方式仍可以输入密码登录。开启密码登录时不写这一项，保持系统原值。
+- `Include` 检查：主配置中必须有能匹配 `/etc/ssh/sshd_config.d/00-litenode.conf` 的 `Include`（相对路径相对于 `/etc/ssh`），而且在它之前不能出现 LiteNode 管理的配置项（`Port`、`PubkeyAuthentication`、`PasswordAuthentication`、`KbdInteractiveAuthentication`、`ChallengeResponseAuthentication`、`PermitRootLogin`），也不能在 `Match` 块中。其他配置项（如 `HostKey`）在前面没有影响，不算错误。
+- 配置类型 `sshd`：就地校验（写入后 `sshd -t` 和 `Include` 检查，失败立即恢复，sshd 还没有重新加载）；应用时 `ssh.service` 在运行则 `systemctl reload ssh.service`（Ubuntu 套接字激活时 sshd 可能没有运行，下次启动时读取新配置），然后用 `sshd -T` 核对状态文件中的每一项都已生效，不一致则整体恢复。恢复后同样核对，所以恢复的结果也经过确认。
+- `/usr/sbin/sshd`、服务名 `ssh.service` 在 Debian 12 和 Ubuntu 24.04 上相同（Debian 上 `sshd.service` 是别名）。
+- **实测**（2026-10-18）：
+  - Ubuntu 24.04（OpenSSH 9.6）：`50-cloud-init.conf` 写着 `PasswordAuthentication yes`，`00-litenode.conf` 中的 `no` 生效；`ssh.socket` 启用、`ssh.service` 由套接字启动，套接字监听 `0.0.0.0:22` 和 `[::]:22`。
+  - Debian 12（OpenSSH 9.2，测试 VPS 的商家在主配置 `Include` 之后写了 `Port 61234`）：`Port` 与其他配置项不同，**所有文件中的 `Port` 都生效**，sshd 同时监听两个端口。LiteNode 写入新端口后 `sshd -T` 显示两个端口，核对不通过，修改被整体恢复。修改端口（M2-05）必须处理这种情况。
 
 **公钥**：
 
