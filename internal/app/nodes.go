@@ -538,6 +538,9 @@ func describe(err error) string {
 		if msg, ok := describeForward(err); ok {
 			return msg
 		}
+		if msg, ok := describeSysopt(err); ok {
+			return msg
+		}
 	}
 	switch {
 	case errors.Is(err, node.ErrRemarkEmpty):

@@ -165,3 +165,22 @@ func TestProbeBBR(t *testing.T) {
 		t.Error("no bbr: want unavailable")
 	}
 }
+
+func TestProbeSwap(t *testing.T) {
+	ctx := context.Background()
+	kvm := systemtest.New()
+	kvm.Files["/proc/swaps"] = []byte("Filename\tType\tSize\tUsed\tPriority\n")
+	kvm.Respond(systemtest.Response{Result: system.Result{Stdout: "kvm\n"}}, "systemd-detect-virt")
+	if !system.ProbeAll(ctx, kvm).Has(system.CapSwap) {
+		t.Error("KVM: want swap available")
+	}
+	lxc := systemtest.New()
+	lxc.Files["/proc/swaps"] = kvm.Files["/proc/swaps"]
+	lxc.Respond(systemtest.Response{Result: system.Result{Stdout: "lxc\n"}}, "systemd-detect-virt")
+	if system.ProbeAll(ctx, lxc).Has(system.CapSwap) {
+		t.Error("LXC: want swap unavailable")
+	}
+	if system.ProbeAll(ctx, systemtest.New()).Has(system.CapSwap) {
+		t.Error("no /proc/swaps: want swap unavailable")
+	}
+}
