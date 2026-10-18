@@ -303,3 +303,32 @@ func TestVPSGeneratedKeyLogin(t *testing.T) {
 		t.Errorf("login with the generated key failed: %v %s", err, login.Stderr)
 	}
 }
+
+// TestVPSPasswordLogin (M2-04) sets password login with LN_PASSWORD=off
+// or on and confirms the change; logging in is checked from the
+// development machine. It also checks that forbidding root login without
+// a sudo user is refused.
+func TestVPSPasswordLogin(t *testing.T) {
+	want := os.Getenv("LN_PASSWORD")
+	if want != "on" && want != "off" {
+		t.Skip("set LN_PASSWORD=on|off")
+	}
+	ctx, r, svc := keySetup(t)
+	if err := svc.SetRootLogin(ctx, RootNo); !errors.Is(err, ErrNeedSudoUser) {
+		t.Errorf("forbidding root without a sudo user: %v", err)
+	}
+	admins, err := svc.Admins(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("admins: %+v", admins)
+	if err := svc.SetPasswordAuth(ctx, want == "on"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Confirmer.Disarm(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := passwordAuth(t, ctx, r); got != (want == "on") {
+		t.Errorf("sshd password login = %v", got)
+	}
+}
