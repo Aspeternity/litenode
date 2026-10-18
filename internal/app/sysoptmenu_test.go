@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -91,5 +92,22 @@ func TestSysoptMenuDNS(t *testing.T) {
 		text.DNSResolvConfNote, text.DNSSet("1.1.1.1 1.0.0.1"))
 	if got := string(f.Files["/etc/resolv.conf"]); !strings.Contains(got, "nameserver 1.1.1.1\nnameserver 1.0.0.1\nsearch example.com\n") {
 		t.Errorf("resolv.conf:\n%s", got)
+	}
+}
+
+func TestSysoptMenuClock(t *testing.T) {
+	f := supported()
+	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")
+	show := []string{"show", "-p", "Timezone", "-p", "NTP", "-p", "NTPSynchronized", "-p", "CanNTP"}
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Timezone=UTC\nNTP=no\nNTPSynchronized=no\nCanNTP=yes\n"}}, "timedatectl", show...)
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Asia/Shanghai\nUTC\n"}}, "timedatectl", "list-timezones")
+	f.OnCommand("timedatectl set-ntp true", func() {
+		f.Respond(systemtest.Response{Result: system.Result{Stdout: "Timezone=UTC\nNTP=yes\nNTPSynchronized=yes\nCanNTP=yes\n"}}, "timedatectl", show...)
+	})
+	// main: 6; 3 clock (BBR, swap hidden), 1 zone, 2 Shanghai; 3, 2 NTP; back; quit.
+	r := runSysopt(t, f, "6", "3", "1", "2", "3", "2", "0", "0")
+	wantOutput(t, r.stdout, "时区: UTC (同步 ✗)", "UTC (当前)", text.TimezoneSet("Asia/Shanghai"), text.NTPSyncedDone, "时区: UTC (同步 ✓)")
+	if !slices.Contains(f.Execs(), "timedatectl set-timezone Asia/Shanghai") {
+		t.Errorf("execs = %q", f.Execs())
 	}
 }

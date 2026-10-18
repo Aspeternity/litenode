@@ -967,7 +967,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 - **swap**：创建交换文件 `/litenode.swap`（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小（1G）。只管理自己的文件，系统已有的其他 swap 只显示（D-079）。大小 128M ~ 32G，创建后磁盘至少保留 256M。停用前检查 swap 中的数据不超过可用内存。容器环境（或没有 `/proc/swaps`）中该项隐藏。
 - **IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6（D-080）。优先 IPv4 时在文件末尾加入带 `# BEGIN LiteNode` / `# END LiteNode` 标记的 `precedence ::ffff:0:0/96  100`；优先 IPv6 即系统默认，删除该段。文件中其他行不修改；其他行已设置优先 IPv4 时提示手动修改。只影响使用 glibc `getaddrinfo` 的程序（curl、apt 等），不影响 Xray。
 - **DNS**：系统使用 systemd-resolved 时写入 `/etc/systemd/resolved.conf.d/` 下的配置文件；否则修改 `/etc/resolv.conf`，并提示该文件可能被 DHCP 或 cloud-init 覆盖。提供常用 DNS 选项和自定义输入（D-081）：Cloudflare、Google、Quad9、自定义（1 ~ 3 个 IP）；systemd-resolved 下由 LiteNode 设置过时另有"恢复系统默认"。应用前直接向每个服务器查询测试，失败时询问是否仍要使用；应用后用系统解析测试一次，失败只提示。
-- **时区与时间同步**：设置时区（`timedatectl`），启用 systemd-timesyncd 时间同步。Reality 对时间敏感，状态区显示同步状态。
+- **时区与时间同步**：设置时区（`timedatectl`），启用 systemd-timesyncd 时间同步。Reality 对时间敏感，状态区显示同步状态。时区从常用列表选择或手动输入（按 `timedatectl list-timezones` 校验）；没有任何时间同步服务时先安装 systemd-timesyncd，已有 chrony 等则直接使用；开启后最多等待 30 秒确认同步（D-082）。容器中不显示时间同步（使用宿主机时间）；`timedatectl` 不可用时整项隐藏。
 
 ## 16. 维护
 

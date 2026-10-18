@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/sysopt"
 	"github.com/Aspeternity/litenode/internal/system"
@@ -21,6 +22,8 @@ type sysoptUI struct {
 	caps system.Capabilities
 	// probeDNS tests DNS servers before they are used.
 	probeDNS sysopt.DNSProber
+	// syncWait is how long to wait for the clock to synchronize.
+	syncWait time.Duration
 }
 
 // mark shows a yes / no state.
@@ -50,6 +53,14 @@ func (u *sysoptUI) menu() ui.Menu {
 	if p, err := u.svc.PreferenceStatus(); err == nil {
 		fields = append(fields, text.StatusPreference(p.IPv4))
 	}
+	clock, clockErr := u.svc.ClockStatus(u.ctx)
+	if clockErr == nil {
+		synced := ""
+		if !u.info.Virt.Container {
+			synced = u.mark(clock.Synced)
+		}
+		fields = append(fields, text.StatusClock(clock.Timezone, synced))
+	}
 	m := ui.Menu{
 		Heading: text.MenuSysopt,
 		Status:  []string{strings.Join(fields, "   ")},
@@ -58,6 +69,7 @@ func (u *sysoptUI) menu() ui.Menu {
 			{Label: text.SysoptSwap, Hint: text.SysoptSwapHint, Hidden: !u.caps.Has(system.CapSwap), Action: u.swap},
 			{Label: text.SysoptPreference, Action: u.preference},
 			{Label: text.SysoptDNS, Action: u.dns},
+			{Label: text.SysoptClock, Hidden: clockErr != nil, Action: u.clock},
 		},
 	}
 	for _, it := range m.Items {
@@ -100,7 +112,7 @@ func (u *sysoptUI) bbr(b sysopt.BBR) error {
 // other errors.
 func describeSysopt(err error) (string, bool) {
 	for target, msg := range map[error]string{
-		sysopt.ErrDNSServers: text.ErrDNSServers,
+		sysopt.ErrDNSServers: text.ErrDNSServers, sysopt.ErrTimezone: text.ErrTimezone,
 		sysopt.ErrSwapExists: text.ErrSwapExists, sysopt.ErrNoSwap: text.ErrNoSwap,
 		sysopt.ErrSwapInUse: text.ErrSwapInUse, sysopt.ErrNoDiskSpace: text.ErrNoDiskSpace,
 		sysopt.ErrSwapSize: text.ErrSwapSize(sysopt.FormatMB(sysopt.MinSwapMB), sysopt.FormatMB(sysopt.MaxSwapMB)),
@@ -296,5 +308,68 @@ func (u *sysoptUI) dns() error {
 	if !u.svc.LookupWorks(u.ctx) {
 		u.s.Println(u.s.Colors.Warn(text.DNSVerifyFailed))
 	}
+	return nil
+}
+
+func (u *sysoptUI) clock() error {
+	c, err := u.svc.ClockStatus(u.ctx)
+	if err != nil {
+		return err
+	}
+	u.s.Println(text.ClockCurrent(c.Timezone, c.NTP, c.Synced))
+	// Containers take the time of the host.
+	choice, err := u.s.Choose(ui.Menu{Items: []ui.Item{
+		{Label: text.ClockSetTimezone},
+		{Label: text.ClockEnableNTP, Hidden: u.info.Virt.Container},
+	}})
+	switch {
+	case err != nil || choice == 0:
+		return err
+	case choice == 1:
+		return u.timezone(c.Timezone)
+	}
+	if c.NTP && c.Synced {
+		u.s.End(text.NTPAlreadySynced)
+		return nil
+	}
+	if !c.CanNTP {
+		u.s.Println(text.NTPInstallingNote)
+	}
+	if err := u.svc.EnableNTP(u.ctx); err != nil {
+		return err
+	}
+	u.s.Println(text.NTPWaiting)
+	if u.svc.WaitSynced(u.ctx, u.syncWait, 2*time.Second) {
+		u.s.Done(text.NTPSyncedDone)
+	} else {
+		u.s.Done(text.NTPPendingDone)
+	}
+	return nil
+}
+
+func (u *sysoptUI) timezone(cur string) error {
+	m := ui.Menu{}
+	for _, tz := range sysopt.CommonTimezones {
+		l := tz
+		if tz == cur {
+			l += " " + text.CurrentMark
+		}
+		m.Items = append(m.Items, ui.Item{Label: l})
+	}
+	m.Items = append(m.Items, ui.Item{Label: text.TimezoneCustom})
+	c, err := u.s.Choose(m)
+	if err != nil || c == 0 {
+		return err
+	}
+	var tz string
+	if c <= len(sysopt.CommonTimezones) {
+		tz = sysopt.CommonTimezones[c-1]
+	} else if tz, err = u.s.Prompt(text.PromptTimezone + ": "); err != nil {
+		return err
+	}
+	if err := u.svc.SetTimezone(u.ctx, strings.TrimSpace(tz)); err != nil {
+		return err
+	}
+	u.s.Done(text.TimezoneSet(strings.TrimSpace(tz)))
 	return nil
 }
