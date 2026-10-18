@@ -20,8 +20,8 @@ func firewallSystem() *systemtest.Fake {
 
 func TestFirewallMenu(t *testing.T) {
 	f := firewallSystem()
-	// main: 5 firewall; enable, yes, keep; disable, yes, keep; back; quit.
-	r := runSSH(t, f, "5", "1", "y", "y", "6", "y", "y", "0", "0")
+	// main: 7 firewall; enable, yes, keep; disable, yes, keep; back; quit.
+	r := runSSH(t, f, "7", "1", "y", "y", "6", "y", "y", "0", "0")
 	for _, want := range []string{
 		" 防火墙: ○ 未启用",
 		" 1. 安装并启用防火墙  (自动放行当前 SSH、节点、转发端口)",
@@ -50,7 +50,7 @@ func TestFirewallMenu(t *testing.T) {
 func TestFirewallMenuUFWActive(t *testing.T) {
 	f := firewallSystem()
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Status: active\n"}}, "ufw", "status")
-	r := runSSH(t, f, "5", "1", "0", "0")
+	r := runSSH(t, f, "7", "1", "0", "0")
 	if !strings.Contains(r.stdout, "ufw 正在运行。请先执行 ufw disable") {
 		t.Errorf("ufw not reported:\n%s", r.stdout)
 	}
@@ -84,7 +84,7 @@ func enabledFirewall(t *testing.T) *systemtest.Fake {
 func TestFirewallRuleManagement(t *testing.T) {
 	f := enabledFirewall(t)
 	r := runSSH(t, f,
-		"5",
+		"7",
 		// open: bad port, range, TCP, bad source, two sources, note.
 		"1", "99999", "28000-28010", "2", "1.2.3", "1.2.3.4, 10.0.0.0/8", "备注",
 		// the same again is refused.
@@ -123,7 +123,7 @@ func TestFirewallRuleManagement(t *testing.T) {
 func TestFirewallAutoSources(t *testing.T) {
 	f := enabledFirewall(t)
 	// modify rule 1 (SSH): set the source, keep it (the change limits SSH).
-	r := runSSH(t, f, "5", "2", "1", "1", "1.2.3.4", "y", "0", "0", "0")
+	r := runSSH(t, f, "7", "2", "1", "1", "1.2.3.4", "y", "0", "0", "0")
 	for _, want := range []string{
 		"该规则由 SSH 自动管理，这里只能设置来源 IP 限制",
 		"规则已修改。",
@@ -140,7 +140,7 @@ func TestFirewallAutoSources(t *testing.T) {
 func TestFirewallCheck(t *testing.T) {
 	f := enabledFirewall(t)
 	f.Respond(systemtest.Response{Result: system.Result{ExitCode: 1}}, nft.NftPath, "list", "chain", "inet", "litenode", "input")
-	r := runSSH(t, f, "5", "4", "y", "y", "0", "0")
+	r := runSSH(t, f, "7", "4", "y", "y", "0", "0")
 	for _, want := range []string{"防火墙规则没有加载", "重新应用防火墙规则？", "已重新应用防火墙规则。"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q\n%s", want, r.stdout)

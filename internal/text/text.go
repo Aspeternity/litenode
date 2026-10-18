@@ -139,6 +139,9 @@ func MainTitle(version string) string {
 // Main menu items.
 const (
 	MenuNodes        = "节点管理"
+	MenuClients      = "客户端管理"
+	MenuShare        = "分享节点"
+	MenuHostAddress  = "主机地址"
 	MenuForwards     = "端口转发"
 	MenuXray         = "Xray 服务"
 	MenuSSH          = "SSH 管理"

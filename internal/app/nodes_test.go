@@ -75,10 +75,9 @@ func TestAddNodeFlow(t *testing.T) {
 		"▀", // QR code
 		"连不上时，请检查云厂商的安全组或防火墙是否放行了 TCP 端口 443。",
 		// DESIGN section 9.1 node list after adding.
-		" 分享地址: 203.0.113.10",
 		" ID  备注         协议               端口  客户端  状态",
 		" 1   Reality-443  VLESS-TCP-Reality  443   1       ● 启用",
-		" 1. 添加节点", " 2. 修改节点", " 3. 启用 / 禁用节点", " 4. 客户端管理", " 5. 分享地址        (添加 / 设为默认 / 重新检测)", " 6. 删除节点",
+		" 1. 添加节点", " 2. 修改节点", " 3. 启用 / 禁用节点", " 4. 删除节点",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
@@ -95,7 +94,7 @@ func TestAddNodeFlow(t *testing.T) {
 
 func TestNodeMenuEmptyHidesItems(t *testing.T) {
 	r := runNodes(t, nodeSystem(), "1\n0\n0\n")
-	if !strings.Contains(r.stdout, "（暂无节点）") || !strings.Contains(r.stdout, " 2. 分享地址") || strings.Contains(r.stdout, "删除节点") {
+	if !strings.Contains(r.stdout, "（暂无节点）") || strings.Contains(r.stdout, "主机地址") || strings.Contains(r.stdout, "删除节点") {
 		t.Errorf("empty node menu:\n%s", r.stdout)
 	}
 }
@@ -104,8 +103,8 @@ func TestDeleteNodeFlow(t *testing.T) {
 	f := nodeSystem()
 	add := strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n") + "\n"
 	runNodes(t, f, add)
-	// nodes > delete (6) > node 1 > confirm y
-	r := runNodes(t, f, "1\n6\n1\ny\n0\n0\n")
+	// nodes > delete (4) > node 1 > confirm y
+	r := runNodes(t, f, "1\n4\n1\ny\n0\n0\n")
 	if !strings.Contains(r.stdout, "删除节点 Reality-443 及其 1 个客户端？ [y/N]") || !strings.Contains(r.stdout, "节点已删除。") {
 		t.Errorf("delete flow:\n%s", r.stdout)
 	}
@@ -117,21 +116,23 @@ func TestDeleteNodeFlow(t *testing.T) {
 func TestClientMenuFlow(t *testing.T) {
 	f := nodeSystem()
 	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
-	// nodes > clients (4) > node 1 > add (1) default remark; then delete the
-	// original client (5, 1, y); then the last one (5, 1, y), which keeps
-	// the node (D-060); then add a client again (1, default remark).
-	input := strings.Join([]string{"1", "4", "1", "1", "", "5", "1", "y", "5", "1", "y", "1", "", "0", "0", "0"}, "\n") + "\n"
+	// main: 2 clients > add (1, only one node: no choice) default remark;
+	// then delete the original client (4, 1, y); then the last one (4, 1,
+	// y), which keeps the node (D-060); then add a client again (1,
+	// default remark).
+	input := strings.Join([]string{"2", "1", "", "4", "1", "y", "4", "1", "y", "1", "", "0", "0"}, "\n") + "\n"
 	r := runNodes(t, f, input)
 	for _, want := range []string{
 		"═ 客户端管理 ═",
-		" 节点 1: Reality-443 (VLESS-TCP-Reality :443)",
-		" 1. 添加客户端", " 2. 修改客户端      (备注 / UUID)", " 3. 启用 / 禁用客户端", " 4. 分享链接 / 二维码", " 5. 删除客户端",
+		" ID  节点         备注           状态",
+		" 2   Reality-443  Reality-443-2  ● 启用",
+		" 1. 添加客户端", " 2. 修改客户端      (备注 / UUID)", " 3. 启用 / 禁用客户端", " 4. 删除客户端",
 		"请输入客户端序号 (0 返回): ",
 		"客户端已添加。", "#Reality-443-2",
 		"删除客户端 Reality-443？ [y/N]", "客户端已删除。",
 		"Reality-443-2 是该节点最后一个客户端，删除后节点暂时不可用，直到添加新客户端。是否继续？ [y/N]",
-		// The empty node's client menu offers only "add".
-		" （该节点没有客户端，当前不可用；添加客户端后即可使用）\n──────────────────────────────────────────────\n 1. 添加客户端\n──────────────────────────────────────────────\n 0. 返回",
+		// Without clients the menu offers only "add" (D-060).
+		" （暂无客户端）\n 节点 Reality-443 没有客户端，当前不可用；添加客户端后即可使用。\n──────────────────────────────────────────────\n 1. 添加客户端\n──────────────────────────────────────────────\n 0. 返回",
 		"flow=xtls-rprx-vision",
 	} {
 		if !strings.Contains(r.stdout, want) {
@@ -175,7 +176,7 @@ func TestChooseTargetReturnsToMenu(t *testing.T) {
 func TestXrayMenu(t *testing.T) {
 	f := nodeSystem()
 	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
-	r := runNodes(t, f, "3\n2\n0\n0\n")
+	r := runNodes(t, f, "5\n2\n0\n0\n")
 	for _, want := range []string{
 		" 1. 启动", " 2. 停止", " 3. 重启", " 4. 查看日志", " 5. 节点出站 IP", " 6. 更新 Xray", " 7. 卸载 Xray",
 		"(同时删除所有节点和客户端)", "节点出站: 默认（由系统决定）", "Xray 已停止。",
@@ -189,7 +190,7 @@ func TestXrayMenu(t *testing.T) {
 	}
 	// Node outbound IP: prefer IPv6 is applied; only IPv6 is refused
 	// without an IPv6 default route.
-	r = runNodes(t, f, "3\n5\n3\n5\n5\n0\n0\n")
+	r = runNodes(t, f, "5\n5\n3\n5\n5\n0\n0\n")
 	for _, want := range []string{"节点出站 IP 已设置为优先 IPv6。", "节点出站: 优先 IPv6", "优先 IPv6 (当前)", "本机没有可用的 IPv6 公网地址或默认路由"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("outbound IP: output missing %q:\n%s", want, r.stdout)
@@ -205,7 +206,7 @@ func TestXrayMenu(t *testing.T) {
 	}
 	// Not installed: only the note.
 	g := supported()
-	r = runNodes(t, g, "3\n0\n0\n")
+	r = runNodes(t, g, "5\n0\n0\n")
 	if !strings.Contains(r.stdout, "Xray 未安装，首次添加节点时会自动安装。") || strings.Contains(r.stdout, " 1. 启动") {
 		t.Errorf("not-installed menu:\n%s", r.stdout)
 	}
@@ -251,5 +252,31 @@ func TestScanTargetFlow(t *testing.T) {
 	r = runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "1", "Two", "0", "0"}, "\n")+"\n")
 	if strings.Contains(r.stdout, "部分 VPS 商家禁止端口扫描") || sc.calls != 2 {
 		t.Errorf("warning repeated or scan not run: calls=%d", sc.calls)
+	}
+}
+
+func TestClientAddChoosesNode(t *testing.T) {
+	f := nodeSystem()
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "8443", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	// main: 2 clients > add > node 2 > default remark; disable client 3.
+	r := runNodes(t, f, strings.Join([]string{"2", "1", "2", "", "3", "3", "0", "0"}, "\n")+"\n")
+	for _, want := range []string{
+		"选择节点", "1. Reality-443 (VLESS-TCP-Reality :443)", "2. Reality-8443 (VLESS-TCP-Reality :8443)",
+		"#Reality-8443-2", "客户端已禁用。",
+		" 3   Reality-8443  Reality-8443-2  ○ 禁用",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
+	}
+	st, _ := state.NewStore(f).Load()
+	if len(st.Nodes) != 2 || len(st.Nodes[1].Clients) != 2 || st.Nodes[1].Clients[1].Enabled {
+		t.Errorf("state = %+v", st.Nodes)
+	}
+	// Viewing the disabled client's link warns.
+	r = runNodes(t, f, "3\n1\n3\n0\n0\n")
+	if !strings.Contains(r.stdout, "该客户端或其节点已禁用") || !strings.Contains(r.stdout, "#Reality-8443-2") {
+		t.Errorf("disabled link:\n%s", r.stdout)
 	}
 }

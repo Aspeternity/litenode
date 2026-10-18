@@ -35,8 +35,8 @@ func runSSH(t *testing.T, f *systemtest.Fake, input ...string) result {
 
 func TestSSHMenu(t *testing.T) {
 	f := sshSystem(effective22)
-	// main: 4 SSH; back; quit.
-	r := runSSH(t, f, "4", "0", "0")
+	// main: 6 SSH; back; quit.
+	r := runSSH(t, f, "6", "0", "0")
 	for _, want := range []string{
 		" SSH: 22 / 密钥+密码",
 		"═════════════════ SSH 管理 ═════════════════",
@@ -63,19 +63,19 @@ func TestSSHMenu(t *testing.T) {
 func TestSSHMenuInterlockAndKeys(t *testing.T) {
 	f := sshSystem(effective22)
 	// Password off without a key: refused with an explanation.
-	r := runSSH(t, f, "4", "4", "y", "0", "0")
+	r := runSSH(t, f, "6", "4", "y", "0", "0")
 	if !strings.Contains(r.stdout, "关闭密码登录？ [y/N]") || !strings.Contains(r.stdout, "请先添加公钥（并确认可以用密钥登录），再关闭密码登录。") {
 		t.Errorf("interlock:\n%s", r.stdout)
 	}
 	// Paste a bad key, then a good one; it appears in the list.
-	r = runSSH(t, f, "4", "1", "1", "not a key", testPub, "0", "0")
+	r = runSSH(t, f, "6", "1", "1", "not a key", testPub, "0", "0")
 	for _, want := range []string{"不是有效的 OpenSSH 公钥", "已添加 1 个公钥。", " 公钥:\n   [1] ed25519 SHA256:o/KaoigHu9ddvclgoQvWem5m+GbW7ahqewdkStS+qZw  laptop", " 8. 删除公钥"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q\n%s", want, r.stdout)
 		}
 	}
 	// Generate a key pair: the private key is shown, not stored.
-	r = runSSH(t, f, "4", "2", "y", "", "0", "0")
+	r = runSSH(t, f, "6", "2", "y", "", "0", "0")
 	if !strings.Contains(r.stdout, "-----BEGIN OPENSSH PRIVATE KEY-----") || !strings.Contains(r.stdout, "[2] ed25519") {
 		t.Errorf("generate:\n%s", r.stdout)
 	}
@@ -90,7 +90,7 @@ func TestSSHMenuSudoUser(t *testing.T) {
 	f := sshSystem(effective22)
 	f.Files["/root/.ssh/authorized_keys"] = []byte(testPub + "\n")
 	// 7: name; bad name first; generated password; copy root keys: n.
-	r := runSSH(t, f, "4", "7", "Bad", "admin", "1", "n", "0", "0")
+	r := runSSH(t, f, "6", "7", "Bad", "admin", "1", "n", "0", "0")
 	for _, want := range []string{"用户名格式不正确", "把 root 的 1 个公钥复制给 admin？ [y/N]", "用户 admin 已创建并加入 sudo 组", "admin 的密码（只显示这一次，请保存）："} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q\n%s", want, r.stdout)
@@ -121,7 +121,7 @@ func TestSSHMenuPortChange(t *testing.T) {
 	f.Files["/etc/ufw/user.rules"] = []byte("### tuple ### allow tcp 2222 0.0.0.0/0 any 0.0.0.0/0 in\n")
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Status: active\n"}}, "ufw", "status")
 	// 6: new port 2200; confirm; keep (y); delete old rules: y.
-	r := runSSH(t, f, "4", "6", "2200", "y", "y", "y", "0", "0")
+	r := runSSH(t, f, "6", "6", "2200", "y", "y", "y", "0", "0")
 	for _, want := range []string{
 		"修改前请确认云厂商的安全组或防火墙已放行 TCP 2200",
 		"SSH 端口将从 2222 改为 2200，是否继续？ [y/N]",
@@ -144,7 +144,7 @@ func TestSSHMenuPortChange(t *testing.T) {
 }
 
 func TestSSHMenuRollbackNothing(t *testing.T) {
-	r := runSSH(t, sshSystem(effective22), "4", "8", "y", "0", "0")
+	r := runSSH(t, sshSystem(effective22), "6", "8", "y", "0", "0")
 	if !strings.Contains(r.stdout, "没有可以回滚的 SSH 修改。") {
 		t.Errorf("rollback:\n%s", r.stdout)
 	}
