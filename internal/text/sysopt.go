@@ -10,7 +10,6 @@ const (
 	ConfirmBBRDisable = "将关闭 BBR，恢复为系统默认的 cubic。确定关闭？"
 	BBREnabledDone    = "BBR 已开启。"
 	BBRDisabledDone   = "BBR 已关闭。"
-	SysoptUnavailable = "部分功能在当前环境中不可用，已隐藏。"
 	StateOn           = "✓"
 	StateOff          = "✗"
 )

@@ -3,15 +3,21 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/sysctl"
+	"github.com/Aspeternity/litenode/internal/sysopt"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 	"github.com/Aspeternity/litenode/internal/text"
+	"github.com/Aspeternity/litenode/internal/ui"
 )
 
 const ccPath = "/proc/sys/net/ipv4/tcp_congestion_control"
@@ -109,5 +115,62 @@ func TestSysoptMenuClock(t *testing.T) {
 	wantOutput(t, r.stdout, "时区: UTC (同步 ✗)", "UTC (当前)", text.TimezoneSet("Asia/Shanghai"), text.NTPSyncedDone, "时区: UTC (同步 ✓)")
 	if !slices.Contains(f.Execs(), "timedatectl set-timezone Asia/Shanghai") {
 		t.Errorf("execs = %q", f.Execs())
+	}
+}
+
+// sysoptFake is a system where every optimization is available: BBR on,
+// no swap, IPv4 preferred, UTC synchronized.
+func sysoptFake() *systemtest.Fake {
+	f := supported()
+	f.Files["/proc/sys/net/ipv4/tcp_available_congestion_control"] = []byte("reno cubic bbr\n")
+	f.Files[ccPath] = []byte("bbr\n")
+	f.Files["/proc/swaps"] = []byte("Filename Type Size Used Priority\n")
+	f.Files["/etc/gai.conf"] = []byte("precedence ::ffff:0:0/96  100\n")
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Timezone=UTC\nNTP=yes\nNTPSynchronized=yes\nCanNTP=yes\n"}},
+		"timedatectl", "show", "-p", "Timezone", "-p", "NTP", "-p", "NTPSynchronized", "-p", "CanNTP")
+	return f
+}
+
+func sysoptMenu(t *testing.T, f *systemtest.Fake, virt system.Virt) string {
+	t.Helper()
+	store := state.NewStore(f)
+	if err := store.Save(state.New()); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	u := &sysoptUI{ctx: ctx, s: ui.NewSession(strings.NewReader(""), io.Discard, nil, ui.Colors{}),
+		info: system.Info{Virt: virt}, caps: system.ProbeAll(ctx, f),
+		svc: &sysopt.Service{Runner: f, Store: store, Changes: change.NewManager(f, store)}}
+	return u.menu().Render()
+}
+
+// TestRenderSysoptMenu compares against the DESIGN section 15 example.
+func TestRenderSysoptMenu(t *testing.T) {
+	want, err := os.ReadFile("testdata/sysopt_menu.golden")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := sysoptFake()
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "kvm\n"}}, "systemd-detect-virt")
+	if got := sysoptMenu(t, f, system.Virt{Type: "kvm"}); got != string(want) {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestSysoptMenuContainer(t *testing.T) {
+	f := sysoptFake()
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "lxc\n"}}, "systemd-detect-virt")
+	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")
+	f.Files["/proc/sys/net/ipv4/tcp_available_congestion_control"] = []byte("reno cubic\n")
+	got := sysoptMenu(t, f, system.Virt{Type: "lxc", Container: true})
+	for _, want := range []string{"部分功能在当前环境（LXC）中不可用，已隐藏。", " 优先: IPv4   时区: UTC\n", " 1. IPv4 / IPv6 优先级", " 3. 时区与时间同步"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q:\n%s", want, got)
+		}
+	}
+	for _, hidden := range []string{"BBR", "swap", "同步 "} {
+		if strings.Contains(got, hidden) {
+			t.Errorf("%q shown in a container:\n%s", hidden, got)
+		}
 	}
 }

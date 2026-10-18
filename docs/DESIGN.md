@@ -961,7 +961,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
  0. 返回
 ```
 
-排序按常用程度。
+排序按常用程度。菜单顶部与其他子菜单一样有标题栏。不可用的项隐藏（BBR：内核不支持；swap：容器或没有 `/proc/swaps`；时区：`timedatectl` 不可用），状态行中对应的字段一并省略，菜单下方提示"部分功能在当前环境（<虚拟化类型>）中不可用，已隐藏。"；容器中时区字段不显示同步标记（D-083）。
 
 - **BBR + fq**：检查内核是否支持 bbr，写入 `/etc/sysctl.d/99-litenode.conf`（`net.core.default_qdisc=fq`、`net.ipv4.tcp_congestion_control=bbr`）并立即生效（D-078）。状态文件 `sysopt.bbr` 记录是否由 LiteNode 开启，sysctl 文件仍由状态整体生成。已由 LiteNode 开启时该项为关闭：删除这两行并把拥塞控制改回 `cubic`；已由系统其他配置开启时只提示无需操作。
 - **swap**：创建交换文件 `/litenode.swap`（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小（1G）。只管理自己的文件，系统已有的其他 swap 只显示（D-079）。大小 128M ~ 32G，创建后磁盘至少保留 256M。停用前检查 swap 中的数据不超过可用内存。容器环境（或没有 `/proc/swaps`）中该项隐藏。
