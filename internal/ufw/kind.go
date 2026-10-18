@@ -19,9 +19,7 @@ func Kind(store *state.Store) *change.Kind {
 			if err != nil {
 				return err
 			}
-			// The LiteNode firewall (M3) is not implemented yet: treat it
-			// as disabled.
-			return Reconcile(ctx, r, Desired(st), false)
+			return Reconcile(ctx, r, Desired(st), st.Firewall.Enabled)
 		},
 	}
 }

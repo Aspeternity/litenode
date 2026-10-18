@@ -327,5 +327,5 @@ func (s *Service) SyncUFW(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return ufw.Reconcile(ctx, s.Runner, ufw.Desired(st), false)
+	return ufw.Reconcile(ctx, s.Runner, ufw.Desired(st), st.Firewall.Enabled)
 }
