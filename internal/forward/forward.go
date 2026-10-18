@@ -179,6 +179,46 @@ func Resolve(ctx context.Context, r Resolver, host, curV4, curV6 string) (v4, v6
 	return v4, v6, nil
 }
 
+// Reresolve looks up a domain target again for the resolve timer (DESIGN
+// section 11). Unlike Resolve, a family whose lookup fails for any reason
+// other than the record not existing keeps its current address, so a DNS
+// outage does not drop working rules; a domain with neither record also
+// keeps both. err reports what could not be looked up; v4 and v6 are
+// always usable.
+func Reresolve(ctx context.Context, r Resolver, host, curV4, curV6 string) (v4, v6 string, err error) {
+	v4s, err4 := r.LookupIP(ctx, "ip4", host)
+	v6s, err6 := r.LookupIP(ctx, "ip6", host)
+	v4, v6 = pick(v4s, curV4, true), pick(v6s, curV6, false)
+	var errs []error
+	if err4 != nil && !notFound(err4) {
+		v4 = curV4
+		errs = append(errs, err4)
+	}
+	if err6 != nil && !notFound(err6) {
+		v6 = curV6
+		errs = append(errs, err6)
+	}
+	if v4 == "" && v6 == "" {
+		return curV4, curV6, fmt.Errorf("resolve %s: %w", host, ErrNoAddresses)
+	}
+	if len(errs) > 0 {
+		return v4, v6, fmt.Errorf("resolve %s: %w", host, errors.Join(errs...))
+	}
+	return v4, v6, nil
+}
+
+// notFound reports whether err means the record does not exist, as
+// opposed to the lookup failing. The Go resolver reports a domain without
+// records of the asked family as an AddrError.
+func notFound(err error) bool {
+	var de *net.DNSError
+	if errors.As(err, &de) {
+		return de.IsNotFound
+	}
+	var ae *net.AddrError
+	return errors.As(err, &ae) && ae.Err == "no suitable address found"
+}
+
 func pick(ips []net.IP, current string, want4 bool) string {
 	var first string
 	for _, ip := range ips {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/firewall"
+	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/reality"
@@ -54,6 +55,7 @@ type Env struct {
 	XrayFetcher     xray.Fetcher
 	Rand            io.Reader
 	Resolver        share.Resolver
+	ForwardResolver forward.Resolver
 }
 
 func (env Env) fetcher() xray.Fetcher {
@@ -116,6 +118,7 @@ func (env Env) kinds(r system.Runner, store *state.Store) change.Registry {
 //	litenode version | -v | --version
 //	litenode help | -h | --help
 //	litenode internal rollback   (called by systemd; not in help)
+//	litenode internal resolve    (called by systemd; not in help)
 func Run(ctx context.Context, env Env) int {
 	args := env.Args
 	switch {
@@ -141,6 +144,9 @@ func Run(ctx context.Context, env Env) int {
 func runInternal(ctx context.Context, env Env, args []string) int {
 	if len(args) == 1 && args[0] == "rollback" {
 		return rollback(ctx, env)
+	}
+	if len(args) == 1 && args[0] == "resolve" {
+		return resolve(ctx, env)
 	}
 	fmt.Fprintln(env.Stderr, text.UnknownCommand(strings.Join(append([]string{"internal"}, args...), " ")))
 	return 2

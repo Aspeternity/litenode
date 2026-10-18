@@ -724,7 +724,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
   - 目标是域名：分别解析 A 和 AAAA 记录（`resolved_ipv4` / `resolved_ipv6`），IPv4 连接转发到 A 记录、IPv6 连接转发到 AAAA 记录；只有一种记录时只转发那一种。重新解析时两种分别比较、分别更新，ufw 的 `route` 规则也分别生成。
 - **规则结构**：在 `table inet litenode` 中，prerouting 链做 DNAT（每个地址族一条），postrouting 链对转发流量做 masquerade（否则落地机的回包不会经过线路机），防火墙启用时 forward 链放行转发流量；后两者都按原始目的端口（`ct original proto-dst`）加 `ct status dnat` 匹配。端口段映射到不同端口时用 `dport map` 一一对应（D-075）。
 - **防火墙关系**：转发规则与防火墙共用同一张表，防火墙启用时 forward 链默认丢弃，只放行转发规则产生的流量和已建立的连接，转发规则的来源限制也在这里生效；防火墙未启用时没有 forward 链，转发同样正常工作。转发规则不写入 input 链。
-- **域名目标**：nftables 只能使用 IP。添加时分别解析 A 和 AAAA 记录，保存 `resolved_ipv4` / `resolved_ipv6`（D-046）；同时创建 `litenode-resolve.timer`（默认每 5 分钟），由 `litenode` 的子命令重新解析，IP 变化时重新生成并应用规则。没有域名目标时删除这个 timer。
+- **域名目标**：nftables 只能使用 IP。添加时分别解析 A 和 AAAA 记录，保存 `resolved_ipv4` / `resolved_ipv6`（D-046）；同时创建 `litenode-resolve.timer`（每 5 分钟，`OnCalendar=*:0/5`），由 `litenode internal resolve` 重新解析，IP 变化时重新生成并应用规则，未变化时不做任何修改。没有域名目标（含已禁用的规则）时删除这个 timer。重新解析时某一类记录查询失败（超时等，不是记录不存在）保留该类当前地址；域名两类记录都没有时保留原地址并记录错误，不删除规则（D-076）。
 - **开机加载**：规则写入 `/etc/litenode/nftables.nft`，由 `litenode-nft.service`（oneshot）开机加载。不修改系统的 `/etc/nftables.conf`。
 - **与 ufw 同步**：LiteNode 防火墙未启用且 ufw 在运行时，规则的添加、修改、删除、启用 / 禁用以及域名重新解析（IP 变化时）都同步 `ufw route allow` 规则（写落地机的目标 IP 和端口，见第 2 节"与 ufw 共存"）。重新解析由 `litenode internal resolve` 执行，菜单正在运行（持有实例锁）时跳过本轮，下一轮再同步。
 - **测试目标连通性**：从 VPS 对目标 TCP 端口发起连接，显示是否连通和延迟。UDP 无法可靠测试，只提示。
