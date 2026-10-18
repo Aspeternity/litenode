@@ -11,14 +11,16 @@ import (
 type Capability string
 
 const (
-	CapBBR Capability = "bbr"
+	CapBBR  Capability = "bbr"
+	CapSwap Capability = "swap"
 )
 
 // Probe reports whether a capability is available.
 type Probe func(ctx context.Context, r Runner) bool
 
 var probes = map[Capability]Probe{
-	CapBBR: probeBBR,
+	CapBBR:  probeBBR,
+	CapSwap: probeSwap,
 }
 
 // Capabilities is the result of probing all registered capabilities.
@@ -46,4 +48,14 @@ func probeBBR(ctx context.Context, r Runner) bool {
 	}
 	_, err := r.Query(ctx, "modinfo", "-n", "tcp_bbr")
 	return err == nil
+}
+
+// probeSwap reports whether swap files can be used: the kernel has swap
+// support and this is not a container, where swapon is refused (the
+// host owns the memory).
+func probeSwap(ctx context.Context, r Runner) bool {
+	if _, err := r.ReadFile("/proc/swaps"); err != nil {
+		return false
+	}
+	return !DetectVirt(ctx, r).Container
 }

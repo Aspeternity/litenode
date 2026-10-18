@@ -155,6 +155,7 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 | `/etc/systemd/system/litenode-resolve.service` 和 `.timer` | 端口转发目标为域名时定期重新解析（仅在需要时创建） |
 | `/etc/ssh/sshd_config.d/00-litenode.conf` | SSH 配置（drop-in 文件） |
 | `/etc/sysctl.d/99-litenode.conf` | BBR、内核转发等 sysctl 设置 |
+| `/litenode.swap` | swap 文件（在 `/etc/fstab` 中挂载） |
 | `/var/log/litenode.log` | LiteNode 自身的操作日志 |
 | `/run/litenode.lock` | 实例锁（`flock`），重启后自动清除 |
 | `/etc/litenode/rollback/pending` | 限时确认的待确认标记（内容为备份 ID），同一时间只有一个（D-040）；放在磁盘上，重启后仍在（D-062） |
@@ -962,7 +963,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 排序按常用程度。
 
 - **BBR + fq**：检查内核是否支持 bbr，写入 `/etc/sysctl.d/99-litenode.conf`（`net.core.default_qdisc=fq`、`net.ipv4.tcp_congestion_control=bbr`）并立即生效（D-078）。状态文件 `sysopt.bbr` 记录是否由 LiteNode 开启，sysctl 文件仍由状态整体生成。已由 LiteNode 开启时该项为关闭：删除这两行并把拥塞控制改回 `cubic`；已由系统其他配置开启时只提示无需操作。
-- **swap**：创建交换文件（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小。
+- **swap**：创建交换文件 `/litenode.swap`（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小（1G）。只管理自己的文件，系统已有的其他 swap 只显示（D-079）。大小 128M ~ 32G，创建后磁盘至少保留 256M。停用前检查 swap 中的数据不超过可用内存。容器环境（或没有 `/proc/swaps`）中该项隐藏。
 - **IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6。
 - **DNS**：系统使用 systemd-resolved 时写入 `/etc/systemd/resolved.conf.d/` 下的配置文件；否则修改 `/etc/resolv.conf`，并提示该文件可能被 DHCP 或 cloud-init 覆盖。提供常用 DNS 选项和自定义输入。
 - **时区与时间同步**：设置时区（`timedatectl`），启用 systemd-timesyncd 时间同步。Reality 对时间敏感，状态区显示同步状态。
