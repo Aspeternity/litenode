@@ -31,6 +31,8 @@ func (u *maintUI) menu() ui.Menu {
 			{Label: text.MaintExport, Hint: text.MaintExportHint, Action: u.export},
 			{Label: text.MaintImport, Action: u.importConfig},
 			{Label: text.MaintUpdate, Action: u.update},
+			{Label: text.MaintRemove, Hint: text.MaintRemoveHint, Action: u.removeProgram},
+			{Label: text.MaintPurge, Hint: text.MaintPurgeHint, Action: u.purge},
 		},
 	}
 }
@@ -141,4 +143,60 @@ func (u *maintUI) update() error {
 	u.s.Done(text.UpdateDone(latest, maint.BakPath))
 	u.s.Println(text.UpdateRestart)
 	return ui.ErrQuit
+}
+
+// removeProgram deletes the program only, then quits.
+func (u *maintUI) removeProgram() error {
+	ok, err := u.s.Confirm(text.ConfirmRemoveProgram)
+	if err != nil || !ok {
+		return err
+	}
+	kept, err := u.svc.UninstallProgram(u.ctx)
+	if err != nil {
+		return err
+	}
+	u.s.Done(text.RemoveProgramDone)
+	u.showKept(kept)
+	return ui.ErrQuit
+}
+
+// purge removes everything but the settings that keep the machine safe,
+// then quits.
+func (u *maintUI) purge() error {
+	st, err := u.svc.Store.Load()
+	if err != nil {
+		return err
+	}
+	cur := maint.SummarizeState(st)
+	ok, err := u.s.Confirm(text.ConfirmPurge(cur.Nodes, cur.Clients, cur.Forwards, st.Firewall.Enabled))
+	if err != nil || !ok {
+		return err
+	}
+	if ok, err = u.s.Confirm(u.s.Colors.Warn(text.ConfirmPurgeAgain)); err != nil || !ok {
+		return err
+	}
+	kept, err := u.svc.UninstallAll(u.ctx)
+	var partial *maint.PartialError
+	if errors.As(err, &partial) {
+		// Part of it is gone already: show the error and quit.
+		u.s.End(u.s.Colors.Bad(text.ActionFailed(err)))
+		u.showKept(kept)
+		return ui.ErrQuit
+	}
+	if err != nil {
+		return err
+	}
+	u.s.Done(text.PurgeDone)
+	u.showKept(kept)
+	return ui.ErrQuit
+}
+
+func (u *maintUI) showKept(kept []maint.Kept) {
+	if len(kept) > 0 {
+		u.s.Println(text.KeptTitle)
+		for _, k := range kept {
+			u.s.Println(text.KeptLine(k.What, k.Path))
+		}
+	}
+	u.s.Println(text.ReinstallHint)
 }
