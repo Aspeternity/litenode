@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/nft"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/reality"
@@ -100,6 +101,7 @@ func (env Env) kinds(r system.Runner, store *state.Store) change.Registry {
 	for _, k := range (&ssh.Service{Store: store}).Kinds() {
 		reg.Register(k)
 	}
+	reg.Register(nft.Kind())
 	return reg
 }
 

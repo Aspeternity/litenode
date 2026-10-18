@@ -30,11 +30,12 @@ type State struct {
 	SchemaVersion int `json:"schema_version"`
 	// NextID is the next stable ID to hand out. It is shared by all kinds
 	// of items and never decreases, so IDs are unique and never reused.
-	NextID int64       `json:"next_id"`
-	Server Server      `json:"server"`
-	Xray   Xray        `json:"xray"`
-	SSH    SSH         `json:"ssh"`
-	Nodes  []node.Node `json:"nodes"`
+	NextID   int64       `json:"next_id"`
+	Server   Server      `json:"server"`
+	Xray     Xray        `json:"xray"`
+	SSH      SSH         `json:"ssh"`
+	Firewall Firewall    `json:"firewall"`
+	Nodes    []node.Node `json:"nodes"`
 }
 
 // Server holds server-wide settings.
@@ -69,6 +70,34 @@ type SSH struct {
 	PasswordAuth *bool `json:"password_authentication,omitempty"`
 	// PermitRootLogin is "yes", "prohibit-password" or "no".
 	PermitRootLogin string `json:"permit_root_login,omitempty"`
+}
+
+// Firewall is the LiteNode firewall (DESIGN section 14). Its automatic
+// rules (SSH, nodes, forwards) are not stored: they follow those items.
+type Firewall struct {
+	Enabled bool `json:"enabled"`
+	// BlockPing drops ICMP and ICMPv6 echo requests; ping is allowed by
+	// default.
+	BlockPing bool `json:"block_ping,omitempty"`
+	// Rules are the user's own rules.
+	Rules []FirewallRule `json:"rules,omitempty"`
+	// AutoSources limits who may reach an automatic rule, by owner
+	// ("ssh", "node:<id>", "forward:<id>"). The limit stays when the port
+	// changes (P-004).
+	AutoSources map[string][]string `json:"auto_sources,omitempty"`
+}
+
+// FirewallRule is a port the user opened.
+type FirewallRule struct {
+	ID int64 `json:"id"`
+	// Port is one port ("443") or a range ("10000-10100").
+	Port string `json:"port"`
+	// Protocol is "tcp", "udp" or "tcp+udp".
+	Protocol string `json:"protocol"`
+	// Sources are IPv4 / IPv6 addresses or networks allowed in; empty
+	// means anyone.
+	Sources []string `json:"sources,omitempty"`
+	Note    string   `json:"note,omitempty"`
 }
 
 // DefaultShareAddress is the address links use unless the user picks
