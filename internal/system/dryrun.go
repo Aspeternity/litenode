@@ -26,6 +26,10 @@ func (d *DryRun) Query(ctx context.Context, name string, args ...string) (Result
 	return d.Inner.Query(ctx, name, args...)
 }
 
+func (d *DryRun) Stream(ctx context.Context, out io.Writer, name string, args ...string) error {
+	return d.Inner.Stream(ctx, out, name, args...)
+}
+
 func (d *DryRun) Exec(ctx context.Context, name string, args ...string) (Result, error) {
 	fmt.Fprintln(d.Out, text.DryRunExec(CommandLine(name, args...)))
 	return Result{}, nil

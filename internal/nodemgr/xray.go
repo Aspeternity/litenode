@@ -3,6 +3,7 @@ package nodemgr
 import (
 	"context"
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,25 @@ import (
 
 // ErrNoEnabledNodes means Xray has nothing to run.
 var ErrNoEnabledNodes = errors.New("no enabled nodes")
+
+// ErrAlreadyRunning and ErrAlreadyStopped mean Xray is already in the
+// requested state; nothing was changed (D-090).
+var (
+	ErrAlreadyRunning = errors.New("xray is already running")
+	ErrAlreadyStopped = errors.New("xray is already stopped")
+)
+
+// MaxLogLines limits the recent log lines shown at once.
+const MaxLogLines = 1000
+
+// activeState is the unit's ActiveState ("" when unknown).
+func (s *Service) activeState(ctx context.Context) string {
+	res, err := s.Runner.Query(ctx, "systemctl", "show", xray.UnitName, "-p", "ActiveState", "--value")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(res.Stdout)
+}
 
 // XrayStatus is what the Xray menu shows (DESIGN section 12).
 type XrayStatus struct {
@@ -92,6 +112,9 @@ func (s *Service) StartXray(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if !st.Xray.Stopped && s.activeState(ctx) == "active" {
+		return ErrAlreadyRunning
+	}
 	st.Xray.Stopped = false
 	if err := s.apply(ctx, st); err != nil {
 		return err
@@ -108,6 +131,9 @@ func (s *Service) StopXray(ctx context.Context) error {
 	st, err := s.Store.Load()
 	if err != nil {
 		return err
+	}
+	if a := s.activeState(ctx); a == "inactive" || a == "failed" {
+		return ErrAlreadyStopped
 	}
 	st.Xray.Stopped = true
 	return s.apply(ctx, st)
@@ -128,10 +154,18 @@ func (s *Service) RestartXray(ctx context.Context) error {
 	return s.Xray.Restart(ctx)
 }
 
-// XrayLogs returns the last lines of the Xray journal (D-057).
+// XrayLogs returns the last lines of the Xray journal (D-057), at most
+// MaxLogLines.
 func (s *Service) XrayLogs(ctx context.Context, lines int) (string, error) {
+	lines = min(max(lines, 1), MaxLogLines)
 	res, err := s.Runner.Query(ctx, "journalctl", "-u", xray.UnitName, "-n", strconv.Itoa(lines), "--no-pager", "-o", "short-iso")
 	return res.Stdout, err
+}
+
+// FollowXrayLogs writes the Xray journal to out as it grows, starting with
+// the last 20 lines, until ctx is canceled (D-090).
+func (s *Service) FollowXrayLogs(ctx context.Context, out io.Writer) error {
+	return s.Runner.Stream(ctx, out, "journalctl", "-u", xray.UnitName, "-f", "-n", "20", "--no-pager", "-o", "short-iso")
 }
 
 // UpdateXray replaces Xray (DefaultVersion if version is "") and records

@@ -184,3 +184,20 @@ func TestRealExecInput(t *testing.T) {
 		t.Errorf("got %q, %v", res.Stdout, err)
 	}
 }
+
+func TestRealStream(t *testing.T) {
+	var out strings.Builder
+	if err := NewReal(nil).Stream(context.Background(), &out, "echo", "hello"); err != nil || out.String() != "hello\n" {
+		t.Errorf("Stream = %q, %v", out.String(), err)
+	}
+	// Canceling ends the command without an error.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if err := NewReal(nil).Stream(ctx, &out, "sleep", "5"); err != nil || time.Since(start) > 3*time.Second {
+		t.Errorf("canceled Stream = %v after %v", err, time.Since(start))
+	}
+	if err := NewReal(nil).Stream(context.Background(), &out, "false"); err == nil {
+		t.Error("failing command: no error")
+	}
+}

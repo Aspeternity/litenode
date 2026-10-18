@@ -138,3 +138,64 @@ func TestSetOutboundIP(t *testing.T) {
 		t.Error("default not restored")
 	}
 }
+
+func TestStartStopXrayAlreadyInState(t *testing.T) {
+	fx := newFixture(t)
+	ctx := context.Background()
+	fx.add(t, 443, "A")
+	show := []string{"show", xray.UnitName, "-p", "ActiveState", "--value"}
+
+	fx.f.Respond(systemtest.Response{Result: system.Result{Stdout: "active\n"}}, "systemctl", show...)
+	before := len(fx.f.Execs())
+	if err := fx.svc.StartXray(ctx); !errors.Is(err, ErrAlreadyRunning) {
+		t.Errorf("start while running = %v, want ErrAlreadyRunning", err)
+	}
+	if e := fx.execsSince(before); e != "" {
+		t.Errorf("start while running changed the system:\n%s", e)
+	}
+
+	for _, state := range []string{"inactive", "failed"} {
+		fx.f.Respond(systemtest.Response{Result: system.Result{Stdout: state + "\n"}}, "systemctl", show...)
+		before = len(fx.f.Execs())
+		if err := fx.svc.StopXray(ctx); !errors.Is(err, ErrAlreadyStopped) {
+			t.Errorf("stop while %s = %v, want ErrAlreadyStopped", state, err)
+		}
+		if e := fx.execsSince(before); e != "" || fx.state(t).Xray.Stopped {
+			t.Errorf("stop while %s changed the system:\n%s", state, e)
+		}
+	}
+
+	// Stopped by the user: start clears the flag even though systemd may
+	// report it active.
+	fx.f.Respond(systemtest.Response{Result: system.Result{Stdout: "active\n"}}, "systemctl", show...)
+	if err := fx.svc.StopXray(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.svc.StartXray(ctx); err != nil || fx.state(t).Xray.Stopped {
+		t.Errorf("start after manual stop = %v, flag %v", err, fx.state(t).Xray.Stopped)
+	}
+}
+
+func TestXrayLogsLimits(t *testing.T) {
+	fx := newFixture(t)
+	ctx := context.Background()
+	fx.svc.XrayLogs(ctx, 5000)
+	fx.svc.XrayLogs(ctx, 0)
+	var out strings.Builder
+	fx.f.Respond(systemtest.Response{Result: system.Result{Stdout: "line\n"}}, "journalctl", "-u", xray.UnitName, "-f", "-n", "20", "--no-pager", "-o", "short-iso")
+	if err := fx.svc.FollowXrayLogs(ctx, &out); err != nil || out.String() != "line\n" {
+		t.Errorf("follow = %q, %v", out.String(), err)
+	}
+	var queries []string
+	for _, c := range fx.f.Calls() {
+		if c.Op == systemtest.OpQuery {
+			queries = append(queries, c.Command)
+		}
+	}
+	calls := strings.Join(queries, "\n")
+	for _, want := range []string{"journalctl -u litenode-xray.service -n 1000 ", "journalctl -u litenode-xray.service -n 1 ", "journalctl -u litenode-xray.service -f -n 20"} {
+		if !strings.Contains(calls, want) {
+			t.Errorf("missing %q in\n%s", want, calls)
+		}
+	}
+}
