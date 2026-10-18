@@ -371,6 +371,38 @@ const (
 	XrayUninstalled      = "Xray 已卸载，所有节点和客户端已删除。"
 )
 
+// Node outbound IP (DESIGN section 12, D-084).
+const (
+	XrayOutboundIP        = "节点出站 IP"
+	XrayOutboundIPHint    = "(与系统优先级独立)"
+	OutboundIPDefault     = "默认（由系统决定）"
+	OutboundIPPreferIPv4  = "优先 IPv4"
+	OutboundIPPreferIPv6  = "优先 IPv6"
+	OutboundIPIPv4Only    = "仅 IPv4"
+	OutboundIPIPv6Only    = "仅 IPv6"
+	OutboundIPNote        = "设置节点访问目标网站时使用的 IP 协议，只影响 Xray，不影响本机 curl、apt 等程序（它们在\"系统优化\"中设置）。"
+	OutboundIPOnlyWarning = "选择\"仅\"时，没有该协议地址的目标网站将无法访问。"
+	OutboundIPUnchanged   = "设置未变化。"
+)
+
+// OutboundIPLabels are the mode names in xray.OutboundModes order.
+var OutboundIPLabels = []string{OutboundIPDefault, OutboundIPPreferIPv4, OutboundIPPreferIPv6, OutboundIPIPv4Only, OutboundIPIPv6Only}
+
+// StatusOutboundIP is the outbound field of the Xray menu status.
+func StatusOutboundIP(label string) string { return "节点出站: " + label }
+
+// OutboundIPDone reports the new mode.
+func OutboundIPDone(label string) string { return "节点出站 IP 已设置为" + label + "。" }
+
+// OutboundIPUnavailable explains a refused "only" mode.
+func OutboundIPUnavailable(ipv6 bool) string {
+	fam := "IPv4"
+	if ipv6 {
+		fam = "IPv6"
+	}
+	return fmt.Sprintf("本机没有可用的 %s 公网地址或默认路由，不能设置为仅 %s。", fam, fam)
+}
+
 // XrayStatusLine is the status of the Xray menu, e.g.
 // "Xray v26.10.17  ● 运行中  已运行 3天2小时  内存 28M".
 func XrayStatusLine(version, state string, uptimeSecs int64, memory int64) string {

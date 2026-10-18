@@ -85,7 +85,7 @@ func TestGenerateConfigGolden(t *testing.T) {
 		"xray-nodes.golden.json": goldenNodes(),
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := GenerateConfig(reg, nodes)
+			got, err := GenerateConfig(reg, nodes, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -101,7 +101,7 @@ func TestGenerateConfigGolden(t *testing.T) {
 // the golden files.
 func TestGenerateConfigPrinciples(t *testing.T) {
 	reg, _ := builtin.Registry()
-	data, err := GenerateConfig(reg, goldenNodes())
+	data, err := GenerateConfig(reg, goldenNodes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,12 +142,12 @@ func TestGenerateConfigRejectsInvalidNode(t *testing.T) {
 	reg, _ := builtin.Registry()
 	n := realityNode(1, 443, "www.example.com:443")
 	n.Clients = []node.Client{{ID: 2, Remark: "me", UUID: "x", Flow: "xtls-rprx-direct", Enabled: true}}
-	if _, err := GenerateConfig(reg, []node.Node{n}); err == nil {
+	if _, err := GenerateConfig(reg, []node.Node{n}, ""); err == nil {
 		t.Error("illegal flow accepted")
 	}
 	n.Clients[0].Flow = node.FlowVision
 	n.Reality = nil
-	if _, err := GenerateConfig(reg, []node.Node{n}); err == nil {
+	if _, err := GenerateConfig(reg, []node.Node{n}, ""); err == nil {
 		t.Error("reality node without settings accepted")
 	}
 }

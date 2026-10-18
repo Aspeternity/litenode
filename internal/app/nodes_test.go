@@ -177,8 +177,8 @@ func TestXrayMenu(t *testing.T) {
 	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
 	r := runNodes(t, f, "3\n2\n0\n0\n")
 	for _, want := range []string{
-		" 1. 启动", " 2. 停止", " 3. 重启", " 4. 查看日志", " 5. 更新 Xray       (可选指定版本)", " 6. 卸载 Xray       (同时删除所有节点和客户端)",
-		"Xray 已停止。",
+		" 1. 启动", " 2. 停止", " 3. 重启", " 4. 查看日志", " 5. 节点出站 IP", " 6. 更新 Xray", " 7. 卸载 Xray",
+		"(同时删除所有节点和客户端)", "节点出站: 默认（由系统决定）", "Xray 已停止。",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
@@ -186,6 +186,17 @@ func TestXrayMenu(t *testing.T) {
 	}
 	if st, _ := state.NewStore(f).Load(); !st.Xray.Stopped {
 		t.Error("stop not recorded")
+	}
+	// Node outbound IP: prefer IPv6 is applied; only IPv6 is refused
+	// without an IPv6 default route.
+	r = runNodes(t, f, "3\n5\n3\n5\n5\n0\n0\n")
+	for _, want := range []string{"节点出站 IP 已设置为优先 IPv6。", "节点出站: 优先 IPv6", "优先 IPv6 (当前)", "本机没有可用的 IPv6 公网地址或默认路由"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("outbound IP: output missing %q:\n%s", want, r.stdout)
+		}
+	}
+	if st, _ := state.NewStore(f).Load(); st.Xray.OutboundIP != xray.OutboundPreferIPv6 {
+		t.Errorf("outbound IP = %q", st.Xray.OutboundIP)
 	}
 	// Main menu warns while nodes exist but Xray was stopped by hand.
 	r = runNodes(t, f, "0\n")

@@ -61,10 +61,10 @@ func Kind(store *state.Store, in *Installer) *change.Kind {
 	}
 }
 
-// ConfigFile is the xray.json change for the given nodes: readable by the
-// service group only (D-034).
-func ConfigFile(reg *node.Registry, nodes []node.Node) (change.File, error) {
-	data, err := GenerateConfig(reg, nodes)
+// ConfigFile is the xray.json change for the nodes and outbound IP mode of
+// st: readable by the service group only (D-034).
+func ConfigFile(reg *node.Registry, st *state.State) (change.File, error) {
+	data, err := GenerateConfig(reg, st.Nodes, st.Xray.OutboundIP)
 	if err != nil {
 		return change.File{}, err
 	}
