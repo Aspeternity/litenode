@@ -164,7 +164,7 @@ GitHub Actions：推送 `v*` 标签时，以 `CGO_ENABLED=0`、`-trimpath`、`-l
 | `/var/log/litenode.log` | LiteNode 自身的操作日志 |
 | `/run/litenode.lock` | 实例锁（`flock`），重启后自动清除 |
 | `/etc/litenode/rollback/pending` | 限时确认的待确认标记（内容为备份 ID），同一时间只有一个（D-040）；放在磁盘上，重启后仍在（D-062） |
-| `/etc/systemd/system/litenode-rollback-boot.service` | 开机时回滚因重启而未确认的修改（oneshot，只在有待确认标记时执行，D-062）；第一次限时确认时安装 |
+| `/etc/systemd/system/litenode-rollback-boot.service` | 开机时回滚因重启而未确认的修改（oneshot，只在有待确认标记且程序存在时执行，D-062、D-095）；第一次限时确认时安装 |
 
 **`/etc/litenode` 权限规则**（集中定义在 `internal/state/layout.go`）：
 
@@ -371,7 +371,7 @@ docs/
 - 开始计时的时机：校验通过之后、修改生效之前。计时失败则不应用修改并恢复。应用失败时立即恢复并取消计时。
 - **确认与超时的竞态**：开始计时时写入标记文件 `/etc/litenode/rollback/pending`（内容为本次备份 ID）。用户确认和定时任务都通过 rename 认领这个文件，先认领的一方生效：确认先到则取消定时器，修改保留；定时任务先到则恢复该备份 ID 对应的备份。确认时发现标记已被认领，提示"已超时，配置已自动恢复，请重新修改"，菜单重新读取状态。
 - `internal rollback` 不受实例锁限制（见第 5 节）。
-- **重启时的回滚**（D-062）：临时定时器在重启后消失，但标记文件在磁盘上。`litenode-rollback-boot.service`（`ConditionPathExists=/etc/litenode/rollback/pending`，`WantedBy=multi-user.target`，执行 `litenode internal rollback`）在开机时认领标记并回滚，与定时器使用同一个回滚流程。第一次限时确认（计时之前）写入并启用该单元，内容不变时不再改动；安装失败则不应用修改。
+- **重启时的回滚**（D-062）：临时定时器在重启后消失，但标记文件在磁盘上。`litenode-rollback-boot.service`（`ConditionPathExists=/etc/litenode/rollback/pending`，另有 `ConditionPathExists=<程序路径>`：卸载脚本后程序不在时跳过，不在日志中报错，与重新解析服务一致（D-095）；`WantedBy=multi-user.target`，执行 `litenode internal rollback`）在开机时认领标记并回滚，与定时器使用同一个回滚流程。第一次限时确认（计时之前）写入并启用该单元，内容不变时不再改动；安装失败则不应用修改。
 - **立即恢复**：用户回答不是 `y` 时不等待超时，立即认领标记并回滚，同时停止定时器。用户在等待确认时退出（Ctrl+C、断开）则提示"修改未确认，将在限时到期后自动恢复"，由定时器回滚。
 
 ## 7. 菜单通用规则
@@ -798,6 +798,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 - **更新**时可输入版本（回车为默认版本，D-054）；输入的版本低于 v26.9.8 时警告 ML-KEM 目标将无法使用。
 - **更新**：默认最新版，可以输入指定版本。更新后用当前配置执行 `xray run -test` 校验，失败则回退旧版本。
   - 旧程序先改名为 `xray.bak`，新程序写入后依次检查：`xray version` 报告的版本正确、接受当前配置、服务原本在运行时重启后 2 秒仍在运行。任一项失败就把 `xray.bak` 改回并重启旧程序（重启前先 `systemctl reset-failed`，因为崩溃的新程序会被 systemd 反复拉起而触发启动频率限制）。成功后删除 `xray.bak`。
+- **程序被外部删除**（D-095）：Xray 程序不存在时无法用 `xray run -test` 校验配置。节点变更后没有需要运行的节点（全部禁用、全部删除或手动停止）时跳过校验照常执行；否则拒绝修改，提示"请先在"Xray 服务"中选择"安装 Xray""。此时 Xray 服务菜单（状态文件中还有节点）显示"Xray 程序不存在（可能被手动删除），节点当前无法运行"和唯一选项"安装 Xray"：安装默认版本，然后应用当前节点（需要时启动）。状态文件中没有节点时仍只显示"首次添加节点时会自动安装"。
 - **卸载（程序部分）**：停止并禁用服务，删除程序、单元文件、`xray.json` 和 `litenode-xray` 用户；`/usr/local/lib/litenode` 为空时一并删除。删除节点和客户端由调用方处理（D-020）。
 - **卸载**：执行前列出将删除的节点数和客户端数，提示可以先在"维护"中导出配置，二次确认后删除 Xray、所有节点和客户端，并清理这些节点对应的防火墙规则（LiteNode 防火墙中的自动规则，或 ufw 中带 `litenode:node:` 标记的规则）。端口转发、SSH 和防火墙的其他设置保持不变。实现上先把删除所有节点作为一次多类变更（ufw 节点规则随之删除、Xray 停止），再删除程序、单元文件、配置和用户。
 

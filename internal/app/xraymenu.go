@@ -16,7 +16,12 @@ import (
 func (u *nodeUI) xrayMenu() ui.Menu {
 	st := u.svc.XrayStatus(u.ctx)
 	if !st.Installed {
-		return ui.Menu{Heading: text.MenuXray, Status: []string{text.XrayNotInstalledNote}}
+		if len(u.state().Nodes) == 0 {
+			return ui.Menu{Heading: text.MenuXray, Status: []string{text.XrayNotInstalledNote}}
+		}
+		// The program is gone but nodes remain (D-095).
+		return ui.Menu{Heading: text.MenuXray, Status: []string{u.s.Colors.Warn(text.XrayMissingNote)},
+			Items: []ui.Item{{Label: text.XrayInstall, Action: u.xrayReinstall}}}
 	}
 	state := u.s.Colors.Off(text.XrayStopped)
 	switch {
@@ -120,6 +125,15 @@ func (u *nodeUI) xrayLiveLogs() error {
 	return u.s.Follow(u.ctx, func(ctx context.Context) error {
 		return u.svc.FollowXrayLogs(ctx, u.s.Out)
 	})
+}
+
+func (u *nodeUI) xrayReinstall() error {
+	u.s.Println(text.XrayInstallingNow)
+	if err := u.svc.ReinstallXray(u.ctx); err != nil {
+		return err
+	}
+	u.s.Done(text.XrayReinstalled)
+	return nil
 }
 
 func (u *nodeUI) xrayUpdate() error {
