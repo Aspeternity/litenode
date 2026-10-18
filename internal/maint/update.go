@@ -82,8 +82,8 @@ func UpdateAvailable(current, latest string) bool {
 	return xray.CompareVersions(latest, current) > 0
 }
 
-// Updater replaces the installed program with a release (DESIGN section 3
-// "更新").
+// Updater replaces the installed program with a release (DESIGN section
+// 3, update).
 type Updater struct {
 	Runner  system.Runner
 	Fetcher xray.Fetcher
