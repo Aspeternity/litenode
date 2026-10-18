@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"net/netip"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,7 +59,7 @@ func TestAddNodeFlow(t *testing.T) {
 	f := nodeSystem()
 	// main: 1 nodes; node menu: 1 add; preset 1; port default; target:
 	// 2 manual, domain; remark default; then back out.
-	input := strings.Join([]string{"1", "1", "1", "", "2", "www.example.com", "", "0", "0"}, "\n") + "\n"
+	input := strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n") + "\n"
 	r := runNodes(t, f, input)
 	if r.code != 0 {
 		t.Fatalf("%+v", r)
@@ -96,7 +97,7 @@ func TestNodeMenuEmptyHidesItems(t *testing.T) {
 
 func TestDeleteNodeFlow(t *testing.T) {
 	f := nodeSystem()
-	add := strings.Join([]string{"1", "1", "1", "", "2", "www.example.com", "", "0", "0"}, "\n") + "\n"
+	add := strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n") + "\n"
 	runNodes(t, f, add)
 	// nodes > delete (6) > node 1 > confirm y
 	r := runNodes(t, f, "1\n6\n1\ny\n0\n0\n")
@@ -110,7 +111,7 @@ func TestDeleteNodeFlow(t *testing.T) {
 
 func TestClientMenuFlow(t *testing.T) {
 	f := nodeSystem()
-	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "2", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
 	// nodes > clients (4) > node 1 > add (1) default remark; then delete the
 	// original client (5, 1, y); then delete the last one (5, 1, y) which
 	// deletes the node and leaves the client menu.
@@ -132,7 +133,7 @@ func TestClientMenuFlow(t *testing.T) {
 
 func TestXrayMenu(t *testing.T) {
 	f := nodeSystem()
-	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "2", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
 	r := runNodes(t, f, "3\n2\n0\n0\n")
 	for _, want := range []string{
 		" 1. 启动", " 2. 停止", " 3. 重启", " 4. 查看日志", " 5. 更新 Xray       (可选指定版本)", " 6. 卸载 Xray       (同时删除所有节点和客户端)",
@@ -155,5 +156,47 @@ func TestXrayMenu(t *testing.T) {
 	r = runNodes(t, g, "3\n0\n0\n")
 	if !strings.Contains(r.stdout, "Xray 未安装，首次添加节点时会自动安装。") || strings.Contains(r.stdout, " 1. 启动") {
 		t.Errorf("not-installed menu:\n%s", r.stdout)
+	}
+}
+
+type fakeScanner struct{ calls int }
+
+func (f *fakeScanner) Scan(_ context.Context, center netip.Addr, progress func(int, int)) ([]reality.Result, error) {
+	f.calls++
+	progress(253, 253)
+	return []reality.Result{{Target: "near.example.net:443", Host: "near.example.net", TLS13: true, H2: true, X25519: true, CertOK: true, Latency: 2 * time.Millisecond}}, nil
+}
+
+func TestScanTargetFlow(t *testing.T) {
+	f := nodeSystem()
+	sc := &fakeScanner{}
+	env := func() Env {
+		return Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
+			TargetChecker: fakeChecker{}, AddressDetector: fakeDetector{}, TargetScanner: sc}
+	}
+	// First use: the warning is asked; answering no goes back to the add
+	// flow, which then gets 0 (back) at the target menu.
+	r := runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "n", "0", "0", "0"}, "\n")+"\n")
+	if !strings.Contains(r.stdout, "部分 VPS 商家禁止端口扫描") || sc.calls != 0 {
+		t.Fatalf("declined warning: calls=%d\n%s", sc.calls, r.stdout)
+	}
+	if st, _ := state.NewStore(f).Load(); st.Server.ScanWarned {
+		t.Error("declined warning remembered")
+	}
+	// Accept, scan, pick result 1, default remark.
+	r = runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "y", "1", "", "0", "0"}, "\n")+"\n")
+	for _, want := range []string{"扫描附近网站    (推荐，约 1 分钟)", "正在扫描 203.0.113.0/24 的 443 端口", "正在扫描 253/253", "near.example.net", "节点已添加。", "sni=near.example.net"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+	st, _ := state.NewStore(f).Load()
+	if !st.Server.ScanWarned || len(st.Nodes) != 1 {
+		t.Errorf("state = %+v", st)
+	}
+	// Second scan: no warning again.
+	r = runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "1", "Two", "0", "0"}, "\n")+"\n")
+	if strings.Contains(r.stdout, "部分 VPS 商家禁止端口扫描") || sc.calls != 2 {
+		t.Errorf("warning repeated or scan not run: calls=%d", sc.calls)
 	}
 }
