@@ -13,6 +13,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/forward"
+	"github.com/Aspeternity/litenode/internal/forwardmgr"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/reality"
@@ -56,6 +57,7 @@ type Env struct {
 	Rand            io.Reader
 	Resolver        share.Resolver
 	ForwardResolver forward.Resolver
+	ForwardDialer   forwardmgr.Dialer
 }
 
 func (env Env) fetcher() xray.Fetcher {
@@ -213,6 +215,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	sshMenu := &sshUI{ctx: ctx, s: s, svc: sshSvc, reg: reg}
 	fwSvc := &firewall.Service{Store: store, Confirmer: sshSvc.Confirmer}
 	fwMenu := &firewallUI{ctx: ctx, s: s, svc: fwSvc, reg: reg}
+	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store)}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))
@@ -228,6 +231,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st), sshMainStatus(ctx, sshSvc),
 			fwSvc.BothActive(ctx, st),
 			func() error { return s.Run(nodes.menu) },
+			func() error { return s.Run(fwdMenu.menu) },
 			func() error { return s.Run(nodes.xrayMenu) },
 			func() error { return s.Run(sshMenu.menu) },
 			func() error { return s.Run(fwMenu.menu) })

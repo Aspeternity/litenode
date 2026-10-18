@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/firewall"
@@ -511,6 +512,15 @@ func (u *nodeUI) delete() error {
 	return nil
 }
 
+// portConflicts explains port conflicts, one per line.
+func portConflicts(cs []ports.Conflict) string {
+	lines := make([]string, len(cs))
+	for i, c := range cs {
+		lines[i] = text.PortTaken(c.Port, string(c.Proto), c.Owner)
+	}
+	return strings.Join(lines, "\n")
+}
+
 // describe maps known errors to user-facing text.
 func describe(err error) string {
 	var pt *nodemgr.PortTakenError
@@ -523,6 +533,9 @@ func describe(err error) string {
 			return msg
 		}
 		if msg, ok := describeFirewall(err); ok {
+			return msg
+		}
+		if msg, ok := describeForward(err); ok {
 			return msg
 		}
 	}
@@ -540,14 +553,7 @@ func describe(err error) string {
 	case errors.Is(err, nodemgr.ErrClientNotFound):
 		return text.ErrClientNotFound
 	case errors.As(err, &pt):
-		msg := ""
-		for i, c := range pt.Conflicts {
-			if i > 0 {
-				msg += "\n"
-			}
-			msg += text.PortTaken(c.Port, string(c.Proto), c.Owner)
-		}
-		return msg
+		return portConflicts(pt.Conflicts)
 	case errors.As(err, &ie):
 		return text.XrayInstallFailed(ie.Err)
 	case errors.As(err, &ce):
