@@ -37,9 +37,15 @@ type Session struct {
 	// Echo turns terminal echo on or off around PromptSecret (optional;
 	// the program sets it to SetEcho on stdin).
 	Echo func(on bool)
+	// Interactive means input and output are a terminal. Only then does
+	// an operation that showed something to read wait for Enter before
+	// the menu comes back (D-096); piped input runs straight through.
+	Interactive bool
 
 	lines <-chan string
 	flow  *flowState
+	// hold: the running operation showed something to read.
+	hold bool
 
 	mu        sync.Mutex
 	prompting bool
@@ -202,20 +208,44 @@ func (s *Session) Run(build func() Menu) error {
 		if flow {
 			s.openFlow(it.Label)
 		}
+		s.hold = false
 		err = it.Action()
 		if flow {
 			s.closeFlow(err)
 		}
-		if err != nil {
-			if errors.Is(err, ErrBack) {
-				return nil
-			}
-			if errors.Is(err, ErrQuit) {
+		hold := s.hold
+		s.hold = false
+		if errors.Is(err, ErrQuit) {
+			return err
+		}
+		if err != nil && !errors.Is(err, ErrBack) {
+			s.Println(s.Colors.Bad(s.describe(err)))
+			hold = true
+		}
+		if hold {
+			if err := s.pause(); err != nil {
 				return err
 			}
-			s.Println(s.Colors.Bad(s.describe(err)))
+		}
+		if errors.Is(err, ErrBack) {
+			return nil
 		}
 	}
+}
+
+// Hold marks the running operation as having shown something to read
+// (links, logs, keys, results): when it ends, the menu comes back only
+// after Enter (D-096). An operation that ends with a one-line result
+// does not call it; an error always holds.
+func (s *Session) Hold() { s.hold = true }
+
+// pause waits for Enter when the session is interactive.
+func (s *Session) pause() error {
+	if !s.Interactive {
+		return nil
+	}
+	_, err := s.Prompt("\n" + text.PressEnter)
+	return err
 }
 
 // Describe turns an action's error into the message shown to the user.

@@ -171,6 +171,10 @@ func InvalidChoice(max int) string {
 	return fmt.Sprintf("无效的选项，请输入 0 到 %d 之间的数字。", max)
 }
 
+// PressEnter waits, after an operation that showed something to read,
+// before the menu comes back (D-096).
+const PressEnter = "按回车返回菜单"
+
 // ConfirmSuffix is appended to yes/no questions; the default is no.
 const ConfirmSuffix = " [y/N]: "
 

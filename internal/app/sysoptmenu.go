@@ -185,7 +185,7 @@ func (u *sysoptUI) promptSwapSize(def int) (mb int, ok bool, err error) {
 		return 0, false, err
 	}
 	if limit < sysopt.MinSwapMB {
-		u.s.End(u.s.Colors.Warn(text.ErrNoDiskSpace))
+		u.s.EndWarn(text.ErrNoDiskSpace)
 		return 0, false, nil
 	}
 	u.s.Println(text.SwapMax(sysopt.FormatMB(limit)))
@@ -235,7 +235,7 @@ func (u *sysoptUI) preference() error {
 		return nil
 	}
 	if after, err := u.svc.PreferenceStatus(); err == nil && after.IPv4 {
-		u.s.End(u.s.Colors.Warn(text.PreferenceForeign))
+		u.s.EndWarn(text.PreferenceForeign)
 		return nil
 	}
 	u.s.Done(text.PreferIPv6Done)
@@ -306,6 +306,7 @@ func (u *sysoptUI) dns() error {
 	}
 	u.s.Done(text.DNSSet(strings.Join(servers, " ")))
 	if !u.svc.LookupWorks(u.ctx) {
+		u.s.Hold()
 		u.s.Println(u.s.Colors.Warn(text.DNSVerifyFailed))
 	}
 	return nil

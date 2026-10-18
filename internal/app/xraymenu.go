@@ -84,7 +84,7 @@ func (u *nodeUI) xrayRestart() error {
 		u.s.End(text.XrayNoNodes)
 		return nil
 	case err != nil && u.state().Xray.Stopped:
-		u.s.End(u.s.Colors.Warn(text.XrayStoppedByUserErr))
+		u.s.EndWarn(text.XrayStoppedByUserErr)
 		return nil
 	case err == nil:
 		u.s.Done(text.XrayRestarted)
@@ -116,12 +116,14 @@ func (u *nodeUI) xrayRecentLogs() error {
 		return err
 	}
 	u.s.End(text.XrayLogsTitle(n))
+	u.s.Hold()
 	u.s.Println(strings.TrimRight(logs, "\n"))
 	return nil
 }
 
 func (u *nodeUI) xrayLiveLogs() error {
 	u.s.End(text.XrayLiveLogsTitle)
+	u.s.Hold()
 	return u.s.Follow(u.ctx, func(ctx context.Context) error {
 		return u.svc.FollowXrayLogs(ctx, u.s.Out)
 	})
@@ -204,7 +206,7 @@ func (u *nodeUI) xrayOutboundIP() error {
 	}
 	err = u.svc.SetOutboundIP(u.ctx, mode)
 	if errors.Is(err, nodemgr.ErrFamilyUnavailable) {
-		u.s.End(u.s.Colors.Warn(text.OutboundIPUnavailable(ipv6)))
+		u.s.EndWarn(text.OutboundIPUnavailable(ipv6))
 		return nil
 	}
 	if err != nil {

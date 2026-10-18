@@ -280,6 +280,7 @@ func (u *sshUI) generateKey() error {
 		return err
 	}
 	u.s.Done(text.KeyGenerated)
+	u.s.Hold()
 	u.s.Println("\n" + text.PrivateKeyTitle)
 	u.s.Println(strings.TrimRight(string(priv), "\n"))
 	u.s.Println(u.s.Colors.Warn(text.PrivateKeyHint))
@@ -456,6 +457,7 @@ func (u *sshUI) createSudoUser() error {
 	}
 	u.s.Done(text.SudoUserCreated(name))
 	if generated {
+		u.s.Hold()
 		u.s.Println(u.s.Colors.Warn(text.GeneratedPassword(name, password)))
 	}
 	return nil

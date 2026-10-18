@@ -120,10 +120,10 @@ func (u *firewallUI) enable() error {
 	p := u.svc.Check(u.ctx)
 	switch {
 	case p.UFW:
-		u.s.End(u.s.Colors.Warn(text.FirewallUFWActive))
+		u.s.EndWarn(text.FirewallUFWActive)
 		return nil
 	case p.Firewalld:
-		u.s.End(u.s.Colors.Warn(text.FirewallFirewalldActive))
+		u.s.EndWarn(text.FirewallFirewalldActive)
 		return nil
 	}
 	if p.Docker {
@@ -485,7 +485,7 @@ func (u *firewallUI) deleteRule() error {
 		return err
 	}
 	if !firewall.IsManual(e.Owner) {
-		u.s.End(u.s.Colors.Warn(text.FirewallAutoRule(ownerLabel(*e), autoRuleMenu(e.Owner))))
+		u.s.EndWarn(text.FirewallAutoRule(ownerLabel(*e), autoRuleMenu(e.Owner)))
 		return nil
 	}
 	ok, err := u.s.Confirm(text.ConfirmDeleteRule(i, portLabel(*e)))

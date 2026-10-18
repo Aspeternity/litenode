@@ -224,6 +224,7 @@ func (u *forwardUI) finish(err error, done string) error {
 	}
 	u.s.Done(done)
 	if te != nil {
+		u.s.Hold()
 		u.s.Println(u.s.Colors.Warn(text.ForwardTimerFailed(te.Err)))
 	}
 	return nil
@@ -285,6 +286,7 @@ func (u *forwardUI) probe() error {
 	if from, to, err := forward.ParsePorts(f.TargetPort); err == nil && to > from {
 		u.s.Println(text.ProbeFirstPort(from))
 	}
+	u.s.Hold()
 	u.s.Println(text.Probing)
 	allOK := true
 	for _, r := range u.svc.Probe(u.ctx, *f) {
@@ -298,7 +300,7 @@ func (u *forwardUI) probe() error {
 	if allOK {
 		u.s.Done(text.ProbeAllOK)
 	} else {
-		u.s.End(u.s.Colors.Warn(text.ProbeSomeFails))
+		u.s.EndWarn(text.ProbeSomeFails)
 	}
 	return nil
 }
