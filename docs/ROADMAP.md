@@ -230,12 +230,13 @@
 
 **测试前确认测试 VPS 的 VNC 控制台可用。M2 全程使用 Ubuntu 24.04：开始前把测试 VPS 重装为 Ubuntu 24.04，先重跑 M0 / M1 的测试机验证（D-048）。**
 
-### M2-01 sshd 配置读写 `未开始`
+### M2-01 sshd 配置读写 `已完成`
 
-- `00-litenode.conf` 生成、`Include` 检查、`sshd -t` 校验、`sshd -T` 读取实际值。
+- `00-litenode.conf` 生成、`Include` 检查、`sshd -t` 校验、`sshd -T` 读取实际值。细节见 D-061。
 - 验收：
-  - [ ] 单元测试：配置生成、`sshd -T` 输出解析。
-  - [ ] [VPS] 存在 `50-cloud-init.conf` 时，LiteNode 的设置仍然生效（以 `sshd -T` 为准）。
+  - [x] 单元测试：配置生成、`sshd -T` 输出解析（含 Ubuntu 24.04 的真实输出）、`Include` 检查（含两台测试机的真实主配置）、生效值核对；`sshd` 配置类型在变更流程中的成功、`sshd -t` 失败、未生效、无 `Include`、套接字激活未运行等情况。
+  - [x] [VPS] 存在 `50-cloud-init.conf` 时，LiteNode 的设置仍然生效（以 `sshd -T` 为准）。（Ubuntu 24.04：`PasswordAuthentication no` 生效，删除后恢复原值。）
+  - [x] [VPS] Debian 12 主配置自带 `Port` 时，LiteNode 写入新端口被核对发现两个端口同时生效，修改整体恢复（M2-05 需要处理）。
 
 ### M2-02 SSH 的限时确认回滚 `未开始`
 

@@ -15,6 +15,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/reality"
 	"github.com/Aspeternity/litenode/internal/share"
+	"github.com/Aspeternity/litenode/internal/ssh"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
@@ -88,6 +89,7 @@ func (env Env) kinds(r system.Runner, store *state.Store) change.Registry {
 			reg.Register(k)
 		}
 	}
+	reg.Register(ssh.Kind(store))
 	return reg
 }
 

@@ -6,7 +6,7 @@
 
 - **阶段**：M1 已由用户实机验收通过（含验收修复 D-059、D-060）。M2 SSH 管理开始。
 - **M2 前的测试机复验**（D-048，2026-10-18）：在 Ubuntu 24.04 测试机上用一行命令安装 v0.0.2，节点添加、常用目标、客户端增删均端到端连通；`vps` 集成测试 `reality`、`share`、`ports`、`firewall`、`ufw`、`change`（systemd-run 定时器回滚）、`xray`（安装 / 更新 / 回退 / 卸载、生成配置、密钥）全部通过。
-- **当前任务**：M2-01 sshd 配置读写。
+- **当前任务**：M2-01 已完成；下一个 M2-02 SSH 的限时确认回滚。
 
 ## 下次会话从这里开始
 
@@ -27,9 +27,12 @@
 - **使用场景**：LiteNode 主要用作落地机。WSL 到 VPS 的直连经过中国，是用户在软路由上特意配置的模拟环境；直连被干扰不作为取舍依据，以 VPS 本机的协议检测为准（D-059）。
 - 客户端连通性：在 WSL 下载官方 Xray（放在 scratchpad 的独立目录，校验 `.dgst`），`scripts/dev/link2client.py` 把链接转成客户端配置，经 SOCKS 访问 `https://www.cloudflare.com/cdn-cgi/trace`，出口 IP 为 VPS 即连通。
 - **WSL 到 VPS 的直连经过 GFW（中国移动）**：所以"从中国大陆能连"和"协议上可用"要分开测；后者把 `scripts/dev/link2client.py` 和 `scripts/dev/vprobe.sh` 传到 VPS 的 `/tmp`，在 VPS 本机运行（注意测试机重启会清空 `/tmp`）。
-- 带 `vps` 构建标签的集成测试（`ports` 用 `VPS_SSH_PORT` 指定 sshd 端口，默认 22）：`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o x.test ./internal/<包>`，传到测试机以 root 运行 `./x.test -test.v -test.run TestVPS`。已有：`xray`、`change`、`share`、`reality`、`ufw`、`ports`、`firewall`。
+- 带 `vps` 构建标签的集成测试（`ports` 用 `VPS_SSH_PORT` 指定 sshd 端口，默认 22；`ssh` 会真实修改 sshd 配置，带 3 分钟自动恢复定时器）：`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags vps -o x.test ./internal/<包>`，传到测试机以 root 运行 `./x.test -test.v -test.run TestVPS`。已有：`xray`、`change`、`share`、`reality`、`ufw`、`ports`、`firewall`、`ssh`。
 
 ## 未解决的问题
+
+- **M2-05 必须处理 `Port` 叠加**：`Port` 在所有文件中都生效（Debian 测试机主配置 `Include` 之后有商家写的 `Port 61234`）。修改端口前需要决定如何处理主配置和其他文件中的 `Port`（DESIGN 第 13 节要求不修改主配置）。Ubuntu 的 `ssh.socket` 也要在 M2-05 实测处理。
+- **Xray 被外部删除后无法删除节点**：Xray 程序被手动删除（测试中出现）时，删除节点会因 `xray run -test` 无法执行而失败，恢复也失败。没有节点需要运行时应允许跳过校验，或提示先在 Xray 菜单重新安装。M2 结束前或 M6 维护功能中处理。
 
 - 限时确认期间服务器重启，修改不会被回滚（DESIGN 第 6 节已记录为已知限制），M2-02 时决定是否处理。
 - 常用目标列表（D-055）只在一个观测点（中国移动）验证过；附近网站扫描在测试机网段没找到可用网站（邻居多为代理服务器）。
