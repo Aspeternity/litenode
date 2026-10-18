@@ -28,6 +28,7 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	session := ui.NewSession(os.Stdin, os.Stdout, sigs, ui.NewColors(os.Getenv("NO_COLOR")))
+	session.Echo = func(on bool) { ui.SetEcho(int(os.Stdin.Fd()), on) }
 
 	os.Exit(app.Run(context.Background(), app.Env{
 		Runner:     system.NewReal(system.NewOpLog(system.DefaultLogPath)),

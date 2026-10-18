@@ -33,6 +33,9 @@ type Session struct {
 	Colors Colors
 	// Describe maps an action's error to a message (optional).
 	Describe func(error) string
+	// Echo turns terminal echo on or off around PromptSecret (optional;
+	// the program sets it to SetEcho on stdin).
+	Echo func(on bool)
 
 	lines <-chan string
 
@@ -103,6 +106,18 @@ func (s *Session) Prompt(label string) (string, error) {
 		fmt.Fprintln(s.Out)
 		return "", ErrQuit
 	}
+}
+
+// PromptSecret is Prompt without showing what is typed.
+func (s *Session) PromptSecret(label string) (string, error) {
+	if s.Echo != nil {
+		s.Echo(false)
+		defer func() {
+			s.Echo(true)
+			fmt.Fprintln(s.Out) // the newline the user typed was not echoed
+		}()
+	}
+	return s.Prompt(label)
 }
 
 // Confirm asks a yes/no question. Only "y" or "yes" means yes; the default
