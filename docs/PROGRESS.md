@@ -4,23 +4,28 @@
 
 ## 当前状态
 
-- **阶段**：M2 已由用户实机验收通过。用户批准两项修改，完成后直接进入 M3（不再停下验收）：
-  1. 多个分享地址（D-068，`fix/M1-06`）：已完成。
-  2. 操作流程的新样式（D-069，`fix/ui-flow-style`）：已完成。
-- **下一个任务**：M3 防火墙（从 M3-01 开始）。
+- **阶段**：M2 已由用户验收通过；验收后的两项修改已合并（多个分享地址 D-068，PR #29；页面和操作流程分开显示 D-069，PR #30）。**M3 防火墙进行中**。
+- **当前任务**：M3-01 nftables 表结构和规则生成，在分支 `feat/M3-01-nft`（已推送，未开 PR）。
+  - 已完成：状态文件 `firewall` 结构；`internal/nft` 规则生成（golden 测试）、`nft` 配置类型（`nft -c` 校验，按磁盘上的文件加载并启用 / 停用 `litenode-nft.service`）；`internal/firewall` 从状态生成规则（`Config`、`SSHPorts`）；回滚子命令登记 `nft`；D-070。
+  - 已实测：Debian 12 上 `nft -c -f` 通过；加载后测试端口被拦截，SSH、节点、ping 正常（从 Ubuntu 测试机直连探测；从 WSL 探测不可靠，见下）；之后已移除表，测试机恢复原状。
+- **用户要求暂停开发（2026-10-18）**，等用户说继续再开始。
 
 ## 下次会话从这里开始
 
-1. 打标签 `v0.0.3` 前先问用户（尚未同意）。
-2. 待确认提议：P-004 在 M3 用到，P-005、P-007 在 M6 用到。按 D-050 由 Claude 决定并记录。
-3. 测试机上用户可能开着 `lnode`（实例锁）：运行菜单前先用 `pgrep -x lnode` 检查，不要结束用户的进程。
+1. 切到 `feat/M3-01-nft`，完成 M3-01 剩余部分：
+   - [VPS] 重启后规则仍在：在 Debian 上用 `firewall` 包的 vps 测试 `LN_NFT=on` 加载（先设置应急定时器），确认新的 SSH 连接正常后重启，检查表已加载、SSH 和节点正常，最后 `LN_NFT=off` 移除。
+   - DESIGN 第 5 节状态示意中的 `firewall` 结构改为实际字段（`enabled`、`block_ping`、`rules[].sources`、`auto_sources`），第 14 节补充 D-070 的基础规则。
+   - 更新 ROADMAP 后开 PR，CI 通过后合并；然后按顺序做 M3-02 ~ M3-04（P-004 在 M3-03 前按 D-050 决定）。
+2. 打标签 `v0.0.3` 前先问用户（尚未同意）。
+3. 测试机上用户可能开着 `lnode`（实例锁）：运行菜单前先用 `pgrep -x lnode` 检查，不要结束用户的进程；远程 `pkill -f` 的模式不要能匹配到执行它的 shell 命令本身。
+4. **从 WSL 探测 VPS 端口不可靠**：开发机到 VPS 的直连经过用户的中国代理，代理会自己完成 TCP 握手，被防火墙拦截的端口也显示"open"。测试防火墙要从另一台测试机直连探测（如从 Ubuntu 探测 Debian）。
 
 ## 测试 VPS 的当前状态（2026-10-18）
 
 登录信息由用户在会话中提供，**不写入仓库或记忆**。用户授权两台都可以完全用于测试。
 
 - **Ubuntu 24.04.5**（M2 起的主测试机，D-048）：KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 62.84.164.181，有 IPv6。`/usr/local/bin/litenode` 是 M2-06 分支的编译版本（与合并后的 main 相同）；没有节点、Xray 未安装；root 的 `authorized_keys` 中有从 GitHub 导入的 Aspeternity 公钥（即开发机 WSL 的 `~/.ssh/id_ed25519`），可以用密钥登录，M2-04 关闭密码登录时使用；装有 `litenode-rollback-boot.service`；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`（M2-04、M2-05 测试后的状态）；ufw 已停用（测试时启用过）；已安装 `python3`、`zbar-tools`；ufw 未启用。
-- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234（主配置中有商家写的 `Port 61234`），公网 IP 216.23.88.252。上面有用户验收时添加的 2 个节点。`/usr/local/bin/litenode` 是 M2-06 分支的编译版本（与合并后的 main 相同）；`00-litenode.conf` 管理着 `Port 61234`（带 `ListenAddress`）。
+- **Debian 12**：KVM、x86_64、约 1G 内存，SSH 端口 61234（主配置中有商家写的 `Port 61234`），公网 IP 216.23.88.252。上面有用户的 2 个节点（`Test`、`Test2`）和 Xray；分享地址列表有 IPv4 和 `216-23-88-252.sslip.io`（M1-06 测试时添加）；没有 LiteNode 的 nftables 表（`/etc/litenode/nftables.nft` 只含删除表的两行，`litenode-nft.service` 已停用）；系统自带的 `table inet filter`（全部 accept）保持不变。`/usr/local/bin/litenode` 是 M2-06 分支的编译版本（与合并后的 main 相同）；`00-litenode.conf` 管理着 `Port 61234`（带 `ListenAddress`）。
 
 ## 实机测试方法（M1 建立，后续沿用）
 

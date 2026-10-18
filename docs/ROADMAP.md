@@ -296,13 +296,13 @@
 
 **M3 起测试 VPS 换回 Debian 12（D-048）。**
 
-### M3-01 nftables 表结构和规则生成 `未开始`
+### M3-01 nftables 表结构和规则生成 `进行中`
 
-- `table inet litenode`：input、forward、prerouting、postrouting 链，ICMPv6 邻居发现始终放行。
+- `table inet litenode`：input、forward、prerouting、postrouting 链，ICMPv6 邻居发现始终放行。细节见 D-070；forward、prerouting、postrouting 在 M4 加入。
 - `litenode-nft.service` 开机加载。
 - 验收：
-  - [ ] golden file 测试：给定状态，生成的规则与预期一致。
-  - [ ] [VPS] 生成的规则通过 `nft -c -f`，重启后规则仍在。
+  - [x] golden file 测试：给定状态，生成的规则与预期一致。（`internal/nft/testdata/*.nft`；另有 `firewall.Config` 的单元测试和 `nft` 配置类型的测试。）
+  - [ ] [VPS] 生成的规则通过 `nft -c -f`，重启后规则仍在。（`nft -c -f` 已在 Debian 12 通过；Debian 上加载后测试端口 9999 被拦截，SSH、节点端口、ping 正常，节点可用；**重启后仍在尚未测试**。）
 
 ### M3-02 启用、关闭、重置 `未开始`
 
