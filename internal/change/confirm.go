@@ -16,8 +16,17 @@ import (
 // DefaultConfirmSeconds is how long the user has to confirm (P-006).
 const DefaultConfirmSeconds = 60
 
-// DefaultPendingDir holds the pending-rollback marker. It is on tmpfs.
-const DefaultPendingDir = "/run/litenode"
+// DefaultPendingDir holds the pending-rollback marker. It is on disk, not
+// tmpfs, so a change left unconfirmed by a reboot is still rolled back at
+// boot (D-062).
+const DefaultPendingDir = state.ConfigDir + "/rollback"
+
+// DefaultBootUnitDir is where the boot-time rollback unit is installed.
+const DefaultBootUnitDir = "/etc/systemd/system"
+
+// BootUnit rolls back at boot a change whose confirmation a reboot cut
+// short: the transient timer is gone then, the marker is not (D-062).
+const BootUnit = "litenode-rollback-boot.service"
 
 // TimerUnit is the transient systemd unit that rolls back an unconfirmed
 // change. Only one change can await confirmation at a time (the menu
@@ -41,12 +50,53 @@ type Confirmer struct {
 	// Executable is the absolute path of the litenode binary.
 	Executable string
 	PendingDir string
-	Seconds    int
+	// BootUnitDir, if set, gets BootUnit before the first rollback is
+	// armed.
+	BootUnitDir string
+	Seconds     int
 }
 
 // NewConfirmer returns a Confirmer with the default timeout and paths.
 func NewConfirmer(m *Manager, executable string) *Confirmer {
-	return &Confirmer{Manager: m, Executable: executable, PendingDir: DefaultPendingDir, Seconds: DefaultConfirmSeconds}
+	return &Confirmer{Manager: m, Executable: executable, PendingDir: DefaultPendingDir,
+		BootUnitDir: DefaultBootUnitDir, Seconds: DefaultConfirmSeconds}
+}
+
+// bootUnit is the unit file of BootUnit. It does nothing unless a marker
+// is pending.
+func (c *Confirmer) bootUnit() []byte {
+	return []byte(`[Unit]
+Description=LiteNode: roll back a change left unconfirmed by a reboot
+ConditionPathExists=` + c.pendingPath() + `
+
+[Service]
+Type=oneshot
+ExecStart=` + c.Executable + ` internal rollback
+
+[Install]
+WantedBy=multi-user.target
+`)
+}
+
+// ensureBootUnit installs and enables BootUnit if it is missing or out of
+// date. After the first time this is a single file read.
+func (c *Confirmer) ensureBootUnit(ctx context.Context) error {
+	if c.BootUnitDir == "" {
+		return nil
+	}
+	r := c.Manager.Runner
+	path := filepath.Join(c.BootUnitDir, BootUnit)
+	want := c.bootUnit()
+	if got, err := r.ReadFile(path); err == nil && string(got) == string(want) {
+		return nil
+	}
+	if err := r.WriteFile(path, want, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := system.DaemonReload(ctx, r); err != nil {
+		return err
+	}
+	return system.Systemctl(ctx, r, system.ServiceEnable, BootUnit)
 }
 
 func (c *Confirmer) pendingPath() string {
@@ -60,6 +110,9 @@ func (c *Confirmer) Arm(ctx context.Context, backupID string) error {
 	r.Exec(ctx, "systemctl", "stop", TimerUnit+".timer")
 	r.Exec(ctx, "systemctl", "reset-failed", TimerUnit+".service")
 
+	if err := c.ensureBootUnit(ctx); err != nil {
+		return fmt.Errorf("install boot-time rollback: %w", err)
+	}
 	if err := system.EnsureDir(r, c.PendingDir, state.PrivateDirMode); err != nil {
 		return err
 	}
@@ -116,6 +169,21 @@ func (c *Confirmer) Apply(ctx context.Context, ch Change) (string, error) {
 		c.Disarm(ctx)
 	}
 	return id, err
+}
+
+// Revert undoes the pending change now, when the user says it does not
+// work, instead of waiting for the timer. It returns ErrRolledBack if the
+// timer already did it.
+func (c *Confirmer) Revert(ctx context.Context, reg Registry) error {
+	done, err := c.Rollback(ctx, reg)
+	c.Manager.Runner.Exec(ctx, "systemctl", "stop", TimerUnit+".timer")
+	if err != nil {
+		return err
+	}
+	if !done {
+		return ErrRolledBack
+	}
+	return nil
 }
 
 // Rollback is run by the timer (litenode internal rollback). It restores

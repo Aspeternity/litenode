@@ -101,6 +101,20 @@ const RollbackDone = "未在限时内确认，已恢复修改前的配置。"
 // RollbackNotNeeded is printed when the change was confirmed in time.
 const RollbackNotNeeded = "修改已确认，无需恢复。"
 
+// ConfirmKeep asks the user to test a new login before keeping a change
+// that may affect SSH access (DESIGN section 6).
+func ConfirmKeep(seconds int) string {
+	return fmt.Sprintf("请新开一个终端测试能否登录。登录正常请输入 y 保留修改，输入其他内容立即恢复；%d 秒内未确认将自动恢复。", seconds)
+}
+
+// Results of the confirmation.
+const (
+	ChangeKept      = "已确认，修改已保留。"
+	ChangeReverted  = "已恢复修改前的配置。"
+	ConfirmTimedOut = "已超时，配置已自动恢复，请重新修改。"
+	QuitUnconfirmed = "修改未确认，将在限时到期后自动恢复。"
+)
+
 // RollbackFailed is printed when the rollback itself fails.
 func RollbackFailed(err error) string {
 	return fmt.Sprintf("自动恢复失败：%v\n请通过 VNC 控制台登录，从 /etc/litenode/backups/ 中手动恢复。", err)

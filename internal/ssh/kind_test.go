@@ -142,3 +142,35 @@ func TestKindRemovesDropInWhenNothingManaged(t *testing.T) {
 		t.Error("drop-in not removed")
 	}
 }
+
+func TestPrivsepDirCreatedWhenMissing(t *testing.T) {
+	// Socket-activated sshd that never started: /run/sshd is missing and
+	// sshd -t / -T would refuse to run.
+	f := sshSystem("port 22222\npubkeyauthentication yes\npasswordauthentication no\nkbdinteractiveauthentication no\npermitrootlogin prohibit-password\n")
+	if err := apply(t, f, keysOnly); err != nil {
+		t.Fatal(err)
+	}
+	created := -1
+	for i, c := range f.Calls() {
+		if c.Op == systemtest.OpMkdir && c.Path == PrivsepDir && created < 0 {
+			created = i
+		}
+		if c.Command == SshdPath+" -t" && (created < 0 || created > i) {
+			t.Fatal("sshd -t ran before /run/sshd was created")
+		}
+	}
+	if created < 0 {
+		t.Error("/run/sshd not created")
+	}
+	// Once it exists it is left alone.
+	f2 := sshSystem(effectiveDefault)
+	f2.Dirs[PrivsepDir] = true
+	if _, err := ReadEffective(context.Background(), f2); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range f2.Calls() {
+		if c.Op == systemtest.OpMkdir || c.Op == systemtest.OpChmod {
+			t.Errorf("existing /run/sshd touched: %+v", c)
+		}
+	}
+}
