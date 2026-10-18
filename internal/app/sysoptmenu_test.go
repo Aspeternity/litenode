@@ -155,7 +155,9 @@ func sysoptMenu(t *testing.T, f *systemtest.Fake, virt system.Virt) string {
 	u := &sysoptUI{ctx: ctx, s: ui.NewSession(strings.NewReader(""), io.Discard, nil, ui.Colors{}),
 		info: system.Info{Virt: virt}, caps: system.ProbeAll(ctx, f),
 		svc: &sysopt.Service{Runner: f, Store: store, Changes: change.NewManager(f, store)}}
-	return u.menu().Render()
+	m := u.menu()
+	m.Path = []string{text.MainMenuName}
+	return m.Render()
 }
 
 // TestRenderSysoptMenu compares against the DESIGN section 15 example.

@@ -295,3 +295,65 @@ func TestEndWarnHolds(t *testing.T) {
 		t.Errorf("EndWarn did not hold:\n%s", out.String())
 	}
 }
+
+// nestedMenus is a main menu (Title) with page "A", which has page "B"
+// and an operation that prints "result".
+func nestedMenus(s *Session) func() Menu {
+	b := func() Menu { return Menu{Heading: "B"} }
+	a := func() Menu {
+		return Menu{Heading: "A", Items: []Item{
+			{Label: "b", Page: true, Action: func() error { return s.Run(b) }},
+			{Label: "op", Action: func() error { s.Println("result"); return nil }},
+		}}
+	}
+	return func() Menu {
+		return Menu{Title: "T", Items: []Item{{Label: "a", Page: true, Action: func() error { return s.Run(a) }}}}
+	}
+}
+
+// TestRunPagePathAndClear: a page heading shows the pages above it; pages
+// clear the screen only when interactive, and an operation's flow does
+// not (D-096).
+func TestRunPagePathAndClear(t *testing.T) {
+	in := "1\n1\n0\n2\n0\n0\n"
+	s, out, _ := newTestSession(strings.NewReader(in))
+	if err := s.Run(nestedMenus(s)); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{HeadingBar("主菜单 › A"), HeadingBar("主菜单 › A › B")} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "\x1b") {
+		t.Errorf("piped session printed escape sequences:\n%q", got)
+	}
+
+	s, out, _ = newTestSession(strings.NewReader(in))
+	s.Interactive = true
+	if err := s.Run(nestedMenus(s)); err != nil {
+		t.Fatal(err)
+	}
+	got = out.String()
+	// Main, A, B, back to A, A after the operation, back to main.
+	if n := strings.Count(got, clearScreen); n != 6 {
+		t.Errorf("clears = %d, want 6\n%q", n, got)
+	}
+	// The operation's output comes after the last clear of page A.
+	if i, j := strings.Index(got, "result"), strings.LastIndex(got, clearScreen); i < 0 || i > j {
+		t.Errorf("operation output cleared too early:\n%q", got)
+	}
+}
+
+// TestHoldAll: in dry-run every operation holds, pages do not.
+func TestHoldAll(t *testing.T) {
+	s, out, _ := newTestSession(strings.NewReader("1\n2\n\n0\n0\n"))
+	s.Interactive, s.HoldAll = true, true
+	if err := s.Run(nestedMenus(s)); err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(out.String(), text.PressEnter); n != 1 {
+		t.Errorf("pauses = %d, want 1\n%s", n, out.String())
+	}
+}

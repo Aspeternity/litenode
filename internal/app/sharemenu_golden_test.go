@@ -8,6 +8,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
+	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
 )
 
@@ -35,6 +36,7 @@ func checkGolden(t *testing.T, name string, m ui.Menu) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	m.Path = []string{text.MainMenuName}
 	if got := m.Render(); got != string(want) {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
