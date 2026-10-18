@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/nft"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -273,5 +274,48 @@ func TestShareAddress(t *testing.T) {
 	fx := newFixture(t)
 	if err := fx.svc.SetShareAddresses([]string{"la.example.com", "203.0.113.10"}); err != nil || fx.state(t).Server.DefaultShareAddress() != "la.example.com" {
 		t.Errorf("share address: %v", err)
+	}
+}
+
+// TestFirewallFollowsNodes checks that node changes keep the LiteNode
+// firewall in step (M3-04): a new port is opened and the old one closed.
+func TestFirewallFollowsNodes(t *testing.T) {
+	fx := newFixture(t)
+	ctx := context.Background()
+	fx.f.Respond(systemtest.Response{Result: system.Result{Stdout: "Status: inactive\n"}}, "ufw", "status")
+	st := fx.state(t)
+	st.Firewall.Enabled = true
+	st.SSH.Port = 22
+	if err := fx.svc.Store.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	rules := func() string { return string(fx.f.Files[nft.ConfigPath]) }
+	a := fx.add(t, 443, "A")
+	if !strings.Contains(rules(), "tcp dport 443 accept") {
+		t.Errorf("new node not opened:\n%s", rules())
+	}
+	if err := fx.svc.SetPort(ctx, a.ID, 8443); err != nil {
+		t.Fatal(err)
+	}
+	if r := rules(); !strings.Contains(r, "tcp dport 8443 accept") || strings.Contains(r, "dport 443 ") {
+		t.Errorf("after the port change:\n%s", r)
+	}
+	if err := fx.svc.SetEnabled(ctx, a.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if r := rules(); strings.Contains(r, "8443") || !strings.Contains(r, "tcp dport 22 accept") {
+		t.Errorf("after disabling:\n%s", r)
+	}
+
+	// Uninstalling Xray when it is already gone still closes node ports.
+	if err := fx.svc.SetEnabled(ctx, a.ID, true); err != nil || !strings.Contains(rules(), "dport 8443") {
+		t.Fatalf("enable: %v\n%s", err, rules())
+	}
+	fx.f.Respond(systemtest.Response{Result: system.Result{ExitCode: 127}}, xray.BinPath, "version")
+	if err := fx.svc.UninstallXray(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if r := rules(); strings.Contains(r, "8443") {
+		t.Errorf("after uninstalling Xray:\n%s", r)
 	}
 }
