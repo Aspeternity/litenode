@@ -131,3 +131,42 @@ func DNSProbeFailed(server string, err error) string {
 
 // DNSSet reports the new DNS servers.
 func DNSSet(servers string) string { return "DNS 已设置为 " + servers + "。" }
+
+// Time zone and time synchronization (DESIGN section 15).
+const (
+	SysoptClock       = "时区与时间同步"
+	ClockSetTimezone  = "设置时区"
+	ClockEnableNTP    = "开启时间同步"
+	TimezoneCustom    = "其他（手动输入）"
+	PromptTimezone    = "时区（如 Asia/Shanghai）"
+	ErrTimezone       = "系统中没有这个时区，请按 地区/城市 格式输入，如 Asia/Shanghai。"
+	NTPWaiting        = "正在等待时间同步（最多 30 秒）……"
+	NTPSyncedDone     = "时间同步已开启，时钟已同步。"
+	NTPPendingDone    = "时间同步已开启，尚未完成同步，请稍后查看状态。"
+	NTPAlreadySynced  = "时间同步已开启，时钟已同步。"
+	NTPInstallingNote = "系统没有时间同步服务，将安装 systemd-timesyncd。"
+)
+
+// StatusClock labels the time zone field; synced is shown only where
+// the system can synchronize time.
+func StatusClock(tz, synced string) string {
+	if synced == "" {
+		return "时区: " + tz
+	}
+	return "时区: " + tz + " (同步 " + synced + ")"
+}
+
+// ClockCurrent describes the time zone and synchronization state.
+func ClockCurrent(tz string, ntp, synced bool) string {
+	sync := "未开启"
+	switch {
+	case synced:
+		sync = "已同步"
+	case ntp:
+		sync = "已开启，尚未同步"
+	}
+	return "当前时区 " + tz + "，时间同步：" + sync + "。Reality 对时间敏感，建议保持同步。"
+}
+
+// TimezoneSet reports the new time zone.
+func TimezoneSet(tz string) string { return "时区已设置为 " + tz + "。" }

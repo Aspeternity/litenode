@@ -9,6 +9,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/firewall"
@@ -226,7 +227,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	fwSvc := &firewall.Service{Store: store, Confirmer: sshSvc.Confirmer}
 	fwMenu := &firewallUI{ctx: ctx, s: s, svc: fwSvc, reg: reg}
 	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store)}
-	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r), probeDNS: env.dnsProber(),
+	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r), probeDNS: env.dnsProber(), syncWait: 30 * time.Second,
 		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)}}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
