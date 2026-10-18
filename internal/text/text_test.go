@@ -90,3 +90,13 @@ func moduleRoot(t *testing.T) string {
 		dir = parent
 	}
 }
+
+func TestXrayStatusLine(t *testing.T) {
+	got := XrayStatusLine("v26.10.17", "● 运行中", 3*86400+2*3600+60, 28<<20)
+	if want := "Xray v26.10.17  ● 运行中  已运行 3天2小时  内存 28M"; got != want {
+		t.Errorf("got %q, want %q (DESIGN section 12)", got, want)
+	}
+	if got := XrayStatusLine("v26.10.17", "○ 已停止", 0, 0); got != "Xray v26.10.17  ○ 已停止" {
+		t.Errorf("stopped: %q", got)
+	}
+}
