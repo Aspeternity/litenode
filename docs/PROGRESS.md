@@ -4,21 +4,22 @@
 
 ## 当前状态
 
-- **阶段**：M5 系统优化**已完成**（M5-01 ~ M5-07），用户要求接着做 M6，M6 完成后与 M5 一起汇报验收（2026-10-19）。
-- **当前任务**：M6-04 维护菜单（M6-01 ~ 03 已完成）。
+- **阶段**：M5 系统优化（M5-01 ~ 07）和 M6 维护（M6-01 ~ 04）**都已完成**，等待用户一起实机验收（2026-10-19）。
+- **当前任务**：无。验收步骤见 PR #44（M5-01 ~ 06）、#46（M5-07）、#47 ~ #50（M6）的描述。
 
 ## 下次会话从这里开始
 
-1. 按顺序做 M6-01 ~ M6-04，全部完成后与 M5 一起请用户实机验收（M5-01 ~ 06 的验收步骤见 PR #44 描述，M5-07 见其 PR）。
-2. 打标签前先问用户（v0.0.3 尚未同意）。
-3. 实机测试前读 `docs/NOTES.md` 的"实机测试方法"（含 M5 的测试注意事项）。
+1. 等用户验收 M5 + M6；验收通过后开始 M7（先讨论 DESIGN 第 18 节第 2 项 TLS 证书来源，并与用户确定 M7 的任务列表）。
+2. 待修复：Xray 被外部删除后无法删除单个节点（见下方"未解决的问题"）。
+3. 打标签前先问用户（v0.0.3 尚未同意）。
+4. 实机测试前读 `docs/NOTES.md` 的"实机测试方法"（含 M5 的测试注意事项）。
 
 ## 测试 VPS 的当前状态（2026-10-19）
 
-登录密码记在本机记忆中（用户同意），**不写入仓库**。用户授权两台都可以完全用于测试。两台的 `/usr/local/bin/litenode` 分别是 M6-02（Ubuntu）和 M6-01（Debian）分支的编译版本（之前的版本在 `/root/litenode.before-m5`）。
+登录密码记在本机记忆中（用户同意），**不写入仓库**。用户授权两台都可以完全用于测试。两台的 `/usr/local/bin/litenode` 都是 M6-03 分支的编译版本（`/root/litenode.dev` 为同一文件）（之前的版本在 `/root/litenode.before-m5`）。
 
 - **Ubuntu 24.04.5**（KVM、x86_64、约 1G 内存，SSH 端口 22，公网 IP 203.0.113.181，有 IPv6）：有用户验收时添加的节点 `Reality-443`，Xray 运行中；`00-litenode.conf` 管理着 `Port 22`（带 `ListenAddress`）和 `PasswordAuthentication yes`；root 的 `authorized_keys` 中**没有**开发机的公钥，只能用密码登录，不要关闭密码登录；装有 `litenode-rollback-boot.service`；ufw 已停用；没有转发规则，LiteNode 防火墙关闭。M5：BBR 由 LiteNode 开启（`sysopt.bbr`，`99-litenode.conf` 只有 BBR 两行；镜像自带的 `99-custom.conf` 也开启 BBR，已恢复原样）；没有 swap；`gai.conf`、DNS（systemd-resolved，无 LiteNode drop-in）、时区 Europe/Berlin 均为测试前的状态；节点出站 IP 为默认。
-- **Debian 12**（KVM、x86_64、约 1G 内存，SSH 端口 61234，公网 IP 198.51.100.252，磁盘只剩约 550M）：用户的 2 个节点（`Test`、`Test2`）和 Xray；没有 LiteNode 的 nftables 表，防火墙关闭；`00-litenode.conf` 管理着 `Port 61234`。M5：BBR 由镜像开启（LiteNode 未管理）；没有 swap；resolv.conf 已恢复为 resolvconf 链接（1.1.1.1）；**新装了 systemd-timesyncd，时间同步已开启**；时区 US/Eastern（原值）。
+- **Debian 12**（KVM、x86_64、约 1G 内存，SSH 端口 61234，公网 IP 198.51.100.252，磁盘只剩约 550M）：用户的 2 个节点（`Test`、`Test2`）和 Xray；没有 LiteNode 的 nftables 表，防火墙关闭；`00-litenode.conf` 管理着 `Port 61234`。M6-03 测试过全部卸载后已恢复（状态文件 + 导入备份，Xray 重新安装为 v26.10.17，`litenode-rollback-boot.service` 已删除，下次限时确认时自动重装）。M5：BBR 由镜像开启（LiteNode 未管理）；没有 swap；resolv.conf 已恢复为 resolvconf 链接（1.1.1.1）；**新装了 systemd-timesyncd，时间同步已开启**；时区 US/Eastern（原值）。
 
 ## 未解决的问题
 
