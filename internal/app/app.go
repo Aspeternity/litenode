@@ -184,9 +184,9 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		if installed {
 			active, _ = system.ServiceActive(ctx, r, xray.UnitName)
 		}
-		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st), func() error {
-			return s.Run(nodes.menu)
-		})
+		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st),
+			func() error { return s.Run(nodes.menu) },
+			func() error { return s.Run(nodes.xrayMenu) })
 	})
 	return 0
 }

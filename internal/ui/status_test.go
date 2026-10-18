@@ -42,3 +42,11 @@ func TestMainStatusWarnings(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestMainStatusLongXrayState(t *testing.T) {
+	info := system.Info{OS: system.OSRelease{ID: "debian", VersionID: "12"}, Virt: system.Virt{Type: "kvm"}}
+	got := MainStatusLines(MainStatus{Xray: "○ 已停止（手动）", Nodes: 1, System: info}, Colors{})
+	if got[0] != "Xray: ○ 已停止（手动）  节点: 1  转发规则: 0" {
+		t.Errorf("got %q", got[0])
+	}
+}

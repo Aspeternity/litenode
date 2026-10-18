@@ -306,3 +306,64 @@ func ClientsTitle(seq int, remark, proto string, port int) string {
 func ConfirmDeleteClient(remark string) string {
 	return fmt.Sprintf("删除客户端 %s？", remark)
 }
+
+// Xray service menu (DESIGN section 12).
+const (
+	XrayStart            = "启动"
+	XrayStop             = "停止"
+	XrayRestart          = "重启"
+	XrayLogs             = "查看日志"
+	XrayUpdate           = "更新 Xray"
+	XrayUpdateHint       = "(可选指定版本)"
+	XrayUninstall        = "卸载 Xray"
+	XrayUninstallHint    = "(同时删除所有节点和客户端)"
+	XrayNotInstalledNote = "Xray 未安装，首次添加节点时会自动安装。"
+	XrayStarted          = "Xray 已启动。"
+	XrayStoppedMsg       = "Xray 已停止。在添加或修改节点后也会保持停止，直到在这里启动。"
+	XrayRestarted        = "Xray 已重启。"
+	XrayNoNodes          = "没有启用的节点，Xray 无需运行。"
+	XrayStoppedByUserErr = "Xray 已被手动停止，请先选择\"启动\"。"
+	XrayLogsTitle        = "最近 50 行日志（实时查看可运行 journalctl -u litenode-xray -f）："
+	PromptXrayVersion    = "要安装的版本（直接回车为默认版本）"
+	XrayUpdating         = "正在下载并校验……"
+	XrayUninstalled      = "Xray 已卸载，所有节点和客户端已删除。"
+)
+
+// XrayStatusLine is the status of the Xray menu, e.g.
+// "Xray v26.10.17  ● 运行中  已运行 3天2小时  内存 28M".
+func XrayStatusLine(version, state string, uptimeSecs int64, memory int64) string {
+	line := fmt.Sprintf("Xray %s  %s", version, state)
+	if uptimeSecs > 0 {
+		line += "  已运行 " + duration(uptimeSecs)
+	}
+	if memory > 0 {
+		line += fmt.Sprintf("  内存 %dM", memory>>20)
+	}
+	return line
+}
+
+func duration(s int64) string {
+	d, h, m := s/86400, s%86400/3600, s%3600/60
+	switch {
+	case d > 0:
+		return fmt.Sprintf("%d天%d小时", d, h)
+	case h > 0:
+		return fmt.Sprintf("%d小时%d分钟", h, m)
+	case m > 0:
+		return fmt.Sprintf("%d分钟", m)
+	}
+	return fmt.Sprintf("%d秒", s)
+}
+
+// XrayUpdated reports a successful update.
+func XrayUpdated(v string) string { return "Xray 已更新到 " + v + "。" }
+
+// XrayOldVersion warns about a version without ML-KEM target support.
+func XrayOldVersion(v, min string) string {
+	return fmt.Sprintf("⚠ %s 低于 %s，使用 X25519MLKEM768 的目标网站（多数大型网站）将无法使用。", v, min)
+}
+
+// ConfirmUninstallXray lists what uninstalling removes.
+func ConfirmUninstallXray(nodes, clients int) string {
+	return fmt.Sprintf("将删除 Xray 以及 %d 个节点、%d 个客户端，端口转发、SSH 和防火墙的其他设置不变。确定卸载？", nodes, clients)
+}
