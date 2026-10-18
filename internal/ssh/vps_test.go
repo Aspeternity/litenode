@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -133,4 +134,69 @@ func TestVPSPortAccumulates(t *testing.T) {
 	if _, err := os.Stat(ConfigPath); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("drop-in not removed: %v", err)
 	}
+}
+
+// confirmSetup uses the real state store and binary, as the menu does, so
+// that "litenode internal rollback" (run by systemd) finds the change.
+func confirmSetup(t *testing.T) (context.Context, system.Runner, *Service) {
+	t.Helper()
+	if os.Geteuid() != 0 {
+		t.Skip("run as root on the test VPS")
+	}
+	if _, err := os.Stat(ConfigPath); err == nil {
+		t.Fatalf("%s already exists", ConfigPath)
+	}
+	r := system.NewReal(nil)
+	store := state.NewStore(r)
+	return context.Background(), r, &Service{Store: store, Confirmer: change.NewConfirmer(change.NewManager(r, store), "/usr/local/bin/litenode")}
+}
+
+func passwordAuth(t *testing.T, ctx context.Context, r system.Runner) bool {
+	t.Helper()
+	e, err := ReadEffective(ctx, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e.PasswordAuth
+}
+
+// TestVPSUnconfirmed (M2-02): password login is turned off and not
+// confirmed; after 60 seconds the timer restores it.
+func TestVPSUnconfirmed(t *testing.T) {
+	ctx, r, svc := confirmSetup(t)
+	off := false
+	if err := svc.Change(ctx, func(s *state.SSH) { s.PasswordAuth = &off }); err != nil {
+		t.Fatal(err)
+	}
+	if passwordAuth(t, ctx, r) {
+		t.Fatal("password login still on")
+	}
+	t.Log("password login off; not confirming, waiting 70 seconds")
+	time.Sleep(70 * time.Second)
+	if !passwordAuth(t, ctx, r) {
+		t.Error("password login not restored")
+	}
+	if _, err := os.Stat(ConfigPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("drop-in not removed: %v", err)
+	}
+	if _, err := os.Stat(change.DefaultPendingDir + "/pending"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("marker left: %v", err)
+	}
+}
+
+// TestVPSHold (M2-02) turns password login off and waits without
+// confirming, for checks where the session is cut or the server reboots.
+// Run only on purpose: LN_HOLD=1.
+func TestVPSHold(t *testing.T) {
+	if os.Getenv("LN_HOLD") != "1" {
+		t.Skip("set LN_HOLD=1")
+	}
+	ctx, _, svc := confirmSetup(t)
+	off := false
+	if err := svc.Change(ctx, func(s *state.SSH) { s.PasswordAuth = &off }); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("password login off; holding")
+	os.WriteFile("/tmp/ln-hold-armed", nil, 0o600)
+	time.Sleep(10 * time.Minute)
 }

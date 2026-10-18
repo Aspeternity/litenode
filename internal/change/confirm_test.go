@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 )
@@ -183,5 +184,45 @@ func TestRegistryRejectsBadNames(t *testing.T) {
 	}
 	if err := reg.Register(&Kind{Name: "sshd"}); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestArmInstallsBootUnitOnce(t *testing.T) {
+	fx := newFixture(t)
+	c := newConfirmer(fx)
+	c.BootUnitDir = "/etc/systemd/system"
+	unit := "/etc/systemd/system/" + BootUnit
+	ctx := context.Background()
+	if err := c.Arm(ctx, "b1"); err != nil {
+		t.Fatal(err)
+	}
+	got := string(fx.f.Files[unit])
+	for _, want := range []string{"ConditionPathExists=/run/litenode/pending\n", "ExecStart=/usr/local/bin/litenode internal rollback\n", "WantedBy=multi-user.target\n"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("unit missing %q:\n%s", want, got)
+		}
+	}
+	execs := fx.f.Execs()
+	enable := slices.Index(execs, "systemctl enable "+BootUnit)
+	if slices.Index(execs, "systemctl daemon-reload") < 0 || enable < 0 || enable > slices.Index(execs, armCmd) {
+		t.Errorf("boot unit not enabled before arming: %v", execs)
+	}
+	if err := c.Disarm(ctx); err != nil {
+		t.Fatal(err)
+	}
+	n := len(fx.f.Execs())
+	if err := c.Arm(ctx, "b2"); err != nil {
+		t.Fatal(err)
+	}
+	if later := fx.f.Execs()[n:]; slices.Contains(later, "systemctl daemon-reload") || slices.Contains(later, "systemctl enable "+BootUnit) {
+		t.Errorf("boot unit reinstalled: %v", later)
+	}
+}
+
+func TestDefaultPendingDirKeepsConfigDirMode(t *testing.T) {
+	// The marker must survive a reboot, and must not live directly in the
+	// config directory, whose 0711 mode EnsureDir would change (D-062).
+	if DefaultPendingDir == state.ConfigDir || !strings.HasPrefix(DefaultPendingDir, state.ConfigDir+"/") {
+		t.Errorf("DefaultPendingDir = %s", DefaultPendingDir)
 	}
 }
