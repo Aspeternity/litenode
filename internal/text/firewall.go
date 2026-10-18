@@ -10,7 +10,6 @@ const (
 	FirewallOff       = "○ 未启用"
 	FirewallOn        = "● 已启用"
 	FirewallEnable    = "安装并启用防火墙"
-	FirewallEnableHnt = "(自动放行当前 SSH、节点、转发端口)"
 	FirewallDisable   = "关闭防火墙"
 	FirewallReset     = "重置所有规则"
 	FirewallRules     = "规则:"
@@ -60,12 +59,9 @@ func FirewallForeign(where []string) string {
 // Firewall rule management (DESIGN section 14, D-073).
 const (
 	FirewallOpen        = "放行端口"
-	FirewallOpenHint    = "(可指定来源 IP)"
 	FirewallModify      = "修改规则"
-	FirewallModifyHint  = "(端口 / 来源 IP)"
 	FirewallPing        = "允许 / 禁止 ping"
 	FirewallCheck       = "检查并修复规则"
-	FirewallCheckHint   = "(对比 SSH、节点、转发端口)"
 	FirewallDelete      = "删除规则"
 	PromptFirewallPorts = "端口（单个端口或范围，如 443 或 10000-10100，0 返回）"
 	PromptFirewallProto = "协议"

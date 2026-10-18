@@ -115,7 +115,7 @@ func (u *nodeUI) shareAddress() error {
 			Heading: text.MenuHostAddress,
 			Status:  status,
 			Items: []ui.Item{
-				{Label: text.ShareAddrAdd, Hint: text.ShareAddrAddHint, Action: u.addAddress},
+				{Label: text.ShareAddrAdd, Action: u.addAddress},
 				{Label: text.ShareAddrDefault, Hidden: len(list) < 2, Action: u.setDefaultAddress},
 				{Label: text.ShareAddrDetect, Action: func() error {
 					list, err := u.detectAddresses(u.shareAddresses())
