@@ -762,6 +762,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
   - 程序本身不走第 6 节的变更流程（体积大，不保留 10 份备份），见下方"更新"。
 - **服务**：`litenode-xray.service`，以专用系统用户 `litenode-xray` 运行，通过 `AmbientCapabilities=CAP_NET_BIND_SERVICE` 允许绑定 443 等低端口（`CapabilityBoundingSet` 也只保留这一项），另加 `NoNewPrivileges`、`ProtectSystem=full`、`ProtectHome`、`PrivateTmp`。配置 `/etc/litenode/xray.json` 为 640、属组 `litenode-xray`。
 - **启动 / 停止**（D-045）：Xray 默认按节点自动启停（有启用的节点时运行，否则停止并取消开机启动）。用户在菜单中"停止"时，在状态文件中记为手动停止（`xray.stopped`），停止服务并取消开机启动；之后的配置变更照常写入和校验配置，但不启动 Xray，重启机器后也不启动。"启动"清除这个标记并按节点情况运行；没有启用的节点时提示"没有启用的节点，Xray 无需运行"。
+- **节点出站 IP**（D-084）：设置 freedom 出站的 `domainStrategy`，与系统 `gai.conf` 的优先级互相独立（节点可以仅 IPv6 出站，系统工具仍用 IPv4）。选项：默认（AsIs，不写该字段）、优先 IPv4（UseIPv4v6）、优先 IPv6（UseIPv6v4）、仅 IPv4（ForceIPv4）、仅 IPv6（ForceIPv6）。存在状态文件 `xray.outbound_ip`，走 Xray 变更流程。选"仅"之前检查本机有该协议的公网地址和默认路由，没有则拒绝；并提示目标网站没有该协议的地址时无法访问。Xray 服务菜单状态区显示"节点出站: <模式>"。
 - **查看日志**：显示最近 50 行（`journalctl -u litenode-xray -n 50`），并提示实时查看可运行 `journalctl -u litenode-xray -f`（D-057：在菜单内持续跟踪需要按 Ctrl+C 结束，会与 LiteNode 自身的中断处理冲突）。
 - **状态行**：版本、运行状态（运行中 / 已停止 / 已停止（手动））、已运行时间（`ActiveEnterTimestampMonotonic` 与 `/proc/uptime` 计算）、内存（`MemoryCurrent`）。Xray 未安装时只显示"首次添加节点时会自动安装"。
 - **更新**时可输入版本（回车为默认版本，D-054）；输入的版本低于 v26.9.8 时警告 ML-KEM 目标将无法使用。
@@ -954,7 +955,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 ──────────────────────────────────────────────
  1. BBR + fq
  2. swap             (创建 / 调整 / 删除)
- 3. IPv4 / IPv6 优先级
+ 3. 系统 IPv4 / IPv6 优先级
  4. DNS
  5. 时区与时间同步
 ──────────────────────────────────────────────
@@ -965,7 +966,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 - **BBR + fq**：检查内核是否支持 bbr，写入 `/etc/sysctl.d/99-litenode.conf`（`net.core.default_qdisc=fq`、`net.ipv4.tcp_congestion_control=bbr`）并立即生效（D-078）。状态文件 `sysopt.bbr` 记录是否由 LiteNode 开启，sysctl 文件仍由状态整体生成。已由 LiteNode 开启时该项为关闭：删除这两行并把拥塞控制改回 `cubic`；已由系统其他配置开启时只提示无需操作。
 - **swap**：创建交换文件 `/litenode.swap`（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小（1G）。只管理自己的文件，系统已有的其他 swap 只显示（D-079）。大小 128M ~ 32G，创建后磁盘至少保留 256M。停用前检查 swap 中的数据不超过可用内存。容器环境（或没有 `/proc/swaps`）中该项隐藏。
-- **IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6（D-080）。优先 IPv4 时在文件末尾加入带 `# BEGIN LiteNode` / `# END LiteNode` 标记的 `precedence ::ffff:0:0/96  100`；优先 IPv6 即系统默认，删除该段。文件中其他行不修改；其他行已设置优先 IPv4 时提示手动修改。只影响使用 glibc `getaddrinfo` 的程序（curl、apt 等），不影响 Xray。
+- **系统 IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6（D-080）。优先 IPv4 时在文件末尾加入带 `# BEGIN LiteNode` / `# END LiteNode` 标记的 `precedence ::ffff:0:0/96  100`；优先 IPv6 即系统默认，删除该段。文件中其他行不修改；其他行已设置优先 IPv4 时提示手动修改。只影响使用 glibc `getaddrinfo` 的程序（curl、apt 等），不影响 Xray；节点出站在 Xray 服务菜单的"节点出站 IP"中单独设置（第 12 节，D-084）。
 - **DNS**：系统使用 systemd-resolved 时写入 `/etc/systemd/resolved.conf.d/` 下的配置文件；否则修改 `/etc/resolv.conf`，并提示该文件可能被 DHCP 或 cloud-init 覆盖。提供常用 DNS 选项和自定义输入（D-081）：Cloudflare、Google、Quad9、自定义（1 ~ 3 个 IP）；systemd-resolved 下由 LiteNode 设置过时另有"恢复系统默认"。应用前直接向每个服务器查询测试，失败时询问是否仍要使用；应用后用系统解析测试一次，失败只提示。
 - **时区与时间同步**：设置时区（`timedatectl`），启用 systemd-timesyncd 时间同步。Reality 对时间敏感，状态区显示同步状态。时区从常用列表选择或手动输入（按 `timedatectl list-timezones` 校验）；没有任何时间同步服务时先安装 systemd-timesyncd，已有 chrony 等则直接使用；开启后最多等待 30 秒确认同步（D-082）。容器中不显示时间同步（使用宿主机时间）；`timedatectl` 不可用时整项隐藏。
 
