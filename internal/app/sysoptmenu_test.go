@@ -58,3 +58,16 @@ func TestSysoptMenuSwap(t *testing.T) {
 		t.Errorf("fstab:\n%s", f.Files["/etc/fstab"])
 	}
 }
+
+func TestSysoptMenuPreference(t *testing.T) {
+	f := supported()
+	f.Files["/etc/gai.conf"] = []byte("# getaddrinfo\n")
+	f.Files["/proc/swaps"] = []byte("Filename Type Size Used Priority\n")
+	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")
+	// main: 6; 2 (BBR hidden), IPv4; 2, IPv6; back; quit.
+	r := runSysopt(t, f, "6", "2", "1", "2", "2", "0", "0")
+	wantOutput(t, r.stdout, "优先: IPv6", text.PreferIPv4Done, "优先: IPv4", text.PreferIPv6Done)
+	if string(f.Files["/etc/gai.conf"]) != "# getaddrinfo\n" {
+		t.Errorf("gai.conf:\n%s", f.Files["/etc/gai.conf"])
+	}
+}

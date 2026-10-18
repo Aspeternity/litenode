@@ -964,7 +964,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 - **BBR + fq**：检查内核是否支持 bbr，写入 `/etc/sysctl.d/99-litenode.conf`（`net.core.default_qdisc=fq`、`net.ipv4.tcp_congestion_control=bbr`）并立即生效（D-078）。状态文件 `sysopt.bbr` 记录是否由 LiteNode 开启，sysctl 文件仍由状态整体生成。已由 LiteNode 开启时该项为关闭：删除这两行并把拥塞控制改回 `cubic`；已由系统其他配置开启时只提示无需操作。
 - **swap**：创建交换文件 `/litenode.swap`（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小（1G）。只管理自己的文件，系统已有的其他 swap 只显示（D-079）。大小 128M ~ 32G，创建后磁盘至少保留 256M。停用前检查 swap 中的数据不超过可用内存。容器环境（或没有 `/proc/swaps`）中该项隐藏。
-- **IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6。
+- **IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6（D-080）。优先 IPv4 时在文件末尾加入带 `# BEGIN LiteNode` / `# END LiteNode` 标记的 `precedence ::ffff:0:0/96  100`；优先 IPv6 即系统默认，删除该段。文件中其他行不修改；其他行已设置优先 IPv4 时提示手动修改。只影响使用 glibc `getaddrinfo` 的程序（curl、apt 等），不影响 Xray。
 - **DNS**：系统使用 systemd-resolved 时写入 `/etc/systemd/resolved.conf.d/` 下的配置文件；否则修改 `/etc/resolv.conf`，并提示该文件可能被 DHCP 或 cloud-init 覆盖。提供常用 DNS 选项和自定义输入。
 - **时区与时间同步**：设置时区（`timedatectl`），启用 systemd-timesyncd 时间同步。Reality 对时间敏感，状态区显示同步状态。
 
