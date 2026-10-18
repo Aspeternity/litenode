@@ -309,14 +309,14 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return s.apply(ctx, st)
 }
 
-// SetShareAddress stores the address used in all links. Only the state
-// changes, no system configuration.
-func (s *Service) SetShareAddress(addr string) error {
+// SetShareAddresses stores the addresses links may use, the default
+// first (D-068). Only the state changes, no system configuration.
+func (s *Service) SetShareAddresses(list []string) error {
 	st, err := s.Store.Load()
 	if err != nil {
 		return err
 	}
-	st.Server.ShareAddress = addr
+	st.Server.ShareAddresses = list
 	return s.Store.Save(st)
 }
 

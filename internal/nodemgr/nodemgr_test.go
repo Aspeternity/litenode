@@ -271,7 +271,7 @@ func TestFailedChangeRestores(t *testing.T) {
 
 func TestShareAddress(t *testing.T) {
 	fx := newFixture(t)
-	if err := fx.svc.SetShareAddress("la.example.com"); err != nil || fx.state(t).Server.ShareAddress != "la.example.com" {
+	if err := fx.svc.SetShareAddresses([]string{"la.example.com", "203.0.113.10"}); err != nil || fx.state(t).Server.DefaultShareAddress() != "la.example.com" {
 		t.Errorf("share address: %v", err)
 	}
 }

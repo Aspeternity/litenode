@@ -43,7 +43,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	f := systemtest.New()
 	s := newTestStore(f)
 	st := New()
-	st.Server.ShareAddress = "203.0.113.10"
+	st.Server.ShareAddresses = []string{"203.0.113.10"}
 	st.Xray.Version = "v25.9.11"
 	if id := st.AllocID(); id != 1 {
 		t.Errorf("first ID = %d", id)
@@ -86,7 +86,7 @@ func TestSaveFailureKeepsOriginal(t *testing.T) {
 	f := systemtest.New()
 	s := newTestStore(f)
 	orig := New()
-	orig.Server.ShareAddress = "original"
+	orig.Server.ShareAddresses = []string{"original"}
 	if err := s.Save(orig); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestSaveFailureKeepsOriginal(t *testing.T) {
 
 	f.WriteErr[s.Path] = errors.New("disk full")
 	changed := New()
-	changed.Server.ShareAddress = "changed"
+	changed.Server.ShareAddresses = []string{"changed"}
 	if err := s.Save(changed); err == nil {
 		t.Fatal("want error")
 	}
@@ -183,7 +183,7 @@ func TestLoadMigratesFakeV0(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.SchemaVersion != 1 || st.Server.ShareAddress != "203.0.113.10" || st.NextID != 1 {
+	if st.SchemaVersion != 1 || st.Server.DefaultShareAddress() != "203.0.113.10" || st.NextID != 1 {
 		t.Errorf("migrated state = %+v", st)
 	}
 
@@ -272,5 +272,26 @@ func TestStatePermissions(t *testing.T) {
 	}
 	if len(bad) > 0 {
 		t.Errorf("readable by others:\n%s", strings.Join(bad, "\n"))
+	}
+}
+
+func TestLegacyShareAddress(t *testing.T) {
+	// v0.0.2 wrote a single "share_address"; it becomes the default of
+	// the list (D-068) and is not written back.
+	f := systemtest.New()
+	s := newTestStore(f)
+	f.Files[s.Path] = []byte(`{"schema_version": 1, "next_id": 3, "server": {"share_address": "203.0.113.10"}, "nodes": []}`)
+	st, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Server.ShareAddresses; len(got) != 1 || got[0] != "203.0.113.10" || st.Server.LegacyShareAddress != "" {
+		t.Fatalf("server = %+v", st.Server)
+	}
+	if err := s.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	if data := string(f.Files[s.Path]); strings.Contains(data, `"share_address"`) || !strings.Contains(data, `"share_addresses"`) {
+		t.Errorf("saved:\n%s", data)
 	}
 }

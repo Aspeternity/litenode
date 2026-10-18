@@ -121,6 +121,7 @@ func decode(data []byte) (*State, int, error) {
 	if err := json.Unmarshal(data, st); err != nil {
 		return nil, 0, &CorruptError{Err: err}
 	}
+	st.normalize()
 	return st, version, nil
 }
 
