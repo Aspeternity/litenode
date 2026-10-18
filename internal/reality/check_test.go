@@ -211,3 +211,18 @@ func TestCheckMLKEM(t *testing.T) {
 		t.Errorf("X25519-only server: %+v", r)
 	}
 }
+
+func TestCheckNoHTTPResponse(t *testing.T) {
+	// TLS works but the server closes without an HTTP response.
+	// HTTP/1.1 only, so the handler can hijack and drop the connection.
+	srv, roots := server(t, false, nil, func(w http.ResponseWriter) {
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err == nil {
+			conn.Close()
+		}
+	})
+	r := checkerFor(srv, roots).Check(context.Background(), "example.com")
+	if r.HomepageSize != -1 || r.Usable() {
+		t.Errorf("result = %+v, want unusable without an HTTP response", r)
+	}
+}

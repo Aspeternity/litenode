@@ -37,6 +37,9 @@ type Server struct {
 	// ShareAddress is the address used in share links. Empty means not yet
 	// chosen.
 	ShareAddress string `json:"share_address"`
+	// ScanWarned is set once the user confirmed the nearby-site scan
+	// warning (DESIGN section 10.3, D-058).
+	ScanWarned bool `json:"scan_warned,omitempty"`
 }
 
 // Xray holds the installed Xray version and whether the user stopped it.

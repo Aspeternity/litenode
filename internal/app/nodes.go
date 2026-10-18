@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 
 	"github.com/Aspeternity/litenode/internal/change"
@@ -33,6 +34,11 @@ type mlkemAware interface {
 	SetMLKEMSupported(bool)
 }
 
+// TargetScanner scans for nearby REALITY targets (reality.Scanner).
+type TargetScanner interface {
+	Scan(ctx context.Context, center netip.Addr, progress func(done, total int)) ([]reality.Result, error)
+}
+
 // AddressDetector finds the public address (share.Detector).
 type AddressDetector interface {
 	Detect(ctx context.Context) share.Detected
@@ -47,6 +53,7 @@ type nodeUI struct {
 	svc      *nodemgr.Service
 	checker  TargetChecker
 	detector AddressDetector
+	scanner  TargetScanner
 }
 
 func (u *nodeUI) state() *state.State {
@@ -295,13 +302,24 @@ func (u *nodeUI) prepareChecker() {
 // section 10.1). "" means back.
 func (u *nodeUI) chooseTarget() (string, error) {
 	u.prepareChecker()
-	m := ui.Menu{Status: []string{text.ChooseTarget}, Items: []ui.Item{{Label: text.TargetCommon}, {Label: text.TargetManual}}}
+	m := ui.Menu{Status: []string{text.ChooseTarget}, Items: []ui.Item{
+		{Label: text.TargetScan, Hint: text.TargetScanHint}, {Label: text.TargetCommon}, {Label: text.TargetManual}}}
 	choice, err := u.s.Choose(m)
 	if err != nil || choice == 0 {
 		return "", err
 	}
+	scanned := false
 	if choice == 1 {
-		u.s.Println(text.CommonListHint)
+		t, err := u.scanTarget()
+		if err != nil || t != "" {
+			return t, err
+		}
+		choice, scanned = 2, true // nothing found: fall back to the common list
+	}
+	if choice == 2 {
+		if !scanned {
+			u.s.Println(text.CommonListHint)
+		}
 		u.s.Println(text.Checking)
 		var usable []reality.Result
 		results := u.checker.CheckAll(u.ctx, reality.CommonTargets, 10)
@@ -325,6 +343,69 @@ func (u *nodeUI) chooseTarget() (string, error) {
 		u.s.Println(u.s.Colors.Warn(text.TargetNoneUsable))
 	}
 	return u.manualTarget()
+}
+
+// scanTarget scans nearby sites (DESIGN section 10.3, D-058). "" with no
+// error means nothing usable was found or the user declined.
+func (u *nodeUI) scanTarget() (string, error) {
+	st := u.state()
+	if !st.Server.ScanWarned {
+		ok, err := u.s.Confirm(text.ScanWarning)
+		if err != nil || !ok {
+			return "", err
+		}
+		st.Server.ScanWarned = true
+		if err := u.svc.Store.Save(st); err != nil {
+			return "", err
+		}
+	}
+	center, ok := u.scanCenter()
+	if !ok {
+		u.s.Println(u.s.Colors.Warn(text.ScanNoAddress))
+		return "", nil
+	}
+	u.s.Println(text.ScanStart(netip.PrefixFrom(center, 24).Masked().String()))
+	last := 0
+	results, err := u.scanner.Scan(u.ctx, center, func(done, total int) {
+		if done == total || done-last >= 50 {
+			last = done
+			u.s.Println(text.ScanProgress(done, total))
+		}
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(results) == 0 {
+		u.s.Println(u.s.Colors.Warn(text.ScanNoResult))
+		return "", nil
+	}
+	u.s.Println(text.ScanFound)
+	width := 0
+	for _, r := range results {
+		width = max(width, ui.Width(r.Host))
+	}
+	for i, r := range results {
+		u.s.Println(fmt.Sprintf(" %d. %s", i+1, text.CheckLine(ui.PadRight(r.Host, width), r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK)))
+	}
+	i, err := u.s.PromptNumber(text.PromptTargetIndex, 1, 0, len(results))
+	if err != nil || i == 0 {
+		return "", err
+	}
+	return results[i-1].Target, nil
+}
+
+// scanCenter is the VPS's public IPv4: the share address if it is one,
+// otherwise the detected address.
+func (u *nodeUI) scanCenter() (netip.Addr, bool) {
+	if a, err := netip.ParseAddr(u.state().Server.ShareAddress); err == nil && a.Unmap().Is4() {
+		return a.Unmap(), true
+	}
+	if d := u.detector.Detect(u.ctx); d.IPv4 != "" {
+		if a, err := netip.ParseAddr(d.IPv4); err == nil {
+			return a, true
+		}
+	}
+	return netip.Addr{}, false
 }
 
 func (u *nodeUI) manualTarget() (string, error) {

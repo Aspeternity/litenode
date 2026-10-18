@@ -76,7 +76,13 @@ const (
 	TargetCommon      = "从常用列表选择"
 	TargetManual      = "手动输入"
 	TargetNoneUsable  = "常用列表中没有通过检测的网站，请手动输入。"
-	CommonListHint    = "提示：常用列表是大型网站，在部分地区可能受到干扰；以后版本推荐使用\"扫描附近网站\"。"
+	CommonListHint    = "提示：常用列表是大型网站，在部分地区可能受到干扰，推荐使用\"扫描附近网站\"。"
+	TargetScan        = "扫描附近网站"
+	TargetScanHint    = "(推荐，约 1 分钟)"
+	ScanWarning       = "扫描会连接本机所在 /24 网段其他服务器的 443 端口。部分 VPS 商家禁止端口扫描，可能导致滥用投诉。是否继续？"
+	ScanNoAddress     = "无法确定本机的公网 IPv4 地址，不能扫描。"
+	ScanNoResult      = "附近没有找到可用的网站，请从常用列表选择或手动输入。"
+	ScanFound         = "找到以下可用网站（按延迟排序）："
 	TargetNotUsable   = "该网站未通过检测，不能使用。"
 	TargetUseAnyway   = "仍要使用这个网站吗？"
 	PromptTargetIndex = "请输入网站序号"
@@ -91,6 +97,16 @@ func CheckLine(host string, ms int64, tls13, h2, x25519, cert bool) string {
 		return "✗"
 	}
 	return fmt.Sprintf("%s  %4d ms  TLS1.3 %s  H2 %s  X25519 %s  证书 %s", host, ms, mark(tls13), mark(h2), mark(x25519), mark(cert))
+}
+
+// ScanProgress shows how far the scan is.
+func ScanProgress(done, total int) string {
+	return fmt.Sprintf("正在扫描 %d/%d……", done, total)
+}
+
+// ScanStart announces the scanned range.
+func ScanStart(prefix string) string {
+	return fmt.Sprintf("正在扫描 %s 的 443 端口……", prefix)
 }
 
 // MLKEMUnsupported explains a target that negotiates ML-KEM with an Xray
@@ -117,7 +133,7 @@ func LargeHomepage(size int64) string {
 // HomepageSize shows the measured homepage size.
 func HomepageSize(size int64) string {
 	if size < 0 {
-		return "首页大小: 未知"
+		return "首页: 没有返回网页（不像真实网站，不能作为目标）"
 	}
 	return fmt.Sprintf("首页大小: %.2f MB", float64(size)/(1<<20))
 }
