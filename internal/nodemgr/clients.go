@@ -10,10 +10,6 @@ import (
 	"github.com/Aspeternity/litenode/internal/state"
 )
 
-// ErrLastClient means the client is the node's only one; a node needs at
-// least one client (DESIGN section 9.4).
-var ErrLastClient = errors.New("a node needs at least one client")
-
 // ErrClientNotFound means the node has no client with the given ID.
 var ErrClientNotFound = errors.New("client not found")
 
@@ -41,7 +37,8 @@ func DefaultClientRemark(st *state.State, n node.Node) string {
 }
 
 // AddClient adds a client with a new UUID and the same flow as the node's
-// existing clients (D-056).
+// existing clients (D-056). A node without clients takes the flow of the
+// preset for its combination (D-060).
 func (s *Service) AddClient(ctx context.Context, nodeID int64, remark string) (node.Client, error) {
 	remark, err := node.NormalizeRemark(remark)
 	if err != nil {
@@ -56,7 +53,7 @@ func (s *Service) AddClient(ctx context.Context, nodeID int64, remark string) (n
 		if err != nil {
 			return err
 		}
-		flow := ""
+		flow := s.Registry.PresetFlow(n.Protocol, n.Transport, n.Security)
 		if len(n.Clients) > 0 {
 			flow = n.Clients[0].Flow
 		}
@@ -115,16 +112,14 @@ func (s *Service) SetClientEnabled(ctx context.Context, nodeID, clientID int64, 
 	})
 }
 
-// DeleteClient removes a client. The last client of a node cannot be
-// deleted on its own (ErrLastClient); delete the node instead.
+// DeleteClient removes a client. Deleting the last one leaves a node
+// without clients: it gets no inbound until a client is added, and keeps
+// its port (D-060).
 func (s *Service) DeleteClient(ctx context.Context, nodeID, clientID int64) error {
 	return s.modify(ctx, nodeID, func(_ *state.State, n *node.Node) error {
 		i := slices.IndexFunc(n.Clients, func(c node.Client) bool { return c.ID == clientID })
 		if i < 0 {
 			return ErrClientNotFound
-		}
-		if len(n.Clients) == 1 {
-			return ErrLastClient
 		}
 		n.Clients = slices.Delete(n.Clients, i, i+1)
 		return nil

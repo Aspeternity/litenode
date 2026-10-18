@@ -81,8 +81,6 @@ type Preset struct {
 	ID    string
 	Label string
 	Combo Combo
-	// Recommended marks the preset shown first with a recommendation.
-	Recommended bool
 	// Build creates a complete node from the user's answers, generating
 	// keys and IDs with the preset's defaults.
 	Build func(in BuildInput) (Node, error)
@@ -172,20 +170,22 @@ func (r *Registry) AddPreset(p Preset) error {
 	return nil
 }
 
-// Presets returns the presets, recommended ones first, otherwise in
-// registration order.
+// Presets returns the presets in registration order. None is marked as
+// recommended; the user picks the node type (D-060).
 func (r *Registry) Presets() []Preset {
-	out := slices.Clone(r.presets)
-	slices.SortStableFunc(out, func(a, b Preset) int {
-		switch {
-		case a.Recommended && !b.Recommended:
-			return -1
-		case !a.Recommended && b.Recommended:
-			return 1
+	return slices.Clone(r.presets)
+}
+
+// PresetFlow is the flow of the first preset with the given protocol,
+// transport and security, "" if none. A node without clients uses it for
+// its next client (D-060).
+func (r *Registry) PresetFlow(protocol, transport, security string) string {
+	for _, p := range r.presets {
+		if p.Combo.Protocol == protocol && p.Combo.Transport == transport && p.Combo.Security == security {
+			return p.Combo.Flow
 		}
-		return 0
-	})
-	return out
+	}
+	return ""
 }
 
 // Preset returns the preset with the given ID.

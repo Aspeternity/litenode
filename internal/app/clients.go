@@ -34,21 +34,21 @@ func (u *nodeUI) clients() error {
 			}
 			rows = append(rows, []string{strconv.Itoa(i + 1), c.Remark, state})
 		}
-		status = append(status, ui.Table(rows)...)
+		none := len(n.Clients) == 0
+		if none {
+			status = append(status, text.ClientNone)
+		} else {
+			status = append(status, ui.Table(rows)...)
+		}
 		return ui.Menu{
-			Status: status,
+			Heading: text.NodeClients,
+			Status:  status,
 			Items: []ui.Item{
 				{Label: text.ClientAdd, Action: func() error { return u.addClient(id) }},
-				{Label: text.ClientModify, Hint: text.ClientModifyHint, Action: func() error { return u.modifyClient(id) }},
-				{Label: text.ClientToggle, Action: func() error { return u.toggleClient(id) }},
-				{Label: text.ClientLink, Action: func() error { return u.clientLink(id) }},
-				{Label: text.ClientDelete, Action: func() error {
-					gone, err := u.deleteClient(id)
-					if err == nil && gone {
-						return ui.ErrBack // the node is gone with its last client
-					}
-					return err
-				}},
+				{Label: text.ClientModify, Hint: text.ClientModifyHint, Hidden: none, Action: func() error { return u.modifyClient(id) }},
+				{Label: text.ClientToggle, Hidden: none, Action: func() error { return u.toggleClient(id) }},
+				{Label: text.ClientLink, Hidden: none, Action: func() error { return u.clientLink(id) }},
+				{Label: text.ClientDelete, Hidden: none, Action: func() error { return u.deleteClient(id) }},
 			},
 		}
 	})
@@ -103,7 +103,8 @@ func (u *nodeUI) modifyClient(id int64) error {
 	if err != nil || c == nil {
 		return err
 	}
-	m := ui.Menu{Items: []ui.Item{{Label: text.ClientRemark, Hint: text.Current(c.Remark)}, {Label: text.ClientResetUUID}}}
+	m := ui.Menu{Heading: text.ClientModify, Status: []string{text.ClientLine(c.Remark)},
+		Items: []ui.Item{{Label: text.ClientRemark, Hint: text.Current(c.Remark)}, {Label: text.ClientResetUUID}}}
 	choice, err := u.s.Choose(m)
 	if err != nil || choice == 0 {
 		return err
@@ -181,31 +182,24 @@ func (u *nodeUI) showClientLink(nodeID, clientID int64) {
 	}
 }
 
-// deleteClient deletes a client; for the last one it offers to delete the
-// node. It reports whether the node itself was deleted.
-func (u *nodeUI) deleteClient(id int64) (bool, error) {
+// deleteClient deletes a client after confirmation. Deleting the last one
+// keeps the node, which cannot be used until a client is added (D-060).
+func (u *nodeUI) deleteClient(id int64) error {
 	n, c, err := u.chooseClient(id)
 	if err != nil || c == nil {
-		return false, err
+		return err
 	}
+	question := text.ConfirmDeleteClient(c.Remark)
 	if len(n.Clients) == 1 {
-		ok, err := u.s.Confirm(text.LastClientDelete)
-		if err != nil || !ok {
-			return false, err
-		}
-		if err := u.svc.Delete(u.ctx, n.ID); err != nil {
-			return false, err
-		}
-		u.s.Println(text.NodeDeleted)
-		return true, nil
+		question = text.ConfirmDeleteLastClient(c.Remark)
 	}
-	ok, err := u.s.Confirm(text.ConfirmDeleteClient(c.Remark))
+	ok, err := u.s.Confirm(question)
 	if err != nil || !ok {
-		return false, err
+		return err
 	}
 	if err := u.svc.DeleteClient(u.ctx, n.ID, c.ID); err != nil {
-		return false, err
+		return err
 	}
 	u.s.Println(text.ClientDeleted)
-	return false, nil
+	return nil
 }

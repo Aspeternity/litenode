@@ -32,11 +32,10 @@ func Registry() (*node.Registry, error) {
 
 		func() error {
 			return r.AddPreset(node.Preset{
-				ID:          PresetVLESSRealityVision,
-				Label:       "VLESS + TCP + Reality (Vision)",
-				Combo:       node.Combo{Protocol: "vless", Transport: "tcp", Security: "reality", Flow: node.FlowVision},
-				Recommended: true,
-				Build:       buildVLESSRealityVision,
+				ID:    PresetVLESSRealityVision,
+				Label: "VLESS + TCP + Reality (Vision)",
+				Combo: node.Combo{Protocol: "vless", Transport: "tcp", Security: "reality", Flow: node.FlowVision},
+				Build: buildVLESSRealityVision,
 			})
 		},
 	}

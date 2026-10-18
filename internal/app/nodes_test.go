@@ -65,7 +65,8 @@ func TestAddNodeFlow(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	for _, want := range []string{
-		"VLESS + TCP + Reality (Vision)", "★推荐", // preset menu
+		"═ 节点管理 ═", "═ 选择节点类型 ═", "═ 选择目标网站 (SNI) ═", // headings (D-060)
+		" 1. VLESS + TCP + Reality (Vision)\n", // no recommendation (D-060)
 		"检测到公网地址：203.0.113.10",
 		"www.example.com     3 ms  TLS1.3 ✓  H2 ✓  X25519 ✓  证书 ✓",
 		"节点已添加。",
@@ -81,6 +82,9 @@ func TestAddNodeFlow(t *testing.T) {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
 		}
+	}
+	if strings.Contains(r.stdout, "推荐\n") || strings.Contains(r.stdout, "★") {
+		t.Error("preset menu still recommends a node type")
 	}
 	st, err := state.NewStore(f).Load()
 	if err != nil || len(st.Nodes) != 1 || st.Server.ShareAddress != "203.0.113.10" {
@@ -113,21 +117,57 @@ func TestClientMenuFlow(t *testing.T) {
 	f := nodeSystem()
 	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
 	// nodes > clients (4) > node 1 > add (1) default remark; then delete the
-	// original client (5, 1, y); then delete the last one (5, 1, y) which
-	// deletes the node and leaves the client menu.
-	input := strings.Join([]string{"1", "4", "1", "1", "", "5", "1", "y", "5", "1", "y", "0", "0"}, "\n") + "\n"
+	// original client (5, 1, y); then the last one (5, 1, y), which keeps
+	// the node (D-060); then add a client again (1, default remark).
+	input := strings.Join([]string{"1", "4", "1", "1", "", "5", "1", "y", "5", "1", "y", "1", "", "0", "0", "0"}, "\n") + "\n"
 	r := runNodes(t, f, input)
 	for _, want := range []string{
+		"═ 客户端管理 ═",
 		" 节点 1: Reality-443 (VLESS-TCP-Reality :443)",
 		" 1. 添加客户端", " 2. 修改客户端      (备注 / UUID)", " 3. 启用 / 禁用客户端", " 4. 分享链接 / 二维码", " 5. 删除客户端",
+		"请输入客户端序号 (0 返回): ",
 		"客户端已添加。", "#Reality-443-2",
 		"删除客户端 Reality-443？ [y/N]", "客户端已删除。",
-		"节点至少需要一个客户端，是否同时删除节点？ [y/N]", "节点已删除。",
-		"（暂无节点）",
+		"Reality-443-2 是该节点最后一个客户端，删除后节点暂时不可用，直到添加新客户端。是否继续？ [y/N]",
+		// The empty node's client menu offers only "add".
+		" （该节点没有客户端，当前不可用；添加客户端后即可使用）\n──────────────────────────────────────────────\n 1. 添加客户端\n──────────────────────────────────────────────\n 0. 返回",
+		"flow=xtls-rprx-vision",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
 		}
+	}
+	if strings.Contains(r.stdout, "节点已删除。") {
+		t.Error("deleting the last client deleted the node")
+	}
+	st, _ := state.NewStore(f).Load()
+	if len(st.Nodes) != 1 || len(st.Nodes[0].Clients) != 1 || st.Nodes[0].Clients[0].Flow != "xtls-rprx-vision" {
+		t.Errorf("state = %+v", st.Nodes)
+	}
+}
+
+func TestChooseTargetReturnsToMenu(t *testing.T) {
+	f := nodeSystem()
+	// Add: preset 1, port default; target menu: common list (2) then back
+	// (0); manual (3) then empty line (back); common list again, pick 1;
+	// default remark.
+	input := strings.Join([]string{"1", "1", "1", "", "2", "0", "3", "", "2", "1", "", "0", "0"}, "\n") + "\n"
+	r := runNodes(t, f, input)
+	if got := strings.Count(r.stdout, "═ 选择目标网站 (SNI) ═"); got != 3 {
+		t.Errorf("target menu shown %d times, want 3:\n%s", got, r.stdout)
+	}
+	for _, want := range []string{
+		"═ 常用目标网站 ═", " 1.  www.microsoft.com ", " 14. www.xbox.com ", "\n 0. 返回\n",
+		"节点已添加。", "sni=www.microsoft.com",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+	// 0 at the target menu cancels adding the node.
+	r = runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "0", "0", "0"}, "\n")+"\n")
+	if st, _ := state.NewStore(f).Load(); len(st.Nodes) != 1 {
+		t.Errorf("cancel added a node: %d nodes", len(st.Nodes))
 	}
 }
 
@@ -174,10 +214,11 @@ func TestScanTargetFlow(t *testing.T) {
 		return Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
 			TargetChecker: fakeChecker{}, AddressDetector: fakeDetector{}, TargetScanner: sc}
 	}
-	// First use: the warning is asked; answering no goes back to the add
-	// flow, which then gets 0 (back) at the target menu.
+	// First use: the warning is asked; answering no returns to the target
+	// menu, where 0 cancels adding.
 	r := runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "n", "0", "0", "0"}, "\n")+"\n")
-	if !strings.Contains(r.stdout, "部分 VPS 商家禁止端口扫描") || sc.calls != 0 {
+	if !strings.Contains(r.stdout, "部分 VPS 商家禁止端口扫描") || sc.calls != 0 ||
+		strings.Count(r.stdout, "═ 选择目标网站 (SNI) ═") != 2 || strings.Contains(r.stdout, "常用目标网站") {
 		t.Fatalf("declined warning: calls=%d\n%s", sc.calls, r.stdout)
 	}
 	if st, _ := state.NewStore(f).Load(); st.Server.ScanWarned {
@@ -185,7 +226,7 @@ func TestScanTargetFlow(t *testing.T) {
 	}
 	// Accept, scan, pick result 1, default remark.
 	r = runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "y", "1", "", "0", "0"}, "\n")+"\n")
-	for _, want := range []string{"扫描附近网站    (推荐，约 1 分钟)", "正在扫描 203.0.113.0/24 的 443 端口", "正在扫描 253/253", "near.example.net", "节点已添加。", "sni=near.example.net"} {
+	for _, want := range []string{"扫描附近网站    (推荐，约 1 分钟)", "正在扫描 203.0.113.0/24 的 443 端口", "正在扫描 253/253", "═ 附近的网站 ═", " 1. near.example.net", "节点已添加。", "sni=near.example.net"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
 		}
