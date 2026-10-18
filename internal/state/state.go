@@ -8,6 +8,7 @@ package state
 import (
 	"slices"
 
+	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/node"
 )
 
@@ -36,6 +37,8 @@ type State struct {
 	SSH      SSH         `json:"ssh"`
 	Firewall Firewall    `json:"firewall"`
 	Nodes    []node.Node `json:"nodes"`
+	// Forwards are the port forwarding rules (DESIGN section 11).
+	Forwards []forward.Forward `json:"forwards"`
 }
 
 // Server holds server-wide settings.
@@ -109,8 +112,12 @@ func (s Server) DefaultShareAddress() string {
 	return s.ShareAddresses[0]
 }
 
-// normalize moves a v0.0.2 single share address into the list.
+// normalize moves a v0.0.2 single share address into the list and writes
+// a missing forward list as [].
 func (st *State) normalize() {
+	if st.Forwards == nil {
+		st.Forwards = []forward.Forward{}
+	}
 	if a := st.Server.LegacyShareAddress; a != "" {
 		if !slices.Contains(st.Server.ShareAddresses, a) {
 			st.Server.ShareAddresses = append([]string{a}, st.Server.ShareAddresses...)
@@ -121,7 +128,7 @@ func (st *State) normalize() {
 
 // New returns the state used when no state file exists yet.
 func New() *State {
-	return &State{SchemaVersion: SchemaVersion, NextID: 1, Nodes: []node.Node{}}
+	return &State{SchemaVersion: SchemaVersion, NextID: 1, Nodes: []node.Node{}, Forwards: []forward.Forward{}}
 }
 
 // AllocID returns a new stable ID.

@@ -192,7 +192,9 @@ internal/
   ports/               端口占用检查（/proc/net + 状态文件）
   ufw/                 与用户自己的 ufw 同步（带 litenode: 标记的规则）
   firewall/            防火墙功能；检测其他软件的入站拦截规则
-  forward/             端口转发功能
+  forward/             端口转发规则模型、校验、域名解析
+  forwardmgr/          端口转发的添加、修改、启用 / 禁用、删除（nodemgr 是节点的对应包）
+  sysctl/              /etc/sysctl.d/99-litenode.conf（内核转发，M5 的系统优化）
   ssh/                 sshd 配置、公钥、确认回滚
   sysopt/              BBR、swap、IP 优先级、DNS、时区
   maint/               导出导入、自我更新、卸载
@@ -712,16 +714,16 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
  0. 返回
 ```
 
-**添加规则**：本机端口（单个端口或端口段，端口段时目标也是等长端口段）、协议（tcp / udp / tcp+udp）、目标地址（IP 或域名）和端口、备注。按第 2 节"端口冲突检查"检查本机端口（修改端口、启用已禁用的规则时同样检查）。
+**添加规则**：本机端口（单个端口或端口段，端口段时目标也是等长端口段）、协议（tcp / udp / tcp+udp）、目标地址（IP 或域名）和端口、备注（可以为空，不要求唯一）。按第 2 节"端口冲突检查"检查本机端口（修改端口、启用已禁用的规则时同样检查）。
 
 **实现要点**：
 
-- **内核转发**：启用第一条规则时写入 `/etc/sysctl.d/99-litenode.conf` 开启 `net.ipv4.ip_forward=1`；存在 IPv6 目标时同时开启 `net.ipv6.conf.all.forwarding=1`。
+- **内核转发**：有启用的 IPv4 目标时在 `/etc/sysctl.d/99-litenode.conf` 写入 `net.ipv4.ip_forward=1`，有启用的 IPv6 目标时写入 `net.ipv6.conf.all.forwarding=1`，并把 `accept_ra = 1` 的网卡先设为 `2`（否则开启转发后不再接受路由器通告，SLAAC 地址和默认路由会丢失）。不再需要时从文件删除，但不把运行中的值改回 0（D-075）。
 - **地址族**（D-046）：nftables 的 DNAT 不能在 IPv4 和 IPv6 之间转换，所以 IPv4 进来的连接只能转发到 IPv4 目标，IPv6 进来的只能转发到 IPv6 目标。
   - 目标是 IP：只转发同一地址族的连接，列表中标明"仅 IPv4"或"仅 IPv6"。
   - 目标是域名：分别解析 A 和 AAAA 记录（`resolved_ipv4` / `resolved_ipv6`），IPv4 连接转发到 A 记录、IPv6 连接转发到 AAAA 记录；只有一种记录时只转发那一种。重新解析时两种分别比较、分别更新，ufw 的 `route` 规则也分别生成。
-- **规则结构**：在 `table inet litenode` 中，prerouting 链做 DNAT，postrouting 链对转发流量做 masquerade（否则落地机的回包不会经过线路机），forward 链放行 `ct status dnat` 的流量。
-- **防火墙关系**：转发规则与防火墙共用同一张表，防火墙启用时 forward 链默认丢弃，只放行转发规则产生的流量和已建立的连接；防火墙未启用时转发同样正常工作。
+- **规则结构**：在 `table inet litenode` 中，prerouting 链做 DNAT（每个地址族一条），postrouting 链对转发流量做 masquerade（否则落地机的回包不会经过线路机），防火墙启用时 forward 链放行转发流量；后两者都按原始目的端口（`ct original proto-dst`）加 `ct status dnat` 匹配。端口段映射到不同端口时用 `dport map` 一一对应（D-075）。
+- **防火墙关系**：转发规则与防火墙共用同一张表，防火墙启用时 forward 链默认丢弃，只放行转发规则产生的流量和已建立的连接，转发规则的来源限制也在这里生效；防火墙未启用时没有 forward 链，转发同样正常工作。转发规则不写入 input 链。
 - **域名目标**：nftables 只能使用 IP。添加时分别解析 A 和 AAAA 记录，保存 `resolved_ipv4` / `resolved_ipv6`（D-046）；同时创建 `litenode-resolve.timer`（默认每 5 分钟），由 `litenode` 的子命令重新解析，IP 变化时重新生成并应用规则。没有域名目标时删除这个 timer。
 - **开机加载**：规则写入 `/etc/litenode/nftables.nft`，由 `litenode-nft.service`（oneshot）开机加载。不修改系统的 `/etc/nftables.conf`。
 - **与 ufw 同步**：LiteNode 防火墙未启用且 ufw 在运行时，规则的添加、修改、删除、启用 / 禁用以及域名重新解析（IP 变化时）都同步 `ufw route allow` 规则（写落地机的目标 IP 和端口，见第 2 节"与 ufw 共存"）。重新解析由 `litenode internal resolve` 执行，菜单正在运行（持有实例锁）时跳过本轮，下一轮再同步。

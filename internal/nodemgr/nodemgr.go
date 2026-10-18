@@ -80,7 +80,7 @@ func (s *Service) PortChecker(st *state.State) (ports.Checker, error) {
 	if err != nil {
 		return ports.Checker{}, err
 	}
-	return ports.Checker{Listening: l, Claims: ports.NodeClaims(st.Nodes)}, nil
+	return ports.Checker{Listening: l, Claims: ports.StateClaims(st.Nodes, st.Forwards)}, nil
 }
 
 // checkPort fails with *PortTakenError if port cannot be used by the node

@@ -32,12 +32,41 @@ func TestGenerateGolden(t *testing.T) {
 			{Ports: "30000-30010", Proto: "tcp+udp", Comment: "litenode:manual:9"},
 		}}},
 		"no-ping": {Firewall: &Firewall{BlockPing: true, Rules: []Rule{{Ports: "22", Proto: "tcp", Comment: "litenode:ssh"}}}},
+		// Without the firewall there is no forward chain; the source
+		// limits only apply while it is on.
+		"forwards": {Forwards: testForwards},
+		"forwards-firewall": {
+			Firewall: &Firewall{Rules: []Rule{{Ports: "22", Proto: "tcp", Comment: "litenode:ssh"}}},
+			Forwards: testForwards,
+		},
+		"firewall-no-forwards": {Firewall: &Firewall{Rules: []Rule{{Ports: "22", Proto: "tcp", Comment: "litenode:ssh"}}}, Forwards: []Forward{}},
 	} {
 		got, err := Generate(c)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		golden(t, name, got)
+	}
+}
+
+var testForwards = []Forward{
+	{Ports: "30001", Proto: "tcp+udp", IPv4: "203.0.113.10", TargetPorts: "443", Sources: []string{"198.51.100.7"}, Comment: "litenode:forward:1"},
+	{Ports: "30002", Proto: "tcp", IPv6: "2001:db8::10", TargetPorts: "8443", Comment: "litenode:forward:2"},
+	{Ports: "30003", Proto: "udp", IPv4: "203.0.113.20", IPv6: "2001:db8::20", TargetPorts: "443", Sources: []string{"198.51.100.0/24", "2001:db8:1::/48"}, Comment: "litenode:forward:3"},
+	{Ports: "31000-31002", Proto: "tcp+udp", IPv4: "203.0.113.30", TargetPorts: "31000-31002", Comment: "litenode:forward:4"},
+	{Ports: "32000-32002", Proto: "tcp", IPv4: "203.0.113.40", IPv6: "2001:db8::40", TargetPorts: "42000-42002", Comment: "litenode:forward:5"},
+}
+
+func TestGenerateRejectsForwards(t *testing.T) {
+	for _, f := range []Forward{
+		{Ports: "30001", Proto: "tcp", IPv4: "203.0.113.10", TargetPorts: "443-444"},
+		{Ports: "30001", Proto: "icmp", IPv4: "203.0.113.10", TargetPorts: "443"},
+		{Ports: "30001", Proto: "tcp", IPv4: "nope", TargetPorts: "443"},
+		{Ports: "30001", Proto: "tcp", IPv4: "203.0.113.10", TargetPorts: "0"},
+	} {
+		if _, err := Generate(Config{Forwards: []Forward{f}}); err == nil {
+			t.Errorf("accepted %+v", f)
+		}
 	}
 }
 

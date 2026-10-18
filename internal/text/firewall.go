@@ -48,6 +48,10 @@ func FirewallStatusLine(state string, ping bool) string {
 // FirewallNode labels a node's rule by its number in the node list.
 func FirewallNode(index int) string { return fmt.Sprintf("节点 %d", index) }
 
+// FirewallForward labels a forward's rule by its number in the forward
+// list.
+func FirewallForward(index int) string { return fmt.Sprintf("转发 %d", index) }
+
 // FirewallForeign warns about filtering other software installed.
 func FirewallForeign(where []string) string {
 	return fmt.Sprintf("⚠ 检测到系统已有入站过滤规则（%s）。这些规则与 LiteNode 防火墙同时生效，可能拦截 LiteNode 放行的端口。", strings.Join(where, "、"))
@@ -102,13 +106,16 @@ func Protocol(p string) string {
 	return ProtoTCPUDP
 }
 
+// Where an automatic rule is changed, for FirewallAutoRule.
+const (
+	FirewallInNodes    = "节点管理"
+	FirewallInSSH      = " SSH 管理"
+	FirewallInForwards = "端口转发"
+)
+
 // FirewallAutoRule explains that an automatic rule is changed elsewhere;
-// owner is the rule's label (SSH, 节点 1), menu where to change it.
-func FirewallAutoRule(owner string, ssh bool) string {
-	where := "节点管理"
-	if ssh {
-		where = " SSH 管理"
-	}
+// owner is the rule's label (SSH, 节点 1), where the menu to change it in.
+func FirewallAutoRule(owner, where string) string {
 	return fmt.Sprintf("该规则由%s自动管理，请在%s中修改。", spaced(owner), where)
 }
 
