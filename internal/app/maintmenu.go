@@ -19,6 +19,9 @@ type maintUI struct {
 	s   *ui.Session
 	svc *maint.Service
 	reg change.Registry
+	upd *maint.Updater
+	// version is the running build's version.
+	version string
 }
 
 func (u *maintUI) menu() ui.Menu {
@@ -27,6 +30,7 @@ func (u *maintUI) menu() ui.Menu {
 		Items: []ui.Item{
 			{Label: text.MaintExport, Hint: text.MaintExportHint, Action: u.export},
 			{Label: text.MaintImport, Action: u.importConfig},
+			{Label: text.MaintUpdate, Action: u.update},
 		},
 	}
 }
@@ -102,4 +106,39 @@ func (u *maintUI) importConfig() error {
 	u.s.Done(text.ImportDone)
 	u.s.Println(text.ImportShareHint)
 	return nil
+}
+
+// update replaces the program with the latest release and quits: the
+// running process is still the old version.
+func (u *maintUI) update() error {
+	u.s.Println(text.UpdateChecking)
+	latest, err := u.upd.Latest(u.ctx)
+	if err != nil {
+		u.s.End(u.s.Colors.Warn(text.UpdateFailed(err)))
+		return nil
+	}
+	if !maint.UpdateAvailable(u.version, latest) {
+		u.s.End(text.UpdateLatest(u.version))
+		return nil
+	}
+	ok, err := u.s.Confirm(text.ConfirmUpdate(u.version, latest))
+	if err != nil || !ok {
+		return err
+	}
+	u.s.Println(text.UpdateUpdating)
+	err = u.upd.Update(u.ctx, latest)
+	switch {
+	case errors.Is(err, maint.ErrDigestMismatch):
+		u.s.End(u.s.Colors.Warn(text.ErrUpdateDigest))
+		return nil
+	case errors.Is(err, maint.ErrBadBinary):
+		u.s.End(u.s.Colors.Warn(text.ErrUpdateBadBinary(err)))
+		return nil
+	case err != nil:
+		u.s.End(u.s.Colors.Warn(text.UpdateFailed(err)))
+		return nil
+	}
+	u.s.Done(text.UpdateDone(latest, maint.BakPath))
+	u.s.Println(text.UpdateRestart)
+	return ui.ErrQuit
 }
