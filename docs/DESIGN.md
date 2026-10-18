@@ -308,10 +308,11 @@ docs/
   ],
   "firewall": {
     "enabled": true,
-    "allow_ping": true,
+    "block_ping": false,
     "rules": [
-      { "id": 1, "port": "28388", "protocol": "tcp", "source": "1.2.3.4", "note": "手动" }
-    ]
+      { "id": 1, "port": "28388", "protocol": "tcp", "sources": ["1.2.3.4"], "note": "手动" }
+    ],
+    "auto_sources": { "node:1": ["198.51.100.7"] }
   }
 }
 ```
@@ -908,8 +909,11 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 **规则内容**：
 
-- input 链默认丢弃，放行：已建立和相关的连接、回环接口、SSH 端口、规则列表中的端口。
-- ICMPv6 的邻居发现（neighbor solicitation / advertisement）、路由器通告等报文**始终放行**，否则 IPv6 网络会失效。"禁止 ping"只影响 ICMP / ICMPv6 的 echo-request。
+- 规则写在 `/etc/litenode/nftables.nft`，开头先 `delete table inet litenode`，加载时在一个事务中替换整张表；`litenode-nft.service` 开机加载，只在有表时启用，不修改 `/etc/nftables.conf`（D-070）。
+- input 链默认丢弃，放行：已建立和相关的连接（丢弃 invalid）、回环接口、SSH 端口、规则列表中的端口。
+- ICMPv6 的邻居发现、路由器请求 / 通告、MLD 查询，以及 DHCP / DHCPv6 回复**始终放行**，否则 IPv6 网络和 DHCP 租约会失效。"禁止 ping"只影响 ICMP / ICMPv6 的 echo-request。
+- 每条放行规则带注释 `litenode:<所有者>`（`ssh`、`node:<ID>`、`manual:<ID>`、`forward:<ID>`），供"检查并修复"对比；有来源限制时 IPv4、IPv6 各一条规则。
+- 状态文件只保存手动规则和自动规则的来源限制（`auto_sources`，按所有者保存）；自动规则本身由 SSH、节点、转发生成。SSH 端口：状态中管理了端口时用它，否则用 `sshd -T` 的实际值。
 - forward 链见第 11 节。
 
 **自动规则与手动规则**：
