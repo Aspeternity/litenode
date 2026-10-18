@@ -43,7 +43,7 @@ func (s *Service) portParts(sshFile change.File) []change.Part {
 // Kinds are the configuration kinds of SSH changes, for the rollback
 // registry.
 func (s *Service) Kinds() []*change.Kind {
-	return []*change.Kind{Kind(s.Store), AuthKeysKind()}
+	return []*change.Kind{Kind(s.Store), AuthKeysKind(), PasswordKind(s.Store)}
 }
 
 // Change applies fn to the SSH settings and arms the rollback.

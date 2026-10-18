@@ -40,15 +40,15 @@ func TestSSHMenu(t *testing.T) {
 	for _, want := range []string{
 		" SSH: 22 / 密钥+密码",
 		"═════════════ 主菜单 › SSH 管理 ══════════════",
-		" 端口: 22   登录方式: 密钥 + 密码 ⚠\n root 登录: 允许   公钥: 0 个\n",
-		" 1. 密钥管理\n 2. 登录方式\n 3. root 登录\n 4. 修改 SSH 端口\n 5. 创建 sudo 用户\n 6. 回滚到上次修改前\n",
+		" 端口: 22   登录方式: 密钥 + 密码 ⚠\n root 登录: 允许   公钥: 0 个   sudo 用户: 0 个\n",
+		" 1. 登录方式\n 2. root 登录\n 3. 修改 SSH 端口\n 4. 密钥管理\n 5. 账户管理\n 6. 回滚到上次修改前\n",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q\n%s", want, r.stdout)
 		}
 	}
 	// Key management: no keys, so "delete" is hidden.
-	r = runSSH(t, f, "6", "1", "0", "0", "0")
+	r = runSSH(t, f, "6", "4", "0", "0", "0")
 	if !strings.Contains(r.stdout, " 公钥: （无）\n──────────────────────────────────────────────\n 1. 生成密钥对\n 2. 添加公钥\n──") || strings.Contains(r.stdout, "删除公钥") {
 		t.Errorf("key menu:\n%s", r.stdout)
 	}
@@ -57,26 +57,26 @@ func TestSSHMenu(t *testing.T) {
 func TestSSHMenuInterlockAndKeys(t *testing.T) {
 	f := sshSystem(effective22)
 	// Key only without a key: refused with an explanation.
-	r := runSSH(t, f, "6", "2", "1", "0", "0")
+	r := runSSH(t, f, "6", "1", "1", "0", "0")
 	if !strings.Contains(r.stdout, "当前: 密钥 + 密码") || !strings.Contains(r.stdout, "1. 仅密钥") || !strings.Contains(r.stdout, "2. 仅密码") || !strings.Contains(r.stdout, "3. 密钥 + 密码") ||
 		!strings.Contains(r.stdout, "请先添加公钥（并确认可以用密钥登录），再关闭密码登录。") {
 		t.Errorf("interlock:\n%s", r.stdout)
 	}
 	// Choosing the current method does nothing.
 	before := len(f.Mutations())
-	runSSH(t, f, "6", "2", "3", "0", "0")
+	runSSH(t, f, "6", "1", "3", "0", "0")
 	if m := f.Mutations()[before:]; len(m) > 1 {
 		t.Errorf("current method changed the system: %+v", m)
 	}
 	// Paste a bad key, then a good one; it appears in the list.
-	r = runSSH(t, f, "6", "1", "2", "1", "not a key", testPub, "0", "0", "0")
+	r = runSSH(t, f, "6", "4", "2", "1", "not a key", testPub, "0", "0", "0")
 	for _, want := range []string{"不是有效的 OpenSSH 公钥", "已添加 1 个公钥。", " 公钥:\n   [1] ed25519 SHA256:o/KaoigHu9ddvclgoQvWem5m+GbW7ahqewdkStS+qZw  laptop", " 3. 删除公钥", "公钥: 1 个"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q\n%s", want, r.stdout)
 		}
 	}
 	// Generate a key pair: the private key is shown, not stored.
-	r = runSSH(t, f, "6", "1", "1", "y", "", "0", "0", "0")
+	r = runSSH(t, f, "6", "4", "1", "y", "", "0", "0", "0")
 	if !strings.Contains(r.stdout, "-----BEGIN OPENSSH PRIVATE KEY-----") || !strings.Contains(r.stdout, "[2] ed25519") {
 		t.Errorf("generate:\n%s", r.stdout)
 	}
@@ -90,8 +90,9 @@ func TestSSHMenuInterlockAndKeys(t *testing.T) {
 func TestSSHMenuSudoUser(t *testing.T) {
 	f := sshSystem(effective22)
 	f.Files["/root/.ssh/authorized_keys"] = []byte(testPub + "\n")
-	// 5: name; bad name first; generated password; copy root keys: n.
-	r := runSSH(t, f, "6", "5", "Bad", "admin", "1", "n", "0", "0")
+	// 5 accounts, 2 create: name; bad name first; generated password;
+	// copy root keys: n.
+	r := runSSH(t, f, "6", "5", "2", "Bad", "admin", "1", "n", "0", "0", "0")
 	for _, want := range []string{"用户名格式不正确", "把 root 的 1 个公钥复制给 admin？ [y/N]", "用户 admin 已创建并加入 sudo 组", "admin 的密码（只显示这一次，请保存）："} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q\n%s", want, r.stdout)
@@ -121,8 +122,8 @@ func TestSSHMenuPortChange(t *testing.T) {
 	})
 	f.Files["/etc/ufw/user.rules"] = []byte("### tuple ### allow tcp 2222 0.0.0.0/0 any 0.0.0.0/0 in\n")
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Status: active\n"}}, "ufw", "status")
-	// 4: new port 2200; confirm; keep (y); delete old rules: y.
-	r := runSSH(t, f, "6", "4", "2200", "y", "y", "y", "0", "0")
+	// 3: new port 2200; confirm; keep (y); delete old rules: y.
+	r := runSSH(t, f, "6", "3", "2200", "y", "y", "y", "0", "0")
 	for _, want := range []string{
 		"修改前请确认云厂商的安全组或防火墙已放行 TCP 2200",
 		"SSH 端口将从 2222 改为 2200，是否继续？ [y/N]",
@@ -148,5 +149,83 @@ func TestSSHMenuRollbackNothing(t *testing.T) {
 	r := runSSH(t, sshSystem(effective22), "6", "6", "y", "0", "0")
 	if !strings.Contains(r.stdout, "没有可以回滚的 SSH 修改。") {
 		t.Errorf("rollback:\n%s", r.stdout)
+	}
+}
+
+// accountsSystem has root and the sudo user alice (no password, no key).
+func accountsSystem() *systemtest.Fake {
+	f := sshSystem(effective22)
+	f.Files[ssh.PasswdPath] = []byte("root:x:0:0:root:/root:/bin/bash\nalice:x:1000:1000::/home/alice:/bin/bash\n")
+	f.Files[ssh.GroupPath] = []byte("root:x:0:\nsudo:x:27:alice\nalice:x:1000:\n")
+	f.Files[ssh.ShadowPath] = []byte("root:$y$hash:19000:0:99999:7:::\nalice:!:19000::::::\n")
+	f.Files["/root/.ssh/authorized_keys"] = []byte(testPub + "\n")
+	f.Respond(systemtest.Response{Result: system.Result{ExitCode: 1}}, "pgrep", "-u", "alice")
+	return f
+}
+
+func TestSSHAccountsPage(t *testing.T) {
+	f := accountsSystem()
+	r := runSSH(t, f, "6", "5", "0", "0", "0")
+	for _, want := range []string{
+		"sudo 用户: 1 个",
+		" › 账户管理 ══",
+		" 用户   sudo  公钥  密码\n root   -     1     有\n alice  是    0     无\n",
+		" 1. 修改密码\n 2. 创建 sudo 用户\n 3. 删除 sudo 用户\n",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
+	}
+}
+
+// TestSSHChangePassword: choose alice, generated password, keep it. The
+// password is shown before the confirmation and goes to chpasswd only
+// through standard input.
+func TestSSHChangePassword(t *testing.T) {
+	f := accountsSystem()
+	r := runSSH(t, f, "6", "5", "1", "2", "1", "y", "0", "0", "0")
+	for _, want := range []string{"alice 的密码（只显示这一次，请保存）：", "请新开一个终端测试能否登录", "└─ ✓ alice 的密码已修改。"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
+	}
+	shown := r.stdout[strings.Index(r.stdout, "请保存）：")+len("请保存）："):]
+	shown = shown[:strings.IndexByte(shown, '\n')]
+	var input string
+	for _, c := range f.Calls() {
+		if strings.Contains(c.Command, shown) {
+			t.Errorf("password in command line: %s", c.Command)
+		}
+		if c.Command == "chpasswd" {
+			input = string(c.Data)
+		}
+	}
+	if input != "alice:"+shown+"\n" {
+		t.Errorf("chpasswd input %q, shown %q", input, shown)
+	}
+}
+
+func TestSSHDeleteSudoUser(t *testing.T) {
+	f := accountsSystem()
+	// 3 delete: alice; the confirmation names the home directory.
+	r := runSSH(t, f, "6", "5", "3", "1", "y", "0", "0", "0")
+	if !strings.Contains(r.stdout, "删除用户 alice：主目录 /home/alice") || !strings.Contains(r.stdout, "└─ ✓ 用户 alice 已删除。") {
+		t.Errorf("delete:\n%s", r.stdout)
+	}
+	if !strings.Contains(strings.Join(f.Execs(), "\n"), "userdel --remove -- alice") {
+		t.Errorf("execs: %v", f.Execs())
+	}
+	// Refused when nobody else could log in: root has no key or password.
+	f = accountsSystem()
+	f.Files[ssh.ShadowPath] = []byte("root:!:19000::::::\nalice:$y$a:19000::::::\n")
+	delete(f.Files, "/root/.ssh/authorized_keys")
+	r = runSSH(t, f, "6", "5", "3", "1", "y", "0", "0", "0")
+	if !strings.Contains(r.stdout, "删除后 root 和其他 sudo 用户都无法登录") || strings.Contains(strings.Join(f.Execs(), "\n"), "userdel") {
+		t.Errorf("lockout:\n%s", r.stdout)
+	}
+	// Without sudo users the option is hidden.
+	r = runSSH(t, sshSystem(effective22), "6", "5", "0", "0", "0")
+	if strings.Contains(r.stdout, "删除 sudo 用户") {
+		t.Errorf("delete shown without sudo users:\n%s", r.stdout)
 	}
 }

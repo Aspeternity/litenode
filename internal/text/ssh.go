@@ -14,6 +14,9 @@ const (
 	SSHRootPolicy   = "root 登录"
 	SSHPortChange   = "修改 SSH 端口"
 	SSHSudoUser     = "创建 sudo 用户"
+	SSHAccounts     = "账户管理"
+	SSHPasswd       = "修改密码"
+	SSHDeleteUser   = "删除 sudo 用户"
 	SSHKeyDelete    = "删除公钥"
 	SSHRollback     = "回滚到上次修改前"
 	SSHKeysOnly     = "仅密钥"
@@ -55,10 +58,10 @@ const (
 )
 
 // SSHStatusLines are the status lines of the SSH menu (D-090).
-func SSHStatusLines(ports, method, root string, keys int) []string {
+func SSHStatusLines(ports, method, root string, keys, sudoUsers int) []string {
 	return []string{
 		fmt.Sprintf("端口: %s   登录方式: %s", ports, method),
-		fmt.Sprintf("root 登录: %s   公钥: %d 个", root, keys),
+		fmt.Sprintf("root 登录: %s   公钥: %d 个   sudo 用户: %d 个", root, keys, sudoUsers),
 	}
 }
 
@@ -156,6 +159,40 @@ const ConfirmDeleteOldRules = "是否删除这些旧端口规则？"
 
 // OldRulesDeleted reports the deletion.
 const OldRulesDeleted = "旧端口规则已删除。"
+
+// Account management page (D-096): one row per admin.
+var AccountsHeader = []string{"用户", "sudo", "公钥", "密码"}
+
+const (
+	AccountSudo       = "是"
+	AccountRoot       = "-"
+	AccountPassword   = "有"
+	AccountNoPassword = "无"
+	PasswordLoginOff  = "SSH 密码登录当前已关闭，新密码用于 sudo 和 VNC 控制台登录。"
+	PromptDeleteUser  = "请输入要删除的用户序号 (0 返回)"
+	ErrNotAdmin       = "只能管理 root 和 sudo 用户。"
+	ErrDeleteRoot     = "不能删除 root。"
+	ErrUserInUse      = "该用户正在登录或有进程在运行。请先退出该用户的所有会话（包括用 sudo 运行 LiteNode 的会话），再用 root 删除。"
+	ErrDeleteUserLock = "删除后 root 和其他 sudo 用户都无法登录，已取消。请先确认 root 或其他 sudo 用户能登录（如添加公钥、调整 root 登录）。"
+)
+
+// AccountKeys is the key count column.
+func AccountKeys(n int) string { return fmt.Sprint(n) }
+
+// PasswordChanged reports a kept password change.
+func PasswordChanged(name string) string {
+	return fmt.Sprintf("%s 的密码已修改。", name)
+}
+
+// ConfirmDeleteUser states what deleting a sudo user removes.
+func ConfirmDeleteUser(name, home string) string {
+	return fmt.Sprintf("删除用户 %s：主目录 %s（包括其中的公钥和文件）和邮件一并删除，不能恢复。继续吗？", name, home)
+}
+
+// SudoUserDeleted reports the deleted user.
+func SudoUserDeleted(name string) string {
+	return fmt.Sprintf("用户 %s 已删除。", name)
+}
 
 // SudoUserCreated reports the new user.
 func SudoUserCreated(name string) string {

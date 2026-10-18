@@ -98,20 +98,127 @@ func (u *sshUI) menu() ui.Menu {
 		if e.PasswordAuth {
 			method = u.s.Colors.Warn(method + " " + text.PasswordWarn)
 		}
-		status = append(status, text.SSHStatusLines(portList(e.Ports), method, rootLabel(e.PermitRootLogin), keys)...)
+		status = append(status, text.SSHStatusLines(portList(e.Ports), method, rootLabel(e.PermitRootLogin), keys, max(len(u.admins())-1, 0))...)
 	}
+	// Rules, then credentials, then accounts (D-096).
 	return ui.Menu{
 		Heading: text.MenuSSH,
 		Status:  status,
 		Items: []ui.Item{
-			{Label: text.SSHKeys, Page: true, Action: func() error { return u.s.Run(u.keysMenu) }},
 			{Label: text.SSHLoginMethod, Action: u.loginMethod},
 			{Label: text.SSHRootPolicy, Action: u.rootPolicy},
 			{Label: text.SSHPortChange, Action: u.changePort},
-			{Label: text.SSHSudoUser, Action: u.createSudoUser},
+			{Label: text.SSHKeys, Page: true, Action: func() error { return u.s.Run(u.keysMenu) }},
+			{Label: text.SSHAccounts, Page: true, Action: func() error { return u.s.Run(u.accountsMenu) }},
 			{Label: text.SSHRollback, Action: u.rollback},
 		},
 	}
+}
+
+// accountsMenu is the account management page: root and the sudo users
+// with what they can log in with (D-096).
+func (u *sshUI) accountsMenu() ui.Menu {
+	admins, err := u.svc.Admins(u.ctx)
+	if err != nil {
+		return ui.Menu{Heading: text.SSHAccounts, Status: []string{u.s.Colors.Bad(text.ActionFailed(err))}}
+	}
+	rows := [][]string{text.AccountsHeader}
+	sudoUsers := 0
+	for _, a := range admins {
+		sudo, pass := text.AccountSudo, text.AccountNoPassword
+		if a.Root {
+			sudo = text.AccountRoot
+		} else {
+			sudoUsers++
+		}
+		if a.Password {
+			pass = text.AccountPassword
+		}
+		rows = append(rows, []string{a.Name, sudo, text.AccountKeys(a.Keys), pass})
+	}
+	return ui.Menu{
+		Heading: text.SSHAccounts,
+		Status:  ui.Table(rows),
+		Items: []ui.Item{
+			{Label: text.SSHPasswd, Action: u.changePassword},
+			{Label: text.SSHSudoUser, Action: u.createSudoUser},
+			{Label: text.SSHDeleteUser, Hidden: sudoUsers == 0, Action: u.deleteSudoUser},
+		},
+	}
+}
+
+// choosePassword asks for a generated (recommended) or typed password;
+// "" means back.
+func (u *sshUI) choosePassword() (password string, generated bool, err error) {
+	m := ui.Menu{Heading: text.ChoosePassword, Items: []ui.Item{{Label: text.SudoPasswordGen}, {Label: text.SudoPasswordInput}}}
+	choice, err := u.s.Choose(m)
+	if err != nil || choice == 0 {
+		return "", false, err
+	}
+	if choice == 1 {
+		password, err = ssh.GeneratePassword(u.svc.Rand)
+		return password, true, err
+	}
+	password, err = u.askPassword()
+	return password, false, err
+}
+
+// changePassword sets a new password for root or a sudo user under
+// confirm-or-rollback; a generated password is shown before the user is
+// asked to test it.
+func (u *sshUI) changePassword() error {
+	a, ok, err := u.chooseAccount()
+	if err != nil || !ok {
+		return err
+	}
+	password, generated, err := u.choosePassword()
+	if err != nil || password == "" {
+		return err
+	}
+	if generated {
+		u.s.Hold()
+		u.s.Println(u.s.Colors.Warn(text.GeneratedPassword(a.Name, password)))
+	}
+	if e, err := u.effective(); err == nil && !e.PasswordAuth {
+		u.s.Println(text.PasswordLoginOff)
+	}
+	if err := u.svc.ChangePassword(u.ctx, a.Name, password); err != nil {
+		return err
+	}
+	_, err = u.confirmed(text.PasswordChanged(a.Name))
+	return err
+}
+
+// deleteSudoUser deletes a sudo user (never root) after confirmation; the
+// service refuses when nobody could log in afterwards.
+func (u *sshUI) deleteSudoUser() error {
+	var users []ssh.Account
+	for _, a := range u.admins() {
+		if a.UID != 0 {
+			users = append(users, a)
+		}
+	}
+	if len(users) == 0 {
+		return nil
+	}
+	m := ui.Menu{Heading: text.ChooseAccount}
+	for _, a := range users {
+		m.Items = append(m.Items, ui.Item{Label: a.Name})
+	}
+	choice, err := u.s.Choose(m)
+	if err != nil || choice == 0 {
+		return err
+	}
+	a := users[choice-1]
+	ok, err := u.s.Confirm(text.ConfirmDeleteUser(a.Name, a.Home))
+	if err != nil || !ok {
+		return err
+	}
+	if err := u.svc.DeleteSudoUser(u.ctx, a.Name); err != nil {
+		return err
+	}
+	u.s.Done(text.SudoUserDeleted(a.Name))
+	return nil
 }
 
 // keysMenu is the key management page: the keys of all admins, numbered
@@ -426,18 +533,8 @@ func (u *sshUI) createSudoUser() error {
 		name = in
 		break
 	}
-	m := ui.Menu{Heading: text.ChoosePassword, Items: []ui.Item{{Label: text.SudoPasswordGen}, {Label: text.SudoPasswordInput}}}
-	choice, err := u.s.Choose(m)
-	if err != nil || choice == 0 {
-		return err
-	}
-	var password string
-	generated := choice == 1
-	if generated {
-		if password, err = ssh.GeneratePassword(u.svc.Rand); err != nil {
-			return err
-		}
-	} else if password, err = u.askPassword(); err != nil || password == "" {
+	password, generated, err := u.choosePassword()
+	if err != nil || password == "" {
 		return err
 	}
 	var keys []ssh.Key
@@ -528,6 +625,8 @@ func describeSSH(err error) (string, bool) {
 		ssh.ErrPortRange: text.ErrSSHPortRange, ssh.ErrPortSame: text.ErrSSHPortSame, ssh.ErrUserName: text.ErrUserName,
 		ssh.ErrUserExists: text.ErrUserExists, ssh.ErrPasswordShort: text.ErrPasswordShort,
 		ssh.ErrPasswordChars: text.ErrPasswordChars, ssh.ErrNothingToRollBack: text.ErrNothingToRollBack,
+		ssh.ErrNotAdmin: text.ErrNotAdmin, ssh.ErrDeleteRoot: text.ErrDeleteRoot, ssh.ErrUserInUse: text.ErrUserInUse,
+		ssh.ErrDeleteLockout: text.ErrDeleteUserLock,
 	} {
 		if errors.Is(err, target) {
 			return msg, true
