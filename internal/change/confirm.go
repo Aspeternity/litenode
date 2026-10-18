@@ -63,11 +63,13 @@ func NewConfirmer(m *Manager, executable string) *Confirmer {
 }
 
 // bootUnit is the unit file of BootUnit. It does nothing unless a marker
-// is pending.
+// is pending, nor while the program is missing (after "uninstall
+// program", DESIGN section 16), like the resolve service.
 func (c *Confirmer) bootUnit() []byte {
 	return []byte(`[Unit]
 Description=LiteNode: roll back a change left unconfirmed by a reboot
 ConditionPathExists=` + c.pendingPath() + `
+ConditionPathExists=` + c.Executable + `
 
 [Service]
 Type=oneshot

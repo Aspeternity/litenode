@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 	"path/filepath"
 	"strings"
@@ -312,5 +313,25 @@ func TestXrayMenuStateAndLogs(t *testing.T) {
 	}
 	if st, _ := state.NewStore(f).Load(); st.Xray.Stopped {
 		t.Error("stop while stopped recorded a manual stop")
+	}
+}
+
+func TestXrayProgramMissing(t *testing.T) {
+	f := nodeSystem()
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "8443", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	f.Respond(systemtest.Response{Err: errors.New("no such file")}, xray.BinPath, "version")
+	// Delete node 1 while node 2 needs Xray; then the Xray menu.
+	r := runNodes(t, f, "1\n4\n1\ny\n0\n5\n0\n0\n")
+	for _, want := range []string{
+		"Xray 程序不存在，无法应用需要运行的节点。请先在\"Xray 服务\"中选择\"安装 Xray\"。",
+		"Xray 程序不存在（可能被手动删除），节点当前无法运行。", " 1. 安装 Xray",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
+	}
+	if st, _ := state.NewStore(f).Load(); len(st.Nodes) != 2 {
+		t.Errorf("nodes = %d", len(st.Nodes))
 	}
 }

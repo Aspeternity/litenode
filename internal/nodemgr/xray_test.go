@@ -199,3 +199,46 @@ func TestXrayLogsLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyWithoutXrayProgram(t *testing.T) {
+	fx := newFixture(t)
+	ctx := context.Background()
+	a := fx.add(t, 443, "A")
+	b := fx.add(t, 8443, "B")
+	// The program was deleted by hand (D-095).
+	fx.f.Respond(systemtest.Response{Err: errors.New("no such file")}, xray.BinPath, "version")
+
+	// B still needs Xray: deleting A cannot be checked and is refused.
+	if err := fx.svc.Delete(ctx, a.ID); !errors.Is(err, ErrXrayMissing) {
+		t.Fatalf("delete with a node left = %v, want ErrXrayMissing", err)
+	}
+	if len(fx.state(t).Nodes) != 2 {
+		t.Error("refused delete changed the state")
+	}
+	// Stopped by the user nothing needs Xray: deleting A goes ahead
+	// without "xray run -test".
+	st := fx.state(t)
+	st.Xray.Stopped = true
+	if err := fx.svc.Store.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	before := len(fx.f.Calls())
+	if err := fx.svc.Delete(ctx, a.ID); err != nil {
+		t.Fatalf("delete = %v", err)
+	}
+	for _, c := range fx.f.Calls()[before:] {
+		if strings.Contains(c.Command, "run -test") {
+			t.Errorf("validated without the program: %s", c.Command)
+		}
+	}
+	// Without manual stop, deleting the last node needs no Xray either.
+	st = fx.state(t)
+	st.Xray.Stopped = false
+	fx.svc.Store.Save(st)
+	if err := fx.svc.Delete(ctx, b.ID); err != nil {
+		t.Fatalf("delete last = %v", err)
+	}
+	if st := fx.state(t); len(st.Nodes) != 0 {
+		t.Errorf("state = %+v", st.Nodes)
+	}
+}

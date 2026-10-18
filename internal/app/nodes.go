@@ -553,6 +553,8 @@ func describe(err error) string {
 		return text.ErrNodeNotFound
 	case errors.Is(err, nodemgr.ErrClientNotFound):
 		return text.ErrClientNotFound
+	case errors.Is(err, nodemgr.ErrXrayMissing):
+		return text.ErrXrayMissing
 	case errors.As(err, &pt):
 		return portConflicts(pt.Conflicts)
 	case errors.As(err, &ie):
