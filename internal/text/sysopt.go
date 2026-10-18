@@ -75,3 +75,23 @@ func SwapMax(max string) string {
 
 // ErrNoDiskSpace reports that the disk cannot hold the swap file.
 const ErrNoDiskSpace = "磁盘空间不足（创建后需保留 256M 空闲空间）。"
+
+// IP preference (DESIGN section 15).
+const (
+	SysoptPreference   = "IPv4 / IPv6 优先级"
+	PreferIPv4         = "优先 IPv4"
+	PreferIPv6         = "优先 IPv6（系统默认）"
+	PreferenceHint     = "影响系统程序（curl、apt 等）解析域名后的出站顺序，写入 /etc/gai.conf。"
+	PreferIPv4Done     = "已设置为优先 IPv4。"
+	PreferIPv6Done     = "已恢复为优先 IPv6（系统默认）。"
+	PreferenceUnchange = "设置未变化。"
+	PreferenceForeign  = "/etc/gai.conf 中有其他行设置了优先 IPv4（非 LiteNode 添加），需手动修改该文件才能优先 IPv6。"
+)
+
+// StatusPreference labels the preference field of the status.
+func StatusPreference(ipv4 bool) string {
+	if ipv4 {
+		return "优先: IPv4"
+	}
+	return "优先: IPv6"
+}

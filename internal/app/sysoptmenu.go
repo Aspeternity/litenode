@@ -45,12 +45,16 @@ func (u *sysoptUI) menu() ui.Menu {
 		}
 		fields = append(fields, text.StatusSwap(v))
 	}
+	if p, err := u.svc.PreferenceStatus(); err == nil {
+		fields = append(fields, text.StatusPreference(p.IPv4))
+	}
 	m := ui.Menu{
 		Heading: text.MenuSysopt,
 		Status:  []string{strings.Join(fields, "   ")},
 		Items: []ui.Item{
 			{Label: text.SysoptBBR, Hidden: !u.caps.Has(system.CapBBR), Action: func() error { return u.bbr(bbr) }},
 			{Label: text.SysoptSwap, Hint: text.SysoptSwapHint, Hidden: !u.caps.Has(system.CapSwap), Action: u.swap},
+			{Label: text.SysoptPreference, Action: u.preference},
 		},
 	}
 	for _, it := range m.Items {
@@ -184,4 +188,40 @@ func (u *sysoptUI) promptSwapSize(def int) (mb int, ok bool, err error) {
 		}
 		u.s.Println(u.s.Colors.Warn(text.ErrSwapSize(sysopt.FormatMB(sysopt.MinSwapMB), sysopt.FormatMB(limit))))
 	}
+}
+
+func (u *sysoptUI) preference() error {
+	p, err := u.svc.PreferenceStatus()
+	if err != nil {
+		return err
+	}
+	u.s.Println(text.PreferenceHint)
+	label := func(l string, cur bool) string {
+		if cur {
+			return l + " " + text.CurrentMark
+		}
+		return l
+	}
+	c, err := u.s.Choose(ui.Menu{Items: []ui.Item{{Label: label(text.PreferIPv4, p.IPv4)}, {Label: label(text.PreferIPv6, !p.IPv4)}}})
+	if err != nil || c == 0 {
+		return err
+	}
+	ipv4 := c == 1
+	if ipv4 == p.IPv4 {
+		u.s.End(text.PreferenceUnchange)
+		return nil
+	}
+	if err := u.svc.SetPreference(u.ctx, ipv4); err != nil {
+		return err
+	}
+	if ipv4 {
+		u.s.Done(text.PreferIPv4Done)
+		return nil
+	}
+	if after, err := u.svc.PreferenceStatus(); err == nil && after.IPv4 {
+		u.s.End(u.s.Colors.Warn(text.PreferenceForeign))
+		return nil
+	}
+	u.s.Done(text.PreferIPv6Done)
+	return nil
 }
