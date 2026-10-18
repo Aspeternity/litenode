@@ -111,7 +111,7 @@ func TestPresetsComeFromRegistry(t *testing.T) {
 	for _, p := range []Preset{
 		{ID: "trojan-tls", Combo: Combo{"trojan", "tcp", "tls", ""}},
 		{ID: "vless-xhttp", Combo: Combo{"vless", "xhttp", "reality", ""}},
-		{ID: "vless-vision", Combo: Combo{"vless", "tcp", "reality", FlowVision}, Recommended: true},
+		{ID: "vless-vision", Combo: Combo{"vless", "tcp", "reality", FlowVision}},
 	} {
 		if err := r.AddPreset(p); err != nil {
 			t.Fatal(err)
@@ -121,12 +121,18 @@ func TestPresetsComeFromRegistry(t *testing.T) {
 	for _, p := range r.Presets() {
 		ids = append(ids, p.ID)
 	}
-	// Recommended first, then registration order.
-	if want := []string{"vless-vision", "trojan-tls", "vless-xhttp"}; !slices.Equal(ids, want) {
+	// Registration order (D-060: no recommended preset).
+	if want := []string{"trojan-tls", "vless-xhttp", "vless-vision"}; !slices.Equal(ids, want) {
 		t.Errorf("Presets() = %v, want %v", ids, want)
 	}
 	if p, ok := r.Preset("vless-xhttp"); !ok || p.Combo.Transport != "xhttp" {
 		t.Errorf("Preset lookup = %+v, %v", p, ok)
+	}
+	if got := r.PresetFlow("vless", "tcp", "reality"); got != FlowVision {
+		t.Errorf("PresetFlow(vless, tcp, reality) = %q", got)
+	}
+	if got := r.PresetFlow("vless", "ws", "tls"); got != "" {
+		t.Errorf("PresetFlow without preset = %q", got)
 	}
 	if _, ok := r.Preset("missing"); ok {
 		t.Error("missing preset found")

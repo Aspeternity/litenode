@@ -14,7 +14,7 @@ import (
 func (u *nodeUI) xrayMenu() ui.Menu {
 	st := u.svc.XrayStatus(u.ctx)
 	if !st.Installed {
-		return ui.Menu{Status: []string{text.XrayNotInstalledNote}}
+		return ui.Menu{Heading: text.MenuXray, Status: []string{text.XrayNotInstalledNote}}
 	}
 	state := u.s.Colors.Off(text.XrayStopped)
 	switch {
@@ -24,7 +24,8 @@ func (u *nodeUI) xrayMenu() ui.Menu {
 		state = u.s.Colors.Warn(text.XrayStoppedByUser)
 	}
 	return ui.Menu{
-		Status: []string{text.XrayStatusLine(st.Version, state, int64(st.Uptime.Seconds()), st.Memory)},
+		Heading: text.MenuXray,
+		Status:  []string{text.XrayStatusLine(st.Version, state, int64(st.Uptime.Seconds()), st.Memory)},
 		Items: []ui.Item{
 			{Label: text.XrayStart, Action: u.xrayStart},
 			{Label: text.XrayStop, Action: u.xrayStop},

@@ -97,7 +97,8 @@ func (u *nodeUI) menu() ui.Menu {
 	}
 	none := len(st.Nodes) == 0
 	return ui.Menu{
-		Status: status,
+		Heading: text.MenuNodes,
+		Status:  status,
 		Items: []ui.Item{
 			{Label: text.NodeAdd, Action: u.add},
 			{Label: text.NodeModify, Hidden: none, Action: u.modify},
@@ -126,13 +127,9 @@ func (u *nodeUI) chooseNode() (*node.Node, error) {
 // add runs the add-node flow (DESIGN section 9.2).
 func (u *nodeUI) add() error {
 	presets := u.svc.Registry.Presets()
-	m := ui.Menu{Status: []string{text.ChoosePreset}}
+	m := ui.Menu{Heading: text.ChoosePreset}
 	for _, p := range presets {
-		hint := ""
-		if p.Recommended {
-			hint = text.Recommended
-		}
-		m.Items = append(m.Items, ui.Item{Label: p.Label, Hint: hint})
+		m.Items = append(m.Items, ui.Item{Label: p.Label})
 	}
 	choice, err := u.s.Choose(m)
 	if err != nil || choice == 0 {
@@ -299,54 +296,71 @@ func (u *nodeUI) prepareChecker() {
 }
 
 // chooseTarget lets the user pick a checked REALITY target (DESIGN
-// section 10.1). "" means back.
+// section 10.1). Going back from a method, or a method finding nothing,
+// returns to this menu; "" means the user left it (back).
 func (u *nodeUI) chooseTarget() (string, error) {
 	u.prepareChecker()
-	m := ui.Menu{Status: []string{text.ChooseTarget}, Items: []ui.Item{
+	m := ui.Menu{Heading: text.ChooseTarget, Items: []ui.Item{
 		{Label: text.TargetScan, Hint: text.TargetScanHint}, {Label: text.TargetCommon}, {Label: text.TargetManual}}}
+	for {
+		choice, err := u.s.Choose(m)
+		if err != nil || choice == 0 {
+			return "", err
+		}
+		var t string
+		switch choice {
+		case 1:
+			t, err = u.scanTarget()
+		case 2:
+			t, err = u.commonTarget()
+		default:
+			t, err = u.manualTarget()
+		}
+		if err != nil || t != "" {
+			return t, err
+		}
+	}
+}
+
+// chooseResult offers checked targets as a menu. "" means back.
+func (u *nodeUI) chooseResult(heading, status string, results []reality.Result) (string, error) {
+	width := 0
+	for _, r := range results {
+		width = max(width, ui.Width(r.Host))
+	}
+	m := ui.Menu{Heading: heading}
+	if status != "" {
+		m.Status = []string{status}
+	}
+	for _, r := range results {
+		m.Items = append(m.Items, ui.Item{Label: text.CheckLine(ui.PadRight(r.Host, width), r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK)})
+	}
 	choice, err := u.s.Choose(m)
 	if err != nil || choice == 0 {
 		return "", err
 	}
-	scanned := false
-	if choice == 1 {
-		t, err := u.scanTarget()
-		if err != nil || t != "" {
-			return t, err
+	return results[choice-1].Target, nil
+}
+
+// commonTarget offers the usable sites of the common list (D-059). ""
+// means back or none usable.
+func (u *nodeUI) commonTarget() (string, error) {
+	u.s.Println(text.Checking)
+	var usable []reality.Result
+	for _, r := range u.checker.CheckAll(u.ctx, reality.CommonTargets, 10) {
+		if r.Usable() {
+			usable = append(usable, r)
 		}
-		choice, scanned = 2, true // nothing found: fall back to the common list
 	}
-	if choice == 2 {
-		if !scanned {
-			u.s.Println(text.CommonListHint)
-		}
-		u.s.Println(text.Checking)
-		var usable []reality.Result
-		results := u.checker.CheckAll(u.ctx, reality.CommonTargets, 10)
-		width := 0
-		for _, r := range results {
-			width = max(width, ui.Width(r.Host))
-		}
-		for _, r := range results {
-			if r.Usable() {
-				usable = append(usable, r)
-				u.s.Println(fmt.Sprintf(" %d. %s", len(usable), text.CheckLine(ui.PadRight(r.Host, width), r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK)))
-			}
-		}
-		if len(usable) > 0 {
-			i, err := u.s.PromptNumber(text.PromptTargetIndex, 1, 0, len(usable))
-			if err != nil || i == 0 {
-				return "", err
-			}
-			return usable[i-1].Target, nil
-		}
+	if len(usable) == 0 {
 		u.s.Println(u.s.Colors.Warn(text.TargetNoneUsable))
+		return "", nil
 	}
-	return u.manualTarget()
+	return u.chooseResult(text.CommonHeading, text.CommonListHint, usable)
 }
 
 // scanTarget scans nearby sites (DESIGN section 10.3, D-058). "" with no
-// error means nothing usable was found or the user declined.
+// error means the user declined or went back, or nothing usable was found.
 func (u *nodeUI) scanTarget() (string, error) {
 	st := u.state()
 	if !st.Server.ScanWarned {
@@ -379,19 +393,7 @@ func (u *nodeUI) scanTarget() (string, error) {
 		u.s.Println(u.s.Colors.Warn(text.ScanNoResult))
 		return "", nil
 	}
-	u.s.Println(text.ScanFound)
-	width := 0
-	for _, r := range results {
-		width = max(width, ui.Width(r.Host))
-	}
-	for i, r := range results {
-		u.s.Println(fmt.Sprintf(" %d. %s", i+1, text.CheckLine(ui.PadRight(r.Host, width), r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK)))
-	}
-	i, err := u.s.PromptNumber(text.PromptTargetIndex, 1, 0, len(results))
-	if err != nil || i == 0 {
-		return "", err
-	}
-	return results[i-1].Target, nil
+	return u.chooseResult(text.ScanHeading, text.ScanFound, results)
 }
 
 // scanCenter is the VPS's public IPv4: the share address if it is one,
@@ -484,7 +486,7 @@ func (u *nodeUI) detectShareAddress() (string, error) {
 		addr = cands[0]
 		u.s.Println(text.ShareAddrDetected + addr)
 	default:
-		m := ui.Menu{Status: []string{text.ChooseShareAddr}}
+		m := ui.Menu{Heading: text.ShareAddrHeading, Status: []string{text.ChooseShareAddr}}
 		for _, c := range cands {
 			m.Items = append(m.Items, ui.Item{Label: c})
 		}
@@ -520,7 +522,8 @@ func (u *nodeUI) askAddress(def string) (string, error) {
 func (u *nodeUI) shareAddress() error {
 	return u.s.Run(func() ui.Menu {
 		return ui.Menu{
-			Status: []string{text.ShareAddressLine(u.state().Server.ShareAddress)},
+			Heading: text.NodeShareAddress,
+			Status:  []string{text.ShareAddressLine(u.state().Server.ShareAddress)},
 			Items: []ui.Item{
 				{Label: text.ShareAddrEnter, Action: func() error {
 					addr, err := u.askAddress(u.state().Server.ShareAddress)
