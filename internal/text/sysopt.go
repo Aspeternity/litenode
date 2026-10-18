@@ -95,3 +95,39 @@ func StatusPreference(ipv4 bool) string {
 	}
 	return "优先: IPv6"
 }
+
+// DNS (DESIGN section 15).
+const (
+	SysoptDNS         = "DNS"
+	DNSCustom         = "自定义"
+	DNSReset          = "恢复系统默认"
+	PromptDNSServers  = "DNS 服务器 IP（最多 3 个，空格分隔）"
+	ErrDNSServers     = "请输入 1 ~ 3 个 IP 地址，用空格分隔。"
+	ConfirmDNSFailed  = "仍要使用这些 DNS 服务器？"
+	DNSResetDone      = "已恢复系统默认 DNS。"
+	DNSResolvConfNote = "系统未使用 systemd-resolved，将直接修改 /etc/resolv.conf。该文件可能被 DHCP、cloud-init 或 resolvconf 改回，届时请重新设置。"
+	DNSVerifyFailed   = "⚠ 设置后解析测试失败，请检查网络或换用其他 DNS。"
+	DNSNone           = "无"
+	DNSByLiteNode     = "LiteNode 设置"
+	DNSBySystem       = "系统配置"
+)
+
+// DNSCurrent shows the DNS servers in use and where they come from.
+func DNSCurrent(servers, source string, resolved bool) string {
+	via := "/etc/resolv.conf"
+	if resolved {
+		via = "systemd-resolved"
+	}
+	return "当前 DNS：" + servers + "（" + source + "，" + via + "）"
+}
+
+// DNSPresetLabel is a preset choice.
+func DNSPresetLabel(name, servers string) string { return name + "  " + servers }
+
+// DNSProbeFailed reports a DNS server that did not answer.
+func DNSProbeFailed(server string, err error) string {
+	return "⚠ " + server + " 无法解析域名：" + err.Error()
+}
+
+// DNSSet reports the new DNS servers.
+func DNSSet(servers string) string { return "DNS 已设置为 " + servers + "。" }

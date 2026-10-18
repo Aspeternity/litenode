@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -69,5 +70,26 @@ func TestSysoptMenuPreference(t *testing.T) {
 	wantOutput(t, r.stdout, "优先: IPv6", text.PreferIPv4Done, "优先: IPv4", text.PreferIPv6Done)
 	if string(f.Files["/etc/gai.conf"]) != "# getaddrinfo\n" {
 		t.Errorf("gai.conf:\n%s", f.Files["/etc/gai.conf"])
+	}
+}
+
+func TestSysoptMenuDNS(t *testing.T) {
+	f := supported()
+	f.Files["/etc/resolv.conf"] = []byte("nameserver 10.0.0.1\nsearch example.com\n")
+	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")
+	probe := func(_ context.Context, server string) error {
+		if server == "9.9.9.9" {
+			return errors.New("timeout")
+		}
+		return nil
+	}
+	in := "6\n2\n4\n1.1.1.1 9.9.9.9\nn\n2\n1\n0\n0\n"
+	// main: 6; 2 DNS (BBR, swap hidden), custom with a failing server, no;
+	// 2 DNS, Cloudflare; back; quit.
+	r := runEnv(t, Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), DNSProber: probe}, in)
+	wantOutput(t, r.stdout, "当前 DNS：10.0.0.1（系统配置，/etc/resolv.conf）", "9.9.9.9 无法解析域名：timeout",
+		text.DNSResolvConfNote, text.DNSSet("1.1.1.1 1.0.0.1"))
+	if got := string(f.Files["/etc/resolv.conf"]); !strings.Contains(got, "nameserver 1.1.1.1\nnameserver 1.0.0.1\nsearch example.com\n") {
+		t.Errorf("resolv.conf:\n%s", got)
 	}
 }

@@ -693,3 +693,15 @@
   - **已知限制**：Xray 和其他 Go 程序使用 Go 自己的解析器，不读取 `gai.conf`，节点出站不受此设置影响。如需让 Xray 出站也按此优先，需要在 Xray 配置中设置 `domainStrategy`，属于设计变更，待用户决定。
 - **原因**：标记段可以精确增删而不碰用户的其他配置；从文件读取状态能反映用户手动修改的情况。
 - **否决**：整体覆盖 `gai.conf`（丢失用户配置）；注释掉用户自己的 precedence 行；用 sysctl 关闭 IPv6 实现"优先 IPv4"（会让 IPv6 节点和转发失效）。
+
+### D-081 DNS 设置的实现（由 Claude 决定（用户授权））
+
+- **内容**：
+  - **判断是否使用 systemd-resolved**：服务在运行，且 `/etc/resolv.conf` 的内容是 systemd-resolved 生成的（含 `systemd-resolved` 字样，stub 或上游列表两种模式都算）。服务在运行但 resolv.conf 不指向它时按"不使用"处理，因为程序实际读取的是 resolv.conf。
+  - **systemd-resolved**：写 `/etc/systemd/resolved.conf.d/litenode.conf`（`DNS=...`、`Domains=~.`），应用步骤重启 systemd-resolved。`Domains=~.` 让全局 DNS 用于所有域名，优先于 DHCP 下发到网卡的 DNS。"恢复系统默认"删除该文件。
+  - **resolv.conf**：整体重写为 LiteNode 的 nameserver，保留原有的 `search`、`domain`、`options` 行；原来是符号链接（如 resolvconf）时替换为普通文件。不提供"恢复系统默认"（没有可靠的默认内容，用户可以选择其他 DNS）。
+  - **变更流程**：`dns` 类型，失败自动恢复。
+  - **测试**：应用前用 Go 解析器直接向每个服务器（UDP 53）查询 `www.cloudflare.com`，限时 3 秒，失败时列出并询问是否仍要使用（默认否）；应用后 `getent hosts` 测试系统解析，失败只提示。
+  - 当前 DNS 显示：LiteNode 设置的值，或系统的值（`resolvectl dns` / resolv.conf 中的 nameserver）。DNS 不进状态文件。
+- **原因**：两种模式都按系统实际使用的文件修改才会生效；事先测试服务器可以避免填错 IP 让系统无法解析。
+- **否决**：在 resolvconf 的 `head` 文件中追加（DHCP 的 DNS 仍在后面，结果不确定）；用 `chattr +i` 锁住 resolv.conf（影响系统工具，用户难以排查）；在 resolved 下修改 `/etc/systemd/resolved.conf` 本身（覆盖用户配置）；应用后解析失败就自动回滚（可能只是暂时网络问题）。
