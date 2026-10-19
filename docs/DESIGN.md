@@ -250,7 +250,7 @@ docs/
 - `ssh`：LiteNode 管理的 sshd 设置（D-061，见第 13 节）。每个字段不写表示不管理，交给系统原有配置；全部不写时不生成 `00-litenode.conf`。
 - 节点的 `share_port`：分享链接使用的端口，不写（或 0）表示与 `port` 相同（NAT 机，D-043）。
 - 转发的 `resolved_ipv4` / `resolved_ipv6`：目标为域名时分别解析的 A / AAAA 记录（D-046，见第 11 节）。
-- `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。VLESS Encryption 节点（第 9.7 节）的 `security` 为 `none`，参数写在 `vless_encryption`（`private_key`、`public_key`），没有 `reality`。
+- `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。VLESS Encryption 节点（第 9.7 节）的 `security` 为 `none`，参数写在 `vless_encryption`（`private_key`、`public_key`），没有 `reality`。Shadowsocks 2022 节点（第 9.8 节）的 `protocol` 为 `shadowsocks`、`security` 为 `none`，参数写在 `shadowsocks`（`method`、`server_key`）；它的客户端没有 `uuid`，用户密钥写在 `key`（D-111）。
 - **备注**（D-039）：节点备注在所有节点之间唯一；客户端备注即 Xray 的 `email`，在所有节点的所有客户端之间唯一；节点备注和客户端备注互不影响，可以相同。格式：去掉首尾空白后 1～32 个字符（中文算一个字符），不含控制字符；比较时不区分大小写（`LA` 与 `la` 视为重复）。
 - 每个节点、客户端、转发规则、防火墙规则有内部稳定 ID：全局一个递增计数器 `next_id`，所有类型共用，只增不减，删除后不复用；菜单显示的是连续的序号。
 
@@ -658,11 +658,11 @@ vless://<uuid>@<地址>:<端口>?encryption=mlkem768x25519plus.native.0rtt.<公�
 
 ### 9.8 Shadowsocks 2022 节点（D-110，M9）
 
-兼容选项：给不支持 VLESS Encryption 的客户端（如 sing-box、Surge、Shadowrocket）使用，也用于经中转连接的落地机。不需要证书和目标网站。Xray 对 Shadowsocks 入站打印弃用警告（不会删除）；没有前向保密，所以选择类型后提示一行"兼容选项：客户端支持时优先使用 VLESS Encryption"。
+兼容选项：给不支持 VLESS Encryption 的客户端（如 sing-box、Surge、Shadowrocket）使用，也用于经中转连接的落地机。不需要证书和目标网站。Xray 对 Shadowsocks 入站打印弃用警告（"可能删除"，建议迁移到 VLESS Encryption；M9-01 实测 v26.10.17 仍正常运行）；没有前向保密，所以选择类型后提示一行"兼容选项：客户端支持时优先使用 VLESS Encryption"。
 
 - **组合**：协议 `shadowsocks`、传输 TCP、安全层 none，无流控。入站 `network` 为 `tcp,udp`（同时提供 UDP）。
-- **加密方法**：固定 `2022-blake3-aes-128-gcm`（密钥 16 字节，标准 base64；VPS 普遍有 AES 硬件加速，密钥和链接比 256 位方法短）。不提供选择。
-- **多用户**：节点保存服务端密钥（`shadowsocks.server_key`），每个客户端有自己的用户密钥（客户端的 `key` 字段，代替 UUID），对应 Xray 的 `settings.password` 和 `clients[].password`；客户端备注仍作为 `email`。"修改客户端"中的"重置 UUID"对这种节点显示为"重置密钥"。
+- **加密方法**：固定 `2022-blake3-aes-128-gcm`（密钥 16 字节，标准 base64；VPS 普遍有 AES 硬件加速，密钥和链接比 256 位方法短）。不提供选择。生成的入站 `settings` 为 `{"method", "password": <服务端密钥>, "clients": [{"password": <用户密钥>, "email": <备注>}], "network": "tcp,udp"}`，`streamSettings` 为 `"network": "tcp", "security": "none"`。导入备份时检查方法和所有密钥（含禁用的客户端）是 16 字节的标准 base64（D-111）。
+- **多用户**：节点保存方法和服务端密钥（`shadowsocks.method`、`shadowsocks.server_key`），每个客户端有自己的用户密钥（客户端的 `key` 字段，代替 UUID），对应 Xray 的 `settings.password` 和 `clients[].password`；客户端备注仍作为 `email`。"修改客户端"中的"重置 UUID"对这种节点显示为"重置密钥"。
 - **端口**：节点同时占用 TCP 和 UDP 端口：端口冲突检查、LiteNode 防火墙和 ufw 规则都包含 TCP 和 UDP。默认随机 10000～60000 中 TCP 和 UDP 都空闲的端口，备注默认 `SS-<端口>`。不询问目标网站。
 - **修改节点**：端口、重新生成服务端密钥、分享端口、备注。重新生成服务端密钥会让所有客户端的链接失效。
 - **链接**（SIP002，2022 方法的用户信息不做 base64，按 URL 编码）：

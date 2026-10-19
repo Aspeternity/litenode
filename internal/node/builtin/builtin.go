@@ -16,6 +16,8 @@ const (
 	PresetVLESSRealityVision = "vless-tcp-reality-vision"
 	// PresetVLESSEncVision is VLESS + TCP + VLESS Encryption (D-106).
 	PresetVLESSEncVision = "vless-tcp-encryption-vision"
+	// PresetSS2022 is Shadowsocks 2022 (D-110).
+	PresetSS2022 = "shadowsocks-2022"
 )
 
 // Registry returns the registry of all compiled-in components.
@@ -23,6 +25,7 @@ func Registry() (*node.Registry, error) {
 	r := node.NewRegistry()
 	steps := []func() error{
 		func() error { return r.AddProtocol(protocol.VLESS{}) },
+		func() error { return r.AddProtocol(protocol.Shadowsocks{}) },
 		func() error { return r.AddTransport(transport.TCP{}) },
 		func() error { return r.AddSecurity(security.Reality{}) },
 		func() error { return r.AddSecurity(security.None{}) },
@@ -36,6 +39,10 @@ func Registry() (*node.Registry, error) {
 		func() error {
 			return r.AddCompat(node.Compat{Protocol: "vless", Transport: "tcp", Security: "none",
 				Flows: []string{node.FlowVision, ""}})
+		},
+		func() error {
+			return r.AddCompat(node.Compat{Protocol: "shadowsocks", Transport: "tcp", Security: "none",
+				Flows: []string{""}})
 		},
 
 		func() error {
@@ -52,6 +59,14 @@ func Registry() (*node.Registry, error) {
 				Label: "VLESS + TCP + Encryption (Vision)",
 				Combo: node.Combo{Protocol: "vless", Transport: "tcp", Security: "none", Flow: node.FlowVision},
 				Build: buildVLESSEncVision,
+			})
+		},
+		func() error {
+			return r.AddPreset(node.Preset{
+				ID:    PresetSS2022,
+				Label: "Shadowsocks 2022",
+				Combo: node.Combo{Protocol: "shadowsocks", Transport: "tcp", Security: "none"},
+				Build: buildSS2022,
 			})
 		},
 	}

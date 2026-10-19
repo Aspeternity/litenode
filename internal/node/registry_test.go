@@ -20,7 +20,7 @@ func (f fake) ShareLink(Node, Client, string, int, []Param) (string, error) {
 	return "", nil
 }
 
-// testRegistry has vless/trojan, tcp/xhttp, reality/tls/none and a small
+// testRegistry has vless/trojan/shadowsocks, tcp/xhttp, reality/tls/none and a small
 // compatibility table, independent of the built-in components.
 func testRegistry(t *testing.T) *Registry {
 	t.Helper()
@@ -33,6 +33,7 @@ func testRegistry(t *testing.T) *Registry {
 	}
 	must(r.AddProtocol(fake{"vless"}))
 	must(r.AddProtocol(fake{"trojan"}))
+	must(r.AddProtocol(fake{"shadowsocks"}))
 	must(r.AddTransport(fake{"tcp"}))
 	must(r.AddTransport(fake{"xhttp"}))
 	must(r.AddSecurity(fake{"reality"}))
@@ -43,6 +44,7 @@ func testRegistry(t *testing.T) *Registry {
 	must(r.AddCompat(Compat{Protocol: "trojan", Transport: "tcp", Security: "tls", Flows: []string{""}}))
 	must(r.AddCompat(Compat{Protocol: "vless", Transport: "tcp", Security: "none", Flows: []string{FlowVision, ""}}))
 	must(r.AddCompat(Compat{Protocol: "trojan", Transport: "tcp", Security: "none", Flows: []string{""}}))
+	must(r.AddCompat(Compat{Protocol: "shadowsocks", Transport: "tcp", Security: "none", Flows: []string{""}}))
 	return r
 }
 
@@ -186,5 +188,32 @@ func TestCheckNodeVLESSEncryption(t *testing.T) {
 	trojan.Clients = []Client{{ID: 2}}
 	if err := r.CheckNode(trojan); err == nil {
 		t.Error("vless encryption on trojan accepted")
+	}
+}
+
+func TestCheckNodeShadowsocks(t *testing.T) {
+	r := testRegistry(t)
+	ss := Node{ID: 1, Protocol: "shadowsocks", Transport: "tcp", Security: "none",
+		Shadowsocks: &Shadowsocks{Method: "m", ServerKey: "k"},
+		Clients:     []Client{{ID: 2, Key: "u"}}}
+	if err := r.CheckNode(ss); err != nil {
+		t.Errorf("valid node rejected: %v", err)
+	}
+	noSettings := ss
+	noSettings.Shadowsocks = nil
+	if err := r.CheckNode(noSettings); err == nil {
+		t.Error("shadowsocks node without settings accepted")
+	}
+	vision := ss
+	vision.Clients = []Client{{ID: 2, Key: "u", Flow: FlowVision}}
+	if err := r.CheckNode(vision); !errors.Is(err, ErrIllegalCombo) {
+		t.Errorf("vision on shadowsocks: err = %v, want ErrIllegalCombo", err)
+	}
+	vless := Node{ID: 1, Protocol: "vless", Transport: "tcp", Security: "none",
+		VLESSEncryption: &VLESSEncryption{PrivateKey: "p", PublicKey: "q"},
+		Shadowsocks:     &Shadowsocks{Method: "m", ServerKey: "k"},
+		Clients:         []Client{{ID: 2, Flow: FlowVision}}}
+	if err := r.CheckNode(vless); err == nil {
+		t.Error("shadowsocks settings on vless accepted")
 	}
 }

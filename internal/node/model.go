@@ -24,7 +24,16 @@ type Node struct {
 	// VLESSEncryption is set for VLESS nodes with VLESS Encryption
 	// (security "none", DESIGN section 9.7).
 	VLESSEncryption *VLESSEncryption `json:"vless_encryption,omitempty"`
-	Clients         []Client         `json:"clients"`
+	// Shadowsocks is set for Shadowsocks 2022 nodes (DESIGN section 9.8).
+	Shadowsocks *Shadowsocks `json:"shadowsocks,omitempty"`
+	Clients     []Client     `json:"clients"`
+}
+
+// Shadowsocks holds the method and the server key of a Shadowsocks 2022
+// node. Each client has its own user key (Client.Key).
+type Shadowsocks struct {
+	Method    string `json:"method"`
+	ServerKey string `json:"server_key"`
 }
 
 // VLESSEncryption holds the X25519 authentication key pair of VLESS
@@ -56,11 +65,14 @@ type FallbackLimit struct {
 }
 
 // Client is one user of a node. Its remark is the Xray "email" and is
-// unique across all clients of all nodes.
+// unique across all clients of all nodes. VLESS clients have a UUID,
+// Shadowsocks 2022 clients a user key instead.
 type Client struct {
-	ID      int64  `json:"id"`
-	Remark  string `json:"remark"`
-	UUID    string `json:"uuid"`
+	ID     int64  `json:"id"`
+	Remark string `json:"remark"`
+	UUID   string `json:"uuid,omitempty"`
+	// Key is the Shadowsocks 2022 user key (standard base64).
+	Key     string `json:"key,omitempty"`
 	Flow    string `json:"flow,omitempty"`
 	Enabled bool   `json:"enabled"`
 }
