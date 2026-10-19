@@ -35,8 +35,8 @@ const (
 	PromptNodeNumber   = "请输入节点序号 (0 返回)"
 	PromptPort         = "端口"
 	PromptRemark       = "备注"
-	PromptTarget       = "目标网站域名（可带端口，默认 443；直接回车返回）"
-	PromptShareAddress = "主机地址（IP 或域名，直接回车返回）"
+	PromptTarget       = "目标网站域名（可带端口，默认 443；0 返回）"
+	PromptShareAddress = "主机地址（IP 或域名，0 返回）"
 	PromptSharePort    = "分享端口（0 表示与监听端口相同）"
 	Checking           = "正在检测……"
 	InstallingXray     = "首次添加节点，正在安装 Xray……"
@@ -241,7 +241,14 @@ const (
 	LinksWillBreak  = "此操作会让该节点所有客户端的分享链接失效，是否继续？"
 	NewLinksTitle   = "该节点所有客户端的新链接："
 	KeysRegenerated = "已重新生成密钥。"
+	SharePortSet    = "分享端口已修改。"
 )
+
+// PortSet ends a successful port change.
+func PortSet(port int) string { return fmt.Sprintf("端口已改为 %d。", port) }
+
+// TargetSet ends a successful target change.
+func TargetSet(target string) string { return "目标网站已改为 " + target + "。" }
 
 // ModifyTitle heads the modify menu.
 func ModifyTitle(n int, remark, proto string) string {
@@ -317,7 +324,7 @@ const (
 	ClientEnabled      = "客户端已启用。"
 	ClientDisabled     = "客户端已禁用。"
 	ClientDeleted      = "客户端已删除。"
-	ClientUUIDReset    = "UUID 已重置，该客户端的旧链接已失效，新链接如下。"
+	ClientUUIDReset    = "UUID 已重置，该客户端的旧链接已失效。"
 	ConfirmResetUUID   = "重置后该客户端的旧链接立即失效（其他客户端不受影响），是否继续？"
 	ClientNone         = "（暂无客户端）"
 	ClientNoNodes      = "（暂无节点，请先在\"节点管理\"中添加节点）"
@@ -390,7 +397,7 @@ const (
 	XrayLiveLogs         = "实时日志"
 	PromptLogLines       = "显示行数（最多 1000，0 返回）"
 	XrayLiveLogsTitle    = "实时日志（按 Ctrl+C 回到菜单）："
-	PromptXrayVersion    = "要安装的版本（直接回车为默认版本）"
+	PromptXrayVersion    = "要安装的版本（直接回车为默认版本，0 返回）"
 	XrayUpdating         = "正在下载并校验……"
 	XrayUninstalled      = "Xray 已卸载，所有节点和客户端已删除。"
 )

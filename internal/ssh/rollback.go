@@ -35,21 +35,35 @@ func (s *Service) Previous() (state.SSH, error) {
 	return st.SSH, nil
 }
 
+// RollBackPlan returns what RollBackLast would restore (prev) and the
+// current settings (cur), or ErrNothingToRollBack, so that the user can
+// be told before confirming.
+func (s *Service) RollBackPlan() (prev, cur state.SSH, err error) {
+	if prev, err = s.Previous(); err != nil {
+		return state.SSH{}, state.SSH{}, err
+	}
+	st, err := s.Store.Load()
+	if err != nil {
+		return state.SSH{}, state.SSH{}, err
+	}
+	if reflect.DeepEqual(prev, st.SSH) {
+		return state.SSH{}, state.SSH{}, ErrNothingToRollBack
+	}
+	return prev, st.SSH, nil
+}
+
 // RollBackLast restores the SSH settings from before the last change,
 // under confirm-or-rollback. Only the SSH settings go back: the backup's
 // whole state would also undo later node changes (D-067). The rollback is
 // itself a change, so doing it again returns to where it started.
 func (s *Service) RollBackLast(ctx context.Context) (state.SSH, error) {
-	prev, err := s.Previous()
+	prev, _, err := s.RollBackPlan()
 	if err != nil {
 		return state.SSH{}, err
 	}
 	st, err := s.Store.Load()
 	if err != nil {
 		return state.SSH{}, err
-	}
-	if reflect.DeepEqual(prev, st.SSH) {
-		return state.SSH{}, ErrNothingToRollBack
 	}
 	st.SSH = prev
 	_, err = s.Confirmer.Apply(ctx, change.Change{

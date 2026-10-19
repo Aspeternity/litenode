@@ -54,7 +54,7 @@ func (u *nodeUI) detectAddresses(list []string) ([]string, error) {
 // askAddress reads an IP or domain; "" means back.
 func (u *nodeUI) askAddress() (string, error) {
 	for {
-		in, err := u.s.Prompt(text.PromptShareAddress + ": ")
+		in, err := u.s.PromptValue(text.PromptShareAddress, "")
 		if err != nil || in == "" {
 			return "", err
 		}

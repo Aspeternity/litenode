@@ -39,8 +39,8 @@ func (u *maintUI) menu() ui.Menu {
 
 func (u *maintUI) export() error {
 	u.s.Println(text.ExportNote)
-	path, err := u.s.PromptDefault(text.PromptExportPath, u.svc.DefaultExportPath())
-	if err != nil {
+	path, err := u.s.PromptValue(text.PromptExportPath, u.svc.DefaultExportPath())
+	if err != nil || path == "" {
 		return err
 	}
 	sum, err := u.svc.Export(path)
@@ -55,7 +55,7 @@ func (u *maintUI) export() error {
 
 func (u *maintUI) importConfig() error {
 	u.s.Println(text.ImportNote)
-	path, err := u.s.Prompt(text.PromptImportPath)
+	path, err := u.s.PromptValue(text.PromptImportPath, "")
 	if err != nil || path == "" {
 		return err
 	}
