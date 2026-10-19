@@ -36,6 +36,19 @@ type Shadowsocks struct {
 	ServerKey string `json:"server_key"`
 }
 
+// UsesUDP reports whether the node's inbound serves UDP besides TCP:
+// Shadowsocks 2022 nodes do (network "tcp,udp", DESIGN section 9.8).
+func (n Node) UsesUDP() bool { return n.Protocol == "shadowsocks" }
+
+// PortProto is the protocol of the node's port as in firewall rules:
+// "tcp" or "tcp+udp".
+func (n Node) PortProto() string {
+	if n.UsesUDP() {
+		return "tcp+udp"
+	}
+	return "tcp"
+}
+
 // VLESSEncryption holds the X25519 authentication key pair of VLESS
 // Encryption, encoded like "xray x25519" (D-107). The server keeps the
 // private key; clients use the public key.

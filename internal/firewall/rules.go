@@ -69,8 +69,7 @@ func Entries(st *state.State, sshPorts []int) []Entry {
 	for i, n := range st.Nodes {
 		if n.Enabled {
 			o := NodeOwner(n.ID)
-			// Every current transport is TCP.
-			es = append(es, Entry{Owner: o, Ports: strconv.Itoa(n.Port), Proto: "tcp", Sources: st.Firewall.AutoSources[o], NodeIndex: i + 1})
+			es = append(es, Entry{Owner: o, Ports: strconv.Itoa(n.Port), Proto: n.PortProto(), Sources: st.Firewall.AutoSources[o], NodeIndex: i + 1})
 		}
 	}
 	for i, f := range st.Forwards {

@@ -451,3 +451,60 @@ func TestXrayUpdateWarnsVLESSEnc(t *testing.T) {
 		t.Errorf("warning for a supported version:\n%s", r.stdout)
 	}
 }
+
+// TestAddSS2022NodeFlow covers DESIGN section 9.8: hint, random port free
+// for TCP and UDP, "SS-<port>" remark, ss:// link, modify items and the
+// client key reset.
+func TestAddSS2022NodeFlow(t *testing.T) {
+	f := nodeSystem()
+	// 1 nodes, 1 add, preset 3, port and remark default; 2 modify, node
+	// 1, 2 regenerate keys (y); back out.
+	input := strings.Join([]string{"1", "1", "3", "", "", "2", "1", "2", "y", "0", "0", "0"}, "\n") + "\n"
+	r := runNodes(t, f, input)
+	if r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	for _, want := range []string{
+		text.SS2022Hint, "◆ 1/2 端口 [", "◆ 2/2 备注 [SS-", "└─ ✓ 节点已添加。\n",
+		"ss://2022-blake3-aes-128-gcm:", "TCP 和 UDP 端口", "Shadowsocks-2022",
+		" 1. 端口", " 2. 重新生成密钥", " 3. 分享端口", " 4. 备注",
+		"└─ ✓ " + text.KeysRegenerated, text.NewLinksTitle,
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"目标网站", "回落限速", text.Non443Hint, "[443]", text.VLESSEncClientHint, "security=", "flow="} {
+		if strings.Contains(r.stdout, unwanted) {
+			t.Errorf("output has %q", unwanted)
+		}
+	}
+	st, err := state.NewStore(f).Load()
+	if err != nil || len(st.Nodes) != 1 {
+		t.Fatalf("state = %+v, %v", st, err)
+	}
+	n := st.Nodes[0]
+	if n.Shadowsocks == nil || n.Port < 10000 || n.Port > 60000 || n.Remark != "SS-"+strconv.Itoa(n.Port) {
+		t.Errorf("node = %+v", n)
+	}
+	if cfg := string(f.Files[xray.ConfigPath]); !strings.Contains(cfg, `"password": "`+n.Shadowsocks.ServerKey+`"`) ||
+		!strings.Contains(cfg, `"network": "tcp,udp"`) {
+		t.Errorf("xray config:\n%s", cfg)
+	}
+
+	// 2 clients: 1 add (default remark); 2 modify, client 2, 2 reset key
+	// (y).
+	r = runNodes(t, f, strings.Join([]string{"2", "1", "", "2", "2", "2", "y", "0", "0"}, "\n")+"\n")
+	for _, want := range []string{"客户端已添加。", " 2. " + text.ClientResetKey, text.ClientKeyReset} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+	if strings.Contains(r.stdout, "UUID") {
+		t.Error("UUID shown for a shadowsocks client")
+	}
+	st, _ = state.NewStore(f).Load()
+	if cl := st.Nodes[0].Clients; len(cl) != 2 || cl[1].Key == "" || cl[1].UUID != "" {
+		t.Errorf("clients = %+v", cl)
+	}
+}

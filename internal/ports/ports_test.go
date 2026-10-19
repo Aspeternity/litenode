@@ -102,10 +102,35 @@ func TestRandomFree(t *testing.T) {
 	c := Checker{Listening: map[Key]bool{}, Claims: nil}
 	rng := rand.New(rand.NewPCG(1, 2))
 	for range 100 {
-		p := c.RandomFree(rng)
+		p := c.RandomFree(rng, node.Node{Protocol: "vless"})
 		if p < 10000 || p > 60000 {
 			t.Fatalf("port %d out of range", p)
 		}
+	}
+	// A Shadowsocks 2022 node needs UDP too: ports below 35000 have UDP
+	// taken.
+	for p := 10000; p < 35000; p++ {
+		c.Listening[Key{UDP, p}] = true
+	}
+	for range 100 {
+		if p := c.RandomFree(rng, node.Node{Protocol: "shadowsocks"}); p < 35000 {
+			t.Fatalf("port %d has UDP taken", p)
+		}
+	}
+}
+
+func TestNodeKeys(t *testing.T) {
+	vless := node.Node{ID: 1, Protocol: "vless", Port: 443}
+	ss := node.Node{ID: 2, Protocol: "shadowsocks", Port: 34567}
+	if got := NodeKeys(vless, 8443); !slices.Equal(got, []Key{{TCP, 8443}}) {
+		t.Errorf("vless = %v", got)
+	}
+	if got := NodeKeys(ss, 34568); !slices.Equal(got, []Key{{TCP, 34568}, {UDP, 34568}}) {
+		t.Errorf("shadowsocks = %v", got)
+	}
+	want := []Claim{{Key{TCP, 443}, "node:1"}, {Key{TCP, 34567}, "node:2"}, {Key{UDP, 34567}, "node:2"}}
+	if got := NodeClaims([]node.Node{vless, ss}); !slices.Equal(got, want) {
+		t.Errorf("NodeClaims = %v", got)
 	}
 }
 

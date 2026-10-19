@@ -6,16 +6,16 @@
 
 - **阶段**：M0 ~ M7 全部完成，用户 2026-10-19 验收 M7 通过，v0.1.0 已发布，Debian 12 测试机从 v0.0.3 升级验证通过。
 - **M8** VLESS Encryption 节点：用户 2026-10-19 验收通过，**暂不发布 v0.2.0**（用户决定）。
-- **当前阶段**：M9 Shadowsocks 2022（D-110）。M9-01 完成（D-111）。用户要求 M9 全部完成后再汇报。
+- **当前阶段**：M9 Shadowsocks 2022（D-110）。M9-01、M9-02 完成（D-111、D-112）。用户要求 M9 全部完成后再汇报。
 
 ## 下次会话从这里开始
 
-1. M9-02 菜单与 UDP 端口（DESIGN 9.8）。M9-01 已注册预设，菜单已列出"Shadowsocks 2022"，但添加流程、节点列表"协议"列、添加客户端（生成用户密钥）、重置密钥、重新生成服务端密钥都还按 VLESS 处理，由 M9-02 完成。
+1. M9-03 分享链接与客户端实测（Xray、mihomo、sing-box，TCP 和 UDP，经转发）。链接生成代码在 M9-01 已写好（`protocol/shadowsocks.go`），M9-03 补单元测试和客户端实测。
 2. M9-03 后向用户汇报 M9，等实机验收；发布 v0.2.0 前先问用户。
 
 ## 测试 VPS 的状态（2026-10-19，M8 结束时）
 
-M8 测试后三台的 `/usr/local/bin/litenode` 换成了 main 的构建（含 M8）。v0.1.0 不认识 VLESS Encryption 节点，Debian 12 上不要再用 v0.1.0 打开。
+M8 测试后三台的 `/usr/local/bin/litenode` 换成了 main 的构建（含 M8）；M9-02 后 Debian 11 换成 `v0.1.0-m9`（ufw 和 LiteNode 防火墙测试后都已关闭，SS 测试节点已删除）。v0.1.0 不认识 VLESS Encryption 节点，Debian 12 上不要再用 v0.1.0 打开。
 
 - **M8 新增**：Debian 12 有节点 `Enc-24680`（VLESS Encryption，端口 24680）；Debian 11 有转发规则 30080 → 216.23.88.252:24680（备注 enc-test）；Debian 11 `/tmp/mihomo` 有测试用的 mihomo，`/tmp/encver` 在 Debian 12 上有各版本 Xray。
 

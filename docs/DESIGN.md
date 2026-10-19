@@ -663,7 +663,7 @@ vless://<uuid>@<地址>:<端口>?encryption=mlkem768x25519plus.native.0rtt.<公�
 - **组合**：协议 `shadowsocks`、传输 TCP、安全层 none，无流控。入站 `network` 为 `tcp,udp`（同时提供 UDP）。
 - **加密方法**：固定 `2022-blake3-aes-128-gcm`（密钥 16 字节，标准 base64；VPS 普遍有 AES 硬件加速，密钥和链接比 256 位方法短）。不提供选择。生成的入站 `settings` 为 `{"method", "password": <服务端密钥>, "clients": [{"password": <用户密钥>, "email": <备注>}], "network": "tcp,udp"}`，`streamSettings` 为 `"network": "tcp", "security": "none"`。导入备份时检查方法和所有密钥（含禁用的客户端）是 16 字节的标准 base64（D-111）。
 - **多用户**：节点保存方法和服务端密钥（`shadowsocks.method`、`shadowsocks.server_key`），每个客户端有自己的用户密钥（客户端的 `key` 字段，代替 UUID），对应 Xray 的 `settings.password` 和 `clients[].password`；客户端备注仍作为 `email`。"修改客户端"中的"重置 UUID"对这种节点显示为"重置密钥"。
-- **端口**：节点同时占用 TCP 和 UDP 端口：端口冲突检查、LiteNode 防火墙和 ufw 规则都包含 TCP 和 UDP。默认随机 10000～60000 中 TCP 和 UDP 都空闲的端口，备注默认 `SS-<端口>`。不询问目标网站。
+- **端口**：节点同时占用 TCP 和 UDP 端口：端口冲突检查、LiteNode 防火墙（一条 `tcp+udp` 规则）和 ufw 规则（tcp、udp 各一条，同一个备注）都包含 TCP 和 UDP。默认随机 10000～60000 中 TCP 和 UDP 都空闲的端口，备注默认 `SS-<端口>`。不询问目标网站。添加步骤与 VLESS Encryption 相同：1/2 端口、2/2 备注。节点列表"协议"列显示 `Shadowsocks-2022`；添加后的安全组提示为"放行了 TCP 和 UDP 端口"（D-112）。
 - **修改节点**：端口、重新生成服务端密钥、分享端口、备注。重新生成服务端密钥会让所有客户端的链接失效。
 - **链接**（SIP002，2022 方法的用户信息不做 base64，按 URL 编码）：
 
