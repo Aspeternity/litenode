@@ -13,6 +13,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
+	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/ports"
 	"github.com/Aspeternity/litenode/internal/reality"
@@ -236,6 +237,11 @@ func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, isDefault, fu
 	port := n.Port
 	if n.SharePort > 0 {
 		port = n.SharePort
+	}
+	if n.TLS != nil {
+		if fp, err := security.CertFingerprints(n.TLS.Certificate); err == nil {
+			u.s.Println(text.RelayParams(addr, port, c.Key, n.TLS.ServerName, fp.CertHex(), fp.PublicKeyBase64()))
+		}
 	}
 	u.s.Println(text.SecurityGroup(port, n.PortProto()))
 	if n.VLESSEncryption != nil {

@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -318,5 +320,43 @@ func TestIsPublic(t *testing.T) {
 		if got := IsPublic(netip.MustParseAddr(s)); got != want {
 			t.Errorf("IsPublic(%s) = %v", s, got)
 		}
+	}
+}
+
+// TestHysteria2LinkMatchesDesign checks DESIGN section 9.10 with the
+// openssl certificate of the security package's test data.
+func TestHysteria2LinkMatchesDesign(t *testing.T) {
+	reg, _ := builtin.Registry()
+	read := func(name string) string {
+		b, err := os.ReadFile(filepath.Join("..", "node", "security", "testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	n := node.Node{ID: 1, Remark: "Hy2-45678", Enabled: true, Port: 45678,
+		Protocol: "hysteria", Transport: "hysteria", Security: "tls",
+		TLS:     &node.TLS{ServerName: "www.bing.com", Certificate: read("openssl-cert.pem"), Key: read("openssl-key.pem")},
+		Clients: []node.Client{{ID: 2, Remark: "relay 1", Key: "0123456789abcdef0123456789abcdef", Enabled: true}}}
+	got, err := Link(reg, n, n.Clients[0], "203.0.113.10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "hysteria2://0123456789abcdef0123456789abcdef@203.0.113.10:45678/?sni=www.bing.com" +
+		"&pinSHA256=86c5ac5b87fba95509e334af4111e01513bcdf1b2fa29976af1bac7127b3cbd1#relay%201"
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+	u, err := url.Parse(got)
+	if err != nil || u.User.Username() != "0123456789abcdef0123456789abcdef" || u.Query().Get("pinSHA256") == "" || u.Fragment != "relay 1" {
+		t.Errorf("parsed = %+v, %v", u, err)
+	}
+	n.SharePort = 30001
+	if got, _ := LinkFor(reg, n, n.Clients[0], "2001:db8::1", false); !strings.HasPrefix(got, "hysteria2://0123456789abcdef0123456789abcdef@[2001:db8::1]:30001/?") ||
+		!strings.HasSuffix(got, "#relay%201-IPv6") {
+		t.Errorf("IPv6 / share port link = %s", got)
+	}
+	if qr, err := QR(want, false); err != nil || len([]rune(strings.SplitN(qr, "\n", 2)[0])) > 65 {
+		t.Errorf("QR too wide or failed: %v", err)
 	}
 }
