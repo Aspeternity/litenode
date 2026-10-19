@@ -6,15 +6,17 @@
 
 - **阶段**：M0 ~ M7 全部完成，用户 2026-10-19 验收 M7 通过，v0.1.0 已发布，Debian 12 测试机从 v0.0.3 升级验证通过。
 - **M8** VLESS Encryption 节点：用户 2026-10-19 验收通过，**暂不发布 v0.2.0**（用户决定）。
-- **当前阶段**：M9 Shadowsocks 2022（D-110）开发完成（M9-01～03，D-111～D-113），**等待用户实机验收 M9**。
+- **M9** Shadowsocks 2022（D-110～D-113）开发完成，等待用户实机验收。
+- **当前阶段**：M10 检测节点连通性（D-114，DESIGN 9.9），用户 2026-10-19 确认设计，未开始。
 
 ## 下次会话从这里开始
 
-1. 用户验收 M9 后：是否发布 v0.2.0 先问用户（M8 + M9）。
+1. 开始 M10-01（新会话）。M10 全部完成后向用户汇报。
+2. 发布 v0.2.0 前先问用户。
 
 ## 测试 VPS 的状态（2026-10-19，M8 结束时）
 
-M8 测试后三台的 `/usr/local/bin/litenode` 换成了 main 的构建（含 M8）；M9 测试后 Debian 11 换成 `v0.1.0-m9`（ufw 和 LiteNode 防火墙测试后都已关闭），保留节点 `SS-42001`（Shadowsocks 2022，端口 42001）供验收；Debian 13 装上了 nftables（转发测试时 LiteNode 自动安装，转发已删除），`/tmp/m9` 有 mihomo v1.19.32 和 sing-box v1.14.3。Debian 12 在 M9 期间一直有用户打开的 `lnode`，没有改动。v0.1.0 不认识 VLESS Encryption 节点，Debian 12 上不要再用 v0.1.0 打开。
+M8 测试后三台的 `/usr/local/bin/litenode` 换成了 main 的构建（含 M8）；M9 测试后 Debian 11 换成 `v0.1.0-m9`（ufw 和 LiteNode 防火墙测试后都已关闭），保留节点 `SS-42001`（Shadowsocks 2022，端口 42001）供验收；Debian 13 装上了 nftables（转发测试时 LiteNode 自动安装，转发已删除），`/tmp/m9` 有 mihomo v1.19.32 和 sing-box v1.14.3。Debian 12 上用户的 `lnode` 已关闭；Debian 13 的 AWS 安全组已放行 UDP（用户 2026-10-19）。v0.1.0 不认识 VLESS Encryption 节点，Debian 12 上不要再用 v0.1.0 打开。
 
 - **M8 新增**：Debian 12 有节点 `Enc-24680`（VLESS Encryption，端口 24680）；Debian 11 有转发规则 30080 → 216.23.88.252:24680（备注 enc-test）；Debian 11 `/tmp/mihomo` 有测试用的 mihomo，`/tmp/encver` 在 Debian 12 上有各版本 Xray。
 
