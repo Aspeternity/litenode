@@ -881,3 +881,23 @@
 - **Debian 11**：LTS 已于 2026-08-31 结束，`bullseye-security` 的软件包已下架（apt 返回 404），但 LiteNode 在 Debian 11 上冒烟测试全部通过，需要的 nftables、systemd-timesyncd 来自 bullseye 主仓库，不受影响。v0.1.0 继续支持 Debian 11，README 说明已停止安全更新、建议 Debian 12 / 13，并写明 404 时的处理方法。否决：v0.1.0 去掉 Debian 11（改变支持范围需要用户同意，而且实际可用）；LiteNode 自动修改 apt 源（超出职责，修改用户的系统配置）。
 - **curl**：最小化的 Debian 11 镜像没有 curl，一行安装命令只会报 `curl: command not found`。README 在安装命令后说明先执行 `apt install -y curl`；install.sh 在找不到 curl 时报错并给出同样的命令（脚本是保存下来或用 wget 获取时才会走到这里）。否决：install.sh 自动用 apt 安装 curl（一行命令在执行脚本前就需要 curl，自动安装帮不上一行命令；而且装包会改动系统）；改用 wget（Debian 最小化镜像同样不一定有 wget）。
 
+
+### D-106 下一个节点类型：只做 VLESS + TCP + VLESS Encryption（用户决定，2026-10-19）
+
+- **内容**：v0.1.0 之后的 M8 只加入 VLESS + TCP + VLESS Encryption（Vision），其他类型暂不开发。
+- **原因**：LiteNode 主要用作落地机，客户端经中转连接。VLESS Encryption 是 Xray 官方为中转 / 链式代理推荐的方案（后量子密钥交换、前向保密），不需要证书和目标网站。
+- **否决 / 暂缓**：
+  - Shadowsocks 2022：Xray 对所有 Shadowsocks 入站（包括 2022）打印"deprecated … Please migrate to VLESS Encryption"（`infra/conf/shadowsocks.go`，使用"不删除的弃用"函数，维护者 2026-03 表示不会删除）；没有前向保密。暂缓，以后只作为兼容选项考虑。
+  - 无加密的 VLESS + TCP：中转机到落地机之间明文，UUID、访问目标和明文内容都可见。否决。
+  - VLESS + XHTTP + Reality：对落地机来说主要优势用不上（不能用 Vision，CPU 开销更大，客户端兼容性更差）。暂缓，证书方案确定后再考虑 XHTTP + TLS。
+  - Hysteria2：Xray v26.3.27 起支持入站，但需要 TLS 证书、使用 UDP，成熟度一般。与其他 TLS 类节点一起，在证书方案（DESIGN 第 18 节第 2 项）确定后再考虑。
+
+### D-107 VLESS Encryption 节点的参数（由 Claude 决定（用户授权），2026-10-19）
+
+- **认证方式 X25519**，否决 ML-KEM-768：ML-KEM-768 的客户端密钥 1184 字节，链接约 1700 个字符，终端二维码远超 65 列（DESIGN 9.5）；密钥交换本身已是 X25519 + ML-KEM-768 混合，后量子安全不受影响。
+- **native 外观**，否决 xorpub / random：经中转的落地机不需要进一步混淆；native + TCP 时 Vision 仍可 splice，CPU 开销最低。
+- **服务端票据 600s、客户端 0rtt**：与 `xray vlessenc` 的默认输出一致。不提供填充等高级选项，保持菜单简单。
+- **流控 Vision**：与 encryption 搭配是 Xray 推荐用法。
+- **默认端口随机**（10000～60000 的空闲端口），否决默认 443：没有伪装 HTTPS 的需要，443 留给 Reality 节点。
+- **备注 `Enc-<端口>`**，与 `Reality-<端口>` 对应。
+- 详细设计见 DESIGN 第 9.7 节。
