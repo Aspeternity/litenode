@@ -21,7 +21,18 @@ type Node struct {
 	Security  string `json:"security"`
 	// Reality is set when Security is "reality".
 	Reality *Reality `json:"reality,omitempty"`
-	Clients []Client `json:"clients"`
+	// VLESSEncryption is set for VLESS nodes with VLESS Encryption
+	// (security "none", DESIGN section 9.7).
+	VLESSEncryption *VLESSEncryption `json:"vless_encryption,omitempty"`
+	Clients         []Client         `json:"clients"`
+}
+
+// VLESSEncryption holds the X25519 authentication key pair of VLESS
+// Encryption, encoded like "xray x25519" (D-107). The server keeps the
+// private key; clients use the public key.
+type VLESSEncryption struct {
+	PrivateKey string `json:"private_key"`
+	PublicKey  string `json:"public_key"`
 }
 
 // Reality holds the REALITY security settings of a node.

@@ -901,3 +901,9 @@
 - **默认端口随机**（10000～60000 的空闲端口），否决默认 443：没有伪装 HTTPS 的需要，443 留给 Reality 节点。
 - **备注 `Enc-<端口>`**，与 `Reality-<端口>` 对应。
 - 详细设计见 DESIGN 第 9.7 节。
+
+### D-108 VLESS Encryption 的数据结构与最低 Xray 版本（由 Claude 决定（用户授权），2026-10-19，M8-01）
+
+- **安全层 `none` + 节点字段 `vless_encryption`**：VLESS Encryption 属于 VLESS 协议的参数（Xray 中是 `settings.decryption`），安全层用新注册的 `none`；`Registry.CheckNode` 要求 `none` 必须带 VLESS Encryption，且只用于 VLESS。否决把它做成一个"安全层"（与 Xray 的配置结构不符，以后加 `security: tls` + encryption 时会冲突）和新协议名 `vless-enc`（分享链接和 Xray 中仍是 VLESS）。
+- **最低 Xray 版本 v25.9.5**：在测试机上逐版本实测（`xray run -test` + 新旧版本服务端 / 客户端互通）：v25.8.3 拒绝配置；v25.8.29、v25.8.31 能用但是预发布版；v25.9.5 是第一个正式版，发布说明首次列出 VLESS Encryption。
+

@@ -2,8 +2,6 @@ package builtin
 
 import (
 	"testing"
-
-	"github.com/Aspeternity/litenode/internal/node"
 )
 
 func TestBuiltinRegistry(t *testing.T) {
@@ -12,7 +10,7 @@ func TestBuiltinRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	presets := r.Presets()
-	if len(presets) != 1 || presets[0].ID != PresetVLESSRealityVision {
+	if len(presets) != 2 || presets[0].ID != PresetVLESSRealityVision || presets[1].ID != PresetVLESSEncVision {
 		t.Fatalf("presets = %+v", presets)
 	}
 	for _, name := range []string{"vless"} {
@@ -23,10 +21,14 @@ func TestBuiltinRegistry(t *testing.T) {
 	if _, ok := r.Transport("tcp"); !ok {
 		t.Error("transport tcp missing")
 	}
-	if _, ok := r.Security("reality"); !ok {
-		t.Error("security reality missing")
+	for _, name := range []string{"reality", "none"} {
+		if _, ok := r.Security(name); !ok {
+			t.Errorf("security %s missing", name)
+		}
 	}
-	if err := r.Check(node.Combo{Protocol: "vless", Transport: "tcp", Security: "reality", Flow: node.FlowVision}); err != nil {
-		t.Errorf("preset combo rejected: %v", err)
+	for _, p := range presets {
+		if err := r.Check(p.Combo); err != nil {
+			t.Errorf("preset %s combo rejected: %v", p.ID, err)
+		}
 	}
 }

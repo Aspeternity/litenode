@@ -41,6 +41,8 @@ func testRegistry(t *testing.T) *Registry {
 	must(r.AddCompat(Compat{Protocol: "vless", Transport: "tcp", Security: "reality", Flows: []string{FlowVision, ""}}))
 	must(r.AddCompat(Compat{Protocol: "vless", Transport: "xhttp", Security: "reality", Flows: []string{""}}))
 	must(r.AddCompat(Compat{Protocol: "trojan", Transport: "tcp", Security: "tls", Flows: []string{""}}))
+	must(r.AddCompat(Compat{Protocol: "vless", Transport: "tcp", Security: "none", Flows: []string{FlowVision, ""}}))
+	must(r.AddCompat(Compat{Protocol: "trojan", Transport: "tcp", Security: "none", Flows: []string{""}}))
 	return r
 }
 
@@ -60,7 +62,7 @@ func TestCheckRejectsIllegalCombos(t *testing.T) {
 	illegal := map[string]Combo{
 		"vision over xhttp":   {"vless", "xhttp", "reality", FlowVision},
 		"vision with trojan":  {"trojan", "tcp", "tls", FlowVision},
-		"not in table":        {"vless", "tcp", "none", ""},
+		"not in table":        {"vless", "xhttp", "none", ""},
 		"trojan with reality": {"trojan", "tcp", "reality", ""},
 		"unknown flow":        {"vless", "tcp", "reality", "xtls-rprx-direct"},
 	}
@@ -163,5 +165,26 @@ func TestCheckNode(t *testing.T) {
 	noClients.Clients = nil
 	if err := r.CheckNode(noClients); err == nil {
 		t.Error("node without clients accepted")
+	}
+}
+
+func TestCheckNodeVLESSEncryption(t *testing.T) {
+	r := testRegistry(t)
+	enc := Node{ID: 1, Protocol: "vless", Transport: "tcp", Security: "none",
+		VLESSEncryption: &VLESSEncryption{PrivateKey: "p", PublicKey: "q"},
+		Clients:         []Client{{ID: 2, Flow: FlowVision}}}
+	if err := r.CheckNode(enc); err != nil {
+		t.Errorf("valid node rejected: %v", err)
+	}
+	plain := enc
+	plain.VLESSEncryption = nil
+	if err := r.CheckNode(plain); err == nil {
+		t.Error("vless + none without encryption accepted")
+	}
+	trojan := enc
+	trojan.Protocol = "trojan"
+	trojan.Clients = []Client{{ID: 2}}
+	if err := r.CheckNode(trojan); err == nil {
+		t.Error("vless encryption on trojan accepted")
 	}
 }

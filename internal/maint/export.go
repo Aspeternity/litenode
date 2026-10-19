@@ -149,6 +149,11 @@ func Check(e Export, reg *node.Registry) error {
 				return fmt.Errorf("node %d: reality key pair does not match", n.ID)
 			}
 		}
+		if e := n.VLESSEncryption; e != nil {
+			if pub, err := security.PublicKey(e.PrivateKey); err != nil || pub != e.PublicKey {
+				return fmt.Errorf("node %d: vless encryption key pair does not match", n.ID)
+			}
+		}
 		for _, c := range n.Clients {
 			if err := seen(c.ID); err != nil {
 				return err

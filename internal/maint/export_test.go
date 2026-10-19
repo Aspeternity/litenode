@@ -118,9 +118,14 @@ func TestDecodeRejects(t *testing.T) {
 		t.Errorf("garbage: err = %v", err)
 	}
 	for name, edit := range map[string]func(e *Export){
-		"duplicate id":       func(e *Export) { e.Forwards[0].ID = 1 },
-		"same port":          func(e *Export) { e.Forwards[0].ListenPort = "443" },
-		"bad node":           func(e *Export) { e.Nodes[0].Reality.PrivateKey = "x" },
+		"duplicate id": func(e *Export) { e.Forwards[0].ID = 1 },
+		"same port":    func(e *Export) { e.Forwards[0].ListenPort = "443" },
+		"bad node":     func(e *Export) { e.Nodes[0].Reality.PrivateKey = "x" },
+		"bad vless enc keys": func(e *Export) {
+			e.Nodes[0].Security, e.Nodes[0].Reality = "none", nil
+			e.Nodes[0].VLESSEncryption = &node.VLESSEncryption{PrivateKey: "wMRf1V1r21-0nC_s75OI24VkdDnoVs9f2Xoe8FiTj2Q", PublicKey: "4xx3hMnM-YmlYM_RE17rfPlYKg7DAOcuJVKRpGi9PF4"}
+		},
+		"none without enc":   func(e *Export) { e.Nodes[0].Security, e.Nodes[0].Reality = "none", nil },
 		"bad port":           func(e *Export) { e.Nodes[0].Port = 70000 },
 		"bad uuid":           func(e *Export) { e.Nodes[0].Clients[0].UUID = "u" },
 		"bad forward":        func(e *Export) { e.Forwards[0].Protocol = "sctp" },
