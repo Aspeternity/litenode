@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"slices"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/firewall"
@@ -170,7 +171,7 @@ func (s *Service) Add(ctx context.Context, in AddInput) (node.Node, error) {
 	}
 	n, err := p.Build(node.BuildInput{
 		NodeID: st.AllocID(), ClientID: st.AllocID(),
-		Port: in.Port, Remark: remark, Target: in.Target, Rand: s.Rand,
+		Port: in.Port, Remark: remark, Target: in.Target, Rand: s.Rand, Now: time.Now(),
 	})
 	if err != nil {
 		return node.Node{}, err

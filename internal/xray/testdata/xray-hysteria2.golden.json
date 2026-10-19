@@ -1,0 +1,215 @@
+{
+  "log": {
+    "loglevel": "warning",
+    "access": "none"
+  },
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "domain": [
+          "full:localhost"
+        ],
+        "outboundTag": "block"
+      },
+      {
+        "ip": [
+          "0.0.0.0/8",
+          "10.0.0.0/8",
+          "100.64.0.0/10",
+          "127.0.0.0/8",
+          "169.254.0.0/16",
+          "172.16.0.0/12",
+          "192.0.0.0/24",
+          "192.0.2.0/24",
+          "192.168.0.0/16",
+          "198.18.0.0/15",
+          "198.51.100.0/24",
+          "203.0.113.0/24",
+          "224.0.0.0/4",
+          "240.0.0.0/4",
+          "::/128",
+          "::1/128",
+          "100::/64",
+          "2001:db8::/32",
+          "fc00::/7",
+          "fe80::/10",
+          "ff00::/8"
+        ],
+        "outboundTag": "block"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "node-1",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "5783a3e7-e373-51cd-8642-c83782b807c5",
+            "flow": "xtls-rprx-vision",
+            "email": "me"
+          },
+          {
+            "id": "c2a4f0de-1b2c-4d3e-8f90-a1b2c3d4e5f6",
+            "flow": "xtls-rprx-vision",
+            "email": "tablet"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "target": "www.example-a.com:443",
+          "serverNames": [
+            "www.example-a.com"
+          ],
+          "privateKey": "wMRf1V1r21-0nC_s75OI24VkdDnoVs9f2Xoe8FiTj2Q",
+          "shortIds": [
+            "a1b2c3d4"
+          ],
+          "limitFallbackUpload": {
+            "afterBytes": 10485760,
+            "bytesPerSec": 1048576,
+            "burstBytesPerSec": 5242880
+          },
+          "limitFallbackDownload": {
+            "afterBytes": 10485760,
+            "bytesPerSec": 1048576,
+            "burstBytesPerSec": 5242880
+          }
+        }
+      }
+    },
+    {
+      "tag": "node-9",
+      "port": 2053,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+            "email": "plain"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "target": "www.example-d.com:443",
+          "serverNames": [
+            "www.example-d.com"
+          ],
+          "privateKey": "wMRf1V1r21-0nC_s75OI24VkdDnoVs9f2Xoe8FiTj2Q",
+          "shortIds": [
+            "",
+            "0123456789abcdef"
+          ]
+        }
+      }
+    },
+    {
+      "tag": "node-11",
+      "port": 23456,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "5783a3e7-e373-51cd-8642-c83782b807c5",
+            "flow": "xtls-rprx-vision",
+            "email": "Enc-23456"
+          }
+        ],
+        "decryption": "mlkem768x25519plus.native.600s.6Eaa3cii4SQoHqeVHDrJ1XTamvh74GFemgtE1-ONWk4"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none"
+      }
+    },
+    {
+      "tag": "node-14",
+      "port": 34567,
+      "protocol": "shadowsocks",
+      "settings": {
+        "method": "2022-blake3-aes-128-gcm",
+        "password": "Q1vZgt0nPdtNEyxt0LUGsw==",
+        "clients": [
+          {
+            "password": "gB+4Ioqq1ywQlfhxV0QbJg==",
+            "email": "SS-34567"
+          }
+        ],
+        "network": "tcp,udp"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none"
+      }
+    },
+    {
+      "tag": "node-17",
+      "port": 45678,
+      "protocol": "hysteria",
+      "settings": {
+        "version": 2,
+        "clients": [
+          {
+            "auth": "0123456789abcdef0123456789abcdef",
+            "email": "Hy2-45678"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "hysteria",
+        "security": "tls",
+        "hysteriaSettings": {
+          "version": 2
+        },
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificate": [
+                "-----BEGIN CERTIFICATE-----",
+                "MIIBfDCCASGgAwIBAgIUaxODS9i/Z0BnLJ1iAz1J2Pogv8MwCgYIKoZIzj0EAwIw",
+                "EzERMA8GA1UEAwwIbGl0ZW5vZGUwHhcNMjYxMDE5MTcwNDEzWhcNMzYxMDE2MTcw",
+                "NDEzWjATMREwDwYDVQQDDAhsaXRlbm9kZTBZMBMGByqGSM49AgEGCCqGSM49AwEH",
+                "A0IABHk7MyG50K5rJe5LavTc0pBmHF8AfPjzUrlR0EMneKsXLx6HEe/862OskoIp",
+                "/e4vOMcV5w7U1Q4y23mXaQLMYMKjUzBRMB0GA1UdDgQWBBQJcE39jXghSVXjhxwK",
+                "ovKAWaMtXjAfBgNVHSMEGDAWgBQJcE39jXghSVXjhxwKovKAWaMtXjAPBgNVHRMB",
+                "Af8EBTADAQH/MAoGCCqGSM49BAMCA0kAMEYCIQDg83wLxrVvcQ+ZZ/spnGy68AOH",
+                "niy7mOjuWyxp+KjVHQIhAMZJERWof4TDYOWL0vsgGBWeVVzEvRN12GiYM/jUmNcO",
+                "-----END CERTIFICATE-----"
+              ],
+              "key": [
+                "-----BEGIN PRIVATE KEY-----",
+                "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgWFGW91nITZV40zLP",
+                "a5lR6XJ2dROw8qO7YJWx5eOa3i6hRANCAAR5OzMhudCuayXuS2r03NKQZhxfAHz4",
+                "81K5UdBDJ3irFy8ehxHv/OtjrJKCKf3uLzjHFecO1NUOMtt5l2kCzGDC",
+                "-----END PRIVATE KEY-----"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ]
+}

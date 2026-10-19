@@ -79,7 +79,7 @@ func ForwardComment(id int64) string { return Marker + forward.Owner(id) }
 const SSHComment = Marker + "ssh"
 
 // Desired lists the rules the state calls for: one per enabled node and
-// protocol (TCP, and UDP for Shadowsocks 2022), the
+// protocol the node listens on (node.PortProto), the
 // SSH port when LiteNode manages it (M2-05), and route rules to the
 // targets of enabled forwards (M4-01): ufw filters forwarded packets
 // after DNAT, so they name the target address and port, one rule per
@@ -97,7 +97,9 @@ func Desired(st *state.State) []Rule {
 	}
 	for _, n := range st.Nodes {
 		if n.Enabled {
-			add(Rule{Proto: "tcp", Port: n.Port, Comment: NodeComment(n.ID)})
+			if n.UsesTCP() {
+				add(Rule{Proto: "tcp", Port: n.Port, Comment: NodeComment(n.ID)})
+			}
 			if n.UsesUDP() {
 				add(Rule{Proto: "udp", Port: n.Port, Comment: NodeComment(n.ID)})
 			}

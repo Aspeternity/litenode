@@ -1,6 +1,7 @@
 package maint
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
+	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/ports"
 	"github.com/Aspeternity/litenode/internal/state"
 )
@@ -223,6 +225,47 @@ func TestDecodeShadowsocks(t *testing.T) {
 		"bad user key":     func(n *node.Node) { n.Clients[0].Key = "x" },
 		"uuid instead":     func(n *node.Node) { n.Clients[0].Key, n.Clients[0].UUID = "", "5783a3e7-e373-51cd-8642-c83782b807c5" },
 		"missing settings": func(n *node.Node) { n.Shadowsocks = nil },
+	} {
+		if _, err := Decode(build(edit), reg, nil); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: err = %v, want ErrInvalid", name, err)
+		}
+	}
+}
+
+func TestDecodeHysteria(t *testing.T) {
+	reg, _ := builtin.Registry()
+	tl, err := security.NewTLS(rand.Reader, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _ := security.NewTLS(rand.Reader, time.Now())
+	build := func(edit func(n *node.Node)) []byte {
+		st := fullState()
+		n := node.Node{
+			ID: 9, Remark: "Hy2-45678", Enabled: true, Port: 45678,
+			Protocol: "hysteria", Transport: "hysteria", Security: "tls", TLS: &node.TLS{},
+			Clients: []node.Client{{ID: 10, Remark: "Hy2-45678", Key: "0123456789abcdef0123456789abcdef"}},
+		}
+		*n.TLS = *tl
+		edit(&n)
+		st.Nodes = append(st.Nodes, n)
+		data, _ := Encode(Build(st, "v", time.Now()))
+		return data
+	}
+	e, err := Decode(build(func(*node.Node) {}), reg, nil)
+	if err != nil {
+		t.Fatalf("valid hysteria node rejected: %v", err)
+	}
+	if got := e.Nodes[1]; got.TLS == nil || got.TLS.Certificate != tl.Certificate || got.TLS.Key != tl.Key {
+		t.Errorf("node = %+v", got)
+	}
+	for name, edit := range map[string]func(n *node.Node){
+		"bad password":  func(n *node.Node) { n.Clients[0].Key = "x" },
+		"uuid instead":  func(n *node.Node) { n.Clients[0].Key, n.Clients[0].UUID = "", "5783a3e7-e373-51cd-8642-c83782b807c5" },
+		"key mismatch":  func(n *node.Node) { n.TLS.Key = other.Key },
+		"bad cert":      func(n *node.Node) { n.TLS.Certificate = "x" },
+		"no tls":        func(n *node.Node) { n.TLS = nil },
+		"no servername": func(n *node.Node) { n.TLS.ServerName = "" },
 	} {
 		if _, err := Decode(build(edit), reg, nil); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: err = %v, want ErrInvalid", name, err)

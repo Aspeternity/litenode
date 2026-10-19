@@ -101,6 +101,14 @@ func TestDesired(t *testing.T) {
 	if got := Desired(st); !slices.Equal(got, []Rule{{Proto: "tcp", Port: 443, Comment: "litenode:node:3"}}) {
 		t.Errorf("got %v (disabled nodes get no rule)", got)
 	}
+	st.Nodes = append(st.Nodes, node.Node{ID: 5, Port: 34567, Protocol: "shadowsocks", Enabled: true},
+		node.Node{ID: 6, Port: 45678, Protocol: "hysteria", Enabled: true})
+	want := []Rule{{Proto: "tcp", Port: 443, Comment: "litenode:node:3"},
+		{Proto: "tcp", Port: 34567, Comment: "litenode:node:5"}, {Proto: "udp", Port: 34567, Comment: "litenode:node:5"},
+		{Proto: "udp", Port: 45678, Comment: "litenode:node:6"}}
+	if got := Desired(st); !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v (Hysteria2 only UDP)", got, want)
+	}
 	st.SSH.Port = 22222
 	if got := Desired(st); !slices.Contains(got, Rule{Proto: "tcp", Port: 22222, Comment: "litenode:ssh"}) {
 		t.Errorf("got %v, want the SSH port's rule", got)

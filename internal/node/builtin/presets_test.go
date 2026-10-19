@@ -3,6 +3,7 @@ package builtin
 import (
 	"crypto/rand"
 	"testing"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/protocol"
@@ -116,5 +117,39 @@ func TestBuildSS2022(t *testing.T) {
 	if len(n.Clients) != 1 || c.ID != 8 || c.Remark != "SS-34567" || c.Flow != "" || !c.Enabled ||
 		c.UUID != "" || !protocol.ValidSS2022Key(c.Key) || c.Key == s.ServerKey {
 		t.Errorf("client = %+v", c)
+	}
+}
+
+func TestBuildHysteria2(t *testing.T) {
+	r, _ := Registry()
+	if err := r.Check(node.Combo{Protocol: "hysteria", Transport: "hysteria", Security: "tls"}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	n, err := buildHysteria2(node.BuildInput{NodeID: 7, ClientID: 8, Port: 45678, Remark: "Hy2-45678", Rand: rand.Reader, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CheckNode(n); err != nil {
+		t.Fatalf("built node is not valid: %v", err)
+	}
+	if n.ID != 7 || n.Port != 45678 || !n.Enabled || n.Remark != "Hy2-45678" || n.Protocol != "hysteria" ||
+		n.Transport != "hysteria" || n.Security != "tls" || n.Reality != nil || n.Shadowsocks != nil {
+		t.Errorf("node = %+v", n)
+	}
+	if err := security.CheckTLS(n.TLS); err != nil || n.TLS.ServerName != "www.bing.com" {
+		t.Fatalf("tls = %+v: %v", n.TLS, err)
+	}
+	cert, _ := security.ParseCert(n.TLS.Certificate)
+	if !cert.NotAfter.Equal(now.Add(security.CertValidity)) {
+		t.Errorf("not after = %v", cert.NotAfter)
+	}
+	c := n.Clients[0]
+	if len(n.Clients) != 1 || c.ID != 8 || c.Remark != "Hy2-45678" || c.Flow != "" || !c.Enabled ||
+		c.UUID != "" || !protocol.ValidHysteriaPassword(c.Key) {
+		t.Errorf("client = %+v", c)
+	}
+	if n.UsesTCP() || !n.UsesUDP() || n.PortProto() != "udp" {
+		t.Errorf("ports: tcp %v udp %v proto %s", n.UsesTCP(), n.UsesUDP(), n.PortProto())
 	}
 }

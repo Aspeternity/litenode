@@ -14,15 +14,17 @@ func TestBuiltinRegistry(t *testing.T) {
 		presets[2].ID != PresetSS2022 {
 		t.Fatalf("presets = %+v", presets)
 	}
-	for _, name := range []string{"vless", "shadowsocks"} {
+	for _, name := range []string{"vless", "shadowsocks", "hysteria"} {
 		if _, ok := r.Protocol(name); !ok {
 			t.Errorf("protocol %s missing", name)
 		}
 	}
-	if _, ok := r.Transport("tcp"); !ok {
-		t.Error("transport tcp missing")
+	for _, name := range []string{"tcp", "hysteria"} {
+		if _, ok := r.Transport(name); !ok {
+			t.Errorf("transport %s missing", name)
+		}
 	}
-	for _, name := range []string{"reality", "none"} {
+	for _, name := range []string{"reality", "none", "tls"} {
 		if _, ok := r.Security(name); !ok {
 			t.Errorf("security %s missing", name)
 		}
