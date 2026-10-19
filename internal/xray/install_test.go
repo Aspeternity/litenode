@@ -267,3 +267,17 @@ func TestLatestWithLongReleaseNotes(t *testing.T) {
 		t.Errorf("Latest = (%q, %v)", v, err)
 	}
 }
+
+func TestUpdateDownloadFailed(t *testing.T) {
+	fx := newFixture(t)
+	fx.r.Files[BinPath] = []byte("program-26.3.27")
+	fx.reportVersion("v26.3.27")
+	_, err := fx.in.Update(context.Background(), "v9.9.9")
+	var de *DownloadError
+	if !errors.As(err, &de) {
+		t.Fatalf("Update = %v, want a DownloadError", err)
+	}
+	if string(fx.r.Files[BinPath]) != "program-26.3.27" {
+		t.Errorf("program changed: %q", fx.r.Files[BinPath])
+	}
+}

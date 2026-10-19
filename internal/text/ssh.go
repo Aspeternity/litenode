@@ -35,7 +35,7 @@ const (
 	PromptPublicKey  = "粘贴公钥（一行，0 返回）"
 	PromptGitHubUser = "GitHub 用户名（0 返回）"
 	PromptKeyChoice  = "导入哪些？输入序号（如 1,3），直接回车导入全部，0 返回"
-	PromptKeyNumber  = "请输入公钥序号 (0 返回)"
+	PromptKeyNumber  = "请输入公钥序号（0 返回）"
 	ChooseAccount    = "选择用户"
 	SSHKeyExists     = "这个公钥已经存在。"
 	PromptKeyComment = "公钥注释"
@@ -44,7 +44,7 @@ const (
 	PublicKeyTitle   = "对应的公钥（已加入 authorized_keys）："
 	ConfirmGenerate  = "将生成新的 ed25519 密钥对，私钥只显示一次，请准备好保存。是否继续？"
 
-	PromptNewPort     = "新的 SSH 端口 (0 返回)"
+	PromptNewPort     = "新的 SSH 端口（0 返回）"
 	PromptSudoName    = "用户名（小写字母、数字、_、-，0 返回）"
 	SudoPasswordGen   = "自动生成强密码（推荐，只显示一次）"
 	SudoPasswordInput = "手动输入密码"
@@ -58,7 +58,6 @@ const (
 	SSHPortName       = "端口"
 	SSHMethodName     = "登录方式"
 	SSHRootName       = "root 登录"
-	SSHOldRulesNone   = "防火墙中没有需要处理的旧端口规则。"
 	PasswordWarn      = "⚠"
 )
 
@@ -179,7 +178,6 @@ const (
 	AccountPassword   = "有"
 	AccountNoPassword = "无"
 	PasswordLoginOff  = "SSH 密码登录当前已关闭，新密码用于 sudo 和 VNC 控制台登录。"
-	PromptDeleteUser  = "请输入要删除的用户序号 (0 返回)"
 	ErrNotAdmin       = "只能管理 root 和 sudo 用户。"
 	ErrDeleteRoot     = "不能删除 root。"
 	ErrUserInUse      = "该用户正在登录或有进程在运行。请先退出该用户的所有会话（包括用 sudo 运行 LiteNode 的会话），再用 root 删除。"
@@ -196,7 +194,7 @@ func PasswordChanged(name string) string {
 
 // ConfirmDeleteUser states what deleting a sudo user removes.
 func ConfirmDeleteUser(name, home string) string {
-	return fmt.Sprintf("删除用户 %s：主目录 %s（包括其中的公钥和文件）和邮件一并删除，不能恢复。继续吗？", name, home)
+	return fmt.Sprintf("删除用户 %s：主目录 %s（包括其中的公钥和文件）和邮件一并删除，不能恢复。是否继续？", name, home)
 }
 
 // SudoUserDeleted reports the deleted user.

@@ -125,7 +125,7 @@ func TestForwardMenuModify(t *testing.T) {
 	f := domainState(t)
 	// Modify 1: keep port, tcp, new target, keep port and remark.
 	r := runForward(t, f, nil, "4", "2", "1", "", "2", "198.51.100.7", "", "", "0", "0")
-	wantOutput(t, r.stdout, "◆ 1/5 本机端口（单个端口或 起始-结束，0 返回） [30001]:", "2. TCP             (当前)", "✓ 转发规则已修改。")
+	wantOutput(t, r.stdout, "◆ 1/5 本机端口（单个端口或 起始-结束，0 返回） [30001]:", "2. TCP             （当前）", "✓ 转发规则已修改。")
 	if fs := loadForwards(t, f); fs[0].TargetHost != "198.51.100.7" || fs[0].ID != 1 || !fs[0].Enabled {
 		t.Errorf("%+v", fs)
 	}

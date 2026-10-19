@@ -32,7 +32,7 @@ const (
 	StateEnabled       = "● 启用"
 	StateDisabled      = "○ 禁用"
 	NotSet             = "未设置"
-	PromptNodeNumber   = "请输入节点序号 (0 返回)"
+	PromptNodeNumber   = "请输入节点序号（0 返回）"
 	PromptPort         = "端口"
 	PromptRemark       = "备注"
 	PromptTarget       = "目标网站域名（可带端口，默认 443；0 返回）"
@@ -42,7 +42,6 @@ const (
 	InstallingXray     = "首次添加节点，正在安装 Xray……"
 	ApplyingChange     = "正在应用配置……"
 	Done               = "完成。"
-	Canceled           = "已取消。"
 )
 
 // ShareAddressLine is the status line of the share menu: the default
@@ -81,7 +80,7 @@ const (
 	ScanHeading      = "附近的网站"
 	CommonListHint   = "提示：常用列表中的大型网站被很多节点使用，且与本机 IP 不在同一网段，扫描附近网站得到的目标更不容易被识别。"
 	TargetScan       = "扫描附近网站"
-	TargetScanHint   = "(推荐，约 1 分钟)"
+	TargetScanHint   = "（推荐，约 1 分钟）"
 	ScanWarning      = "扫描会连接本机所在 /24 网段其他服务器的 443 端口。部分 VPS 商家禁止端口扫描，可能导致滥用投诉。是否继续？"
 	ScanNoAddress    = "无法确定本机的公网 IPv4 地址，不能扫描。"
 	ScanNoResult     = "附近没有找到可用的网站，请选择其他方式。"
@@ -117,9 +116,10 @@ func MLKEMUnsupported(min string) string {
 	return fmt.Sprintf("该网站使用 X25519MLKEM768 密钥交换，需要 Xray %s 或更高版本才能作为 Reality 目标。", min)
 }
 
-// CheckUnreachable is shown when a target cannot be reached.
-func CheckUnreachable(host string, err error) string {
-	return fmt.Sprintf("%s  无法连接：%v", host, err)
+// CheckUnreachable is shown when a target cannot be reached; reason
+// comes from NetReason.
+func CheckUnreachable(host, reason string) string {
+	return host + "  无法连接：" + reason
 }
 
 // RiskyKeyword warns about a high-risk domain (DESIGN section 10.4).
@@ -172,7 +172,7 @@ const (
 	ErrRemarkEmpty     = "备注不能为空。"
 	ErrRemarkControl   = "备注不能包含控制字符。"
 	ErrRemarkDuplicate = "备注已被使用（不区分大小写），请换一个。"
-	ErrNodeNotFound    = "节点不存在。"
+	ErrNodeNotFound    = "节点不存在，可能已被删除。"
 	ErrInvalidAddress  = "请输入有效的 IP 地址或域名。"
 )
 
@@ -184,6 +184,11 @@ func ErrRemarkTooLong(max int) string {
 // XrayInstallFailed explains a failed Xray download (D-042).
 func XrayInstallFailed(err error) string {
 	return fmt.Sprintf("安装 Xray 失败：%v\n如果这台机器无法访问 GitHub，请参考 %s", err, NoGitHubURL)
+}
+
+// XrayDownloadFailed explains a failed Xray update download (D-042).
+func XrayDownloadFailed(err error) string {
+	return fmt.Sprintf("下载 Xray 失败，未做任何修改：%v\n如果这台机器无法访问 GitHub，请参考 %s", err, NoGitHubURL)
 }
 
 // ChangeFailed explains a failed configuration change; restored reports
@@ -223,7 +228,7 @@ const (
 	ShareAddrExists    = "这个地址已经在列表中。"
 	ShareAddrsNone     = "（暂无，生成链接时自动检测）"
 	ShareAddrDetected  = "检测到公网地址："
-	PromptAddressNum   = "请输入地址序号 (0 返回)"
+	PromptAddressNum   = "请输入地址序号（0 返回）"
 	LinkAddressHeading = "选择链接使用的地址"
 	OtherAddressesHint = "其他主机地址（如 IPv6、域名）的链接：主菜单 → 分享节点。"
 	KindDomain         = "域名"
@@ -277,7 +282,7 @@ func FallbackDescribe(afterBytes, bytesPerSec int64) string {
 
 // FallbackTier labels a tier with its values.
 func FallbackTier(name string, afterBytes, bytesPerSec, burst int64) string {
-	return fmt.Sprintf("%s  (%s 后限速 %s/s，突发 %s/s)", name, humanBytes(afterBytes), humanBytes(bytesPerSec), humanBytes(burst))
+	return fmt.Sprintf("%s  （%s 后限速 %s/s，突发 %s/s）", name, humanBytes(afterBytes), humanBytes(bytesPerSec), humanBytes(burst))
 }
 
 func humanBytes(b int64) string {
@@ -319,7 +324,7 @@ const (
 	ClientDelete       = "删除客户端"
 	ClientRemark       = "备注"
 	ClientResetUUID    = "重置 UUID"
-	PromptClientNumber = "请输入客户端序号 (0 返回)"
+	PromptClientNumber = "请输入客户端序号（0 返回）"
 	ClientAdded        = "客户端已添加。"
 	ClientEnabled      = "客户端已启用。"
 	ClientDisabled     = "客户端已禁用。"
@@ -329,7 +334,7 @@ const (
 	ClientNone         = "（暂无客户端）"
 	ClientNoNodes      = "（暂无节点，请先在\"节点管理\"中添加节点）"
 	ChooseNodeHeading  = "选择节点"
-	ErrClientNotFound  = "客户端不存在。"
+	ErrClientNotFound  = "客户端不存在，可能已被删除。"
 )
 
 // NodeChoice labels a node when choosing one, e.g. "LA (VLESS-TCP-Reality :443)".
@@ -358,7 +363,6 @@ func ConfirmDeleteLastClient(remark string) string {
 const (
 	ShareLinkQR    = "导出单个链接"
 	ShareAllLinks  = "导出全部链接"
-	ShareNoClients = "（暂无客户端）"
 	ShareClientOff = "该客户端或其节点已禁用，链接暂时不能使用。"
 	ShareAllNone   = "没有启用的客户端。"
 	AllLinksTitle  = "全部链接："
@@ -412,7 +416,6 @@ const (
 	OutboundIPIPv6Only    = "仅 IPv6"
 	OutboundIPNote        = "设置节点访问目标网站时使用的 IP 协议，只影响 Xray，不影响本机 curl、apt 等程序（它们在\"系统优化\"中设置）。"
 	OutboundIPOnlyWarning = "选择\"仅\"时，没有该协议地址的目标网站将无法访问。"
-	OutboundIPUnchanged   = "设置未变化。"
 )
 
 // OutboundIPLabels are the mode names in xray.OutboundModes order.

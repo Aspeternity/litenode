@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"path/filepath"
 	"strings"
@@ -129,7 +130,7 @@ func TestClientMenuFlow(t *testing.T) {
 		" ID  节点         备注           状态",
 		" 2   Reality-443  Reality-443-2  ● 启用",
 		" 1. 添加客户端", " 2. 修改客户端\n", " 3. 启用 / 禁用客户端", " 4. 删除客户端",
-		"请输入客户端序号 (0 返回): ",
+		"请输入客户端序号（0 返回）: ",
 		"客户端已添加。", "#Reality-443-2",
 		"删除客户端 Reality-443？ [y/N]", "客户端已删除。",
 		"Reality-443-2 是该节点最后一个客户端，删除后节点暂时不可用，直到添加新客户端。是否继续？ [y/N]",
@@ -220,7 +221,7 @@ func TestXrayMenu(t *testing.T) {
 	// Node outbound IP: prefer IPv6 is applied; only IPv6 is refused
 	// without an IPv6 default route.
 	r = runNodes(t, f, "5\n5\n3\n5\n5\n0\n0\n")
-	for _, want := range []string{"节点出站 IP 已设置为优先 IPv6。", "节点出站: 优先 IPv6", "优先 IPv6 (当前)", "本机没有可用的 IPv6 公网地址或默认路由"} {
+	for _, want := range []string{"节点出站 IP 已设置为优先 IPv6。", "节点出站: 优先 IPv6", "优先 IPv6 （当前）", "本机没有可用的 IPv6 公网地址或默认路由"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("outbound IP: output missing %q:\n%s", want, r.stdout)
 		}
@@ -268,7 +269,7 @@ func TestScanTargetFlow(t *testing.T) {
 	}
 	// Accept, scan, pick result 1, default remark.
 	r = runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "y", "1", "", "0", "0"}, "\n")+"\n")
-	for _, want := range []string{"扫描附近网站    (推荐，约 1 分钟)", "正在扫描 203.0.113.0/24 的 443 端口", "正在扫描 253/253", "◇ 附近的网站", "│   1. near.example.net", "节点已添加。", "sni=near.example.net"} {
+	for _, want := range []string{"扫描附近网站    （推荐，约 1 分钟）", "正在扫描 203.0.113.0/24 的 443 端口", "正在扫描 253/253", "◇ 附近的网站", "│   1. near.example.net", "节点已添加。", "sni=near.example.net"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
 		}
@@ -361,5 +362,12 @@ func TestXrayProgramMissing(t *testing.T) {
 	}
 	if st, _ := state.NewStore(f).Load(); len(st.Nodes) != 2 {
 		t.Errorf("nodes = %d", len(st.Nodes))
+	}
+}
+
+func TestDescribeXrayDownload(t *testing.T) {
+	got := describe(fmt.Errorf("update: %w", &xray.DownloadError{Err: errors.New("404")}))
+	if !strings.Contains(got, text.NoGitHubURL) || !strings.Contains(got, "404") {
+		t.Errorf("describe = %q", got)
 	}
 }

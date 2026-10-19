@@ -65,6 +65,11 @@ func TestSysoptMenuSwap(t *testing.T) {
 	if strings.Contains(string(f.Files["/etc/fstab"]), "litenode.swap") {
 		t.Errorf("fstab:\n%s", f.Files["/etc/fstab"])
 	}
+	// Resizing explains its lower limit (M7-10); 0 goes back.
+	runSysopt(t, f, "8", "2", "", "0", "0")
+	r = runSysopt(t, f, "8", "2", "1", "0", "0", "0")
+	wantOutput(t, r.stdout, text.SwapResizeNote)
+	runSysopt(t, f, "8", "2", "2", "y", "0", "0")
 	// A size of 0 goes back.
 	r = runSysopt(t, f, "8", "2", "0", "0", "0")
 	if strings.Contains(r.stdout, "大小须在") || !strings.Contains(r.stdout, "└─ "+text.FlowCanceled) || strings.Contains(r.stdout, text.SwapCreated("1G")) {
@@ -134,7 +139,7 @@ func TestSysoptMenuClock(t *testing.T) {
 	})
 	// main: 6; 3 clock (BBR, swap hidden), 1 zone, 2 Shanghai; 3, 2 NTP; back; quit.
 	r := runSysopt(t, f, "8", "3", "1", "2", "3", "2", "0", "0")
-	wantOutput(t, r.stdout, "时区: UTC (同步 ✗)", "UTC (当前)", text.TimezoneSet("Asia/Shanghai"), text.NTPSyncedDone, "时区: UTC (同步 ✓)")
+	wantOutput(t, r.stdout, "时区: UTC（同步 ✗）", "UTC （当前）", text.TimezoneSet("Asia/Shanghai"), text.NTPSyncedDone, "时区: UTC（同步 ✓）")
 	if !slices.Contains(f.Execs(), "timedatectl set-timezone Asia/Shanghai") {
 		t.Errorf("execs = %q", f.Execs())
 	}

@@ -462,7 +462,7 @@ func (u *nodeUI) manualTarget() (string, error) {
 
 func (u *nodeUI) printCheck(r reality.Result) {
 	if r.Err != nil {
-		u.s.Println(text.CheckUnreachable(r.Host, r.Err))
+		u.s.Println(text.CheckUnreachable(r.Host, text.NetReason(r.Err)))
 		return
 	}
 	u.s.Println(text.CheckLine(r.Host, r.Latency.Milliseconds(), r.TLS13, r.H2, r.X25519, r.CertOK))
@@ -526,6 +526,7 @@ func describe(err error) string {
 	var pt *nodemgr.PortTakenError
 	var ce *change.Error
 	var ie *nodemgr.XrayInstallError
+	var de *xray.DownloadError
 	// A failed restore matters most; otherwise SSH errors have their own
 	// text, also when wrapped in a change error (restored).
 	if !errors.As(err, &ce) || ce.RestoreErr == nil {
@@ -561,6 +562,8 @@ func describe(err error) string {
 		return portConflicts(pt.Conflicts)
 	case errors.As(err, &ie):
 		return text.XrayInstallFailed(ie.Err)
+	case errors.As(err, &de):
+		return text.XrayDownloadFailed(de.Err)
 	case errors.As(err, &ce):
 		return text.ChangeFailed(ce, ce.RestoreErr == nil)
 	}
