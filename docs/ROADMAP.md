@@ -514,11 +514,33 @@
   - [x] 单元测试：链接格式与 DESIGN 9.7 一致。
   - [x] [VPS] 用 Xray 客户端（导入链接生成的配置）从另一台测试机连通，也测试经 LiteNode 端口转发连通；至少再实测一个常用客户端（如 mihomo）。
 
+## M9 Shadowsocks 2022 节点
+
+用户 2026-10-19 同意加入，作为兼容选项（D-110）。设计见 DESIGN 第 9.8 节。
+
+### M9-01 Shadowsocks 2022 节点模型与配置生成 `未开始`
+- 逻辑层：注册协议 `shadowsocks` 和组合 shadowsocks + TCP + none；节点保存方法和服务端密钥，客户端保存用户密钥；生成 Xray 入站（`network: tcp,udp`）；导入备份时校验密钥。
+- 验收：
+  - [ ] 单元测试：入站配置与 DESIGN 9.8 一致（golden），已有节点的配置不变；密钥长度和编码正确。
+  - [ ] [VPS] 生成的配置通过 `xray run -test`。
+
+### M9-02 菜单与 UDP 端口 `未开始`
+- 选择节点类型新增"Shadowsocks 2022"；添加流程（提示、随机端口、备注 `SS-<端口>`）；修改节点；客户端"重置密钥"；节点端口的冲突检查、防火墙和 ufw 同时处理 TCP 和 UDP。依赖 M9-01。
+- 验收：
+  - [ ] 菜单和提示与 DESIGN 9.8 一致，界面文字在 `internal/text`；已有节点只放行 TCP 不变。
+  - [ ] [VPS] 添加、修改端口、重新生成密钥、客户端重置密钥、启用 / 禁用、删除都正常，防火墙 / ufw 的 TCP 和 UDP 规则同步。
+
+### M9-03 分享链接与客户端实测 `未开始`
+- 生成 SS2022 链接和二维码；实测客户端导入链接并连通，写入 README。依赖 M9-01。
+- 验收：
+  - [ ] 单元测试：链接格式与 DESIGN 9.8 一致。
+  - [ ] [VPS] Xray、mihomo、sing-box 客户端连通（TCP 和 UDP），并测试经 LiteNode 端口转发（tcp+udp）连通。
+
 ## 未排期
 
 产品成熟后再决定（D-089）：
 
-- 更多节点类型（开始前先讨论 DESIGN 第 18 节第 2 项 TLS 证书来源）。候选（D-106）：Shadowsocks 2022（仅作兼容选项，Xray 已标记弃用）、VLESS + XHTTP + TLS / Reality、Hysteria2、VLESS + WS + TLS、Trojan + TCP + TLS。
+- 更多节点类型（开始前先讨论 DESIGN 第 18 节第 2 项 TLS 证书来源）。候选（D-106）：VLESS + XHTTP + TLS / Reality、Hysteria2、VLESS + WS + TLS、Trojan + TCP + TLS。
 - 命令行子命令（如 `litenode node list`、`litenode node link <序号>`，命名先与用户确认）。
 - 独立于节点的"用户"（一个用户可用多个节点，需要改数据结构）。
 - 单个节点覆盖全局的节点出站 IP（D-084 提议）。
