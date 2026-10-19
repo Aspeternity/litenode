@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"regexp"
 	"testing"
+
+	"github.com/Aspeternity/litenode/internal/node"
 )
 
 // Output of "xray x25519" from Xray v26.3.27 on the test VPS (D-047):
@@ -35,6 +37,30 @@ const (
 	clampedPrivate   = "kIT42DOV9O6LGkv1TtHhTpkhupV7WE8zPWcla0bfHmA"
 	clampedPublic    = "PmLl1TieVQvRiaf6-OviNssJKgTGd_-seYxXbq4YuBQ"
 )
+
+// "xray vlessenc" (v26.10.17) on the test VPS, X25519 authentication:
+//
+//	"decryption": "mlkem768x25519plus.native.600s.6Eaa3cii4SQoHqeVHDrJ1XTamvh74GFemgtE1-ONWk4"
+//	"encryption": "mlkem768x25519plus.native.0rtt.4xx3hMnM-YmlYM_RE17rfPlYKg7DAOcuJVKRpGi9PF4"
+//
+// The VLESS Encryption keys are the same X25519 encoding (D-107).
+func TestPublicKeyMatchesVLESSEnc(t *testing.T) {
+	got, err := PublicKey("6Eaa3cii4SQoHqeVHDrJ1XTamvh74GFemgtE1-ONWk4")
+	if want := "4xx3hMnM-YmlYM_RE17rfPlYKg7DAOcuJVKRpGi9PF4"; err != nil || got != want {
+		t.Errorf("PublicKey = (%q, %v), want %q (from xray vlessenc)", got, err, want)
+	}
+}
+
+func TestNone(t *testing.T) {
+	sec, key, settings, err := None{}.StreamSecurity(node.Node{})
+	if sec != "none" || key != "" || settings != nil || err != nil {
+		t.Errorf("StreamSecurity = %q %q %v %v", sec, key, settings, err)
+	}
+	params, _ := None{}.ShareParams(node.Node{})
+	if len(params) != 1 || params[0] != (node.Param{Key: "security", Value: "none"}) {
+		t.Errorf("ShareParams = %+v", params)
+	}
+}
 
 func TestClampMatchesXray(t *testing.T) {
 	raw, _ := keyEncoding.DecodeString(unclampedPrivate)

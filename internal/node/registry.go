@@ -261,5 +261,12 @@ func (r *Registry) CheckNode(n Node) error {
 	if n.Security == "reality" && n.Reality == nil {
 		return fmt.Errorf("node %d: reality settings missing", n.ID)
 	}
+	// Without a security layer only VLESS Encryption protects the traffic.
+	if n.Security == "none" && n.VLESSEncryption == nil {
+		return fmt.Errorf("node %d: vless encryption settings missing", n.ID)
+	}
+	if n.VLESSEncryption != nil && n.Protocol != "vless" {
+		return fmt.Errorf("node %d: vless encryption on protocol %q", n.ID, n.Protocol)
+	}
 	return nil
 }

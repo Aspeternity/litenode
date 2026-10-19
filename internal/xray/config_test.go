@@ -58,6 +58,22 @@ func goldenNodes() []node.Node {
 	return []node.Node{la, disabled, noClients, noLimit}
 }
 
+// vlessEncNode uses the key pair of a real "xray vlessenc" output (D-107).
+func vlessEncNode() node.Node {
+	return node.Node{
+		ID: 11, Remark: "Enc-23456", Enabled: true, Port: 23456,
+		Protocol: "vless", Transport: "tcp", Security: "none",
+		VLESSEncryption: &node.VLESSEncryption{
+			PrivateKey: "6Eaa3cii4SQoHqeVHDrJ1XTamvh74GFemgtE1-ONWk4",
+			PublicKey:  "4xx3hMnM-YmlYM_RE17rfPlYKg7DAOcuJVKRpGi9PF4",
+		},
+		Clients: []node.Client{
+			{ID: 12, Remark: "Enc-23456", UUID: "5783a3e7-e373-51cd-8642-c83782b807c5", Flow: node.FlowVision, Enabled: true},
+			{ID: 13, Remark: "enc-off", UUID: "0e9e4b3c-7a4e-4e8a-9d1e-2c3f6b7a8d90", Flow: node.FlowVision, Enabled: false},
+		},
+	}
+}
+
 func checkGolden(t *testing.T, name string, got []byte) {
 	t.Helper()
 	path := filepath.Join("testdata", name)
@@ -83,6 +99,9 @@ func TestGenerateConfigGolden(t *testing.T) {
 	for name, nodes := range map[string][]node.Node{
 		"xray-empty.golden.json": nil,
 		"xray-nodes.golden.json": goldenNodes(),
+		// A VLESS Encryption node next to the Reality nodes, which stay
+		// as in xray-nodes.golden.json.
+		"xray-vlessenc.golden.json": append(goldenNodes(), vlessEncNode()),
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := GenerateConfig(reg, nodes, "")

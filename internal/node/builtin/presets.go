@@ -45,3 +45,24 @@ func buildVLESSRealityVision(in node.BuildInput) (node.Node, error) {
 		}},
 	}, nil
 }
+
+// buildVLESSEncVision builds a VLESS Encryption node (DESIGN section 9.7):
+// an X25519 authentication key pair and the first client with Vision.
+func buildVLESSEncVision(in node.BuildInput) (node.Node, error) {
+	priv, pub, err := security.NewX25519(in.Rand)
+	if err != nil {
+		return node.Node{}, err
+	}
+	uuid, err := node.NewUUID(in.Rand)
+	if err != nil {
+		return node.Node{}, err
+	}
+	return node.Node{
+		ID: in.NodeID, Remark: in.Remark, Enabled: true, Port: in.Port,
+		Protocol: "vless", Transport: "tcp", Security: "none",
+		VLESSEncryption: &node.VLESSEncryption{PrivateKey: priv, PublicKey: pub},
+		Clients: []node.Client{{
+			ID: in.ClientID, Remark: in.Remark, UUID: uuid, Flow: node.FlowVision, Enabled: true,
+		}},
+	}, nil
+}
