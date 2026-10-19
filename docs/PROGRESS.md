@@ -4,16 +4,15 @@
 
 ## 当前状态
 
-- **阶段**：M0 ~ M7 全部完成，用户 2026-10-19 验收 M7 通过，发布 v0.1.0。
+- **阶段**：M0 ~ M7 全部完成，用户 2026-10-19 验收 M7 通过，v0.1.0 已发布，Debian 12 测试机从 v0.0.3 升级验证通过。
 
 ## 下次会话从这里开始
 
-1. 在 Debian 12 测试机上用"维护 › 更新脚本"从 v0.0.3 升级到 v0.1.0，验证更新功能（ROADMAP「v0.1.0 发布」最后一项）。
-2. 之后的方向（新节点类型等）与用户讨论（D-089）。
+1. 之后的方向（新节点类型等）与用户讨论（D-089）。
 
 ## 测试 VPS 的状态（2026-10-19，冒烟测试结束时）
 
-登录密码记在本机记忆中（用户同意），**不写入仓库**。三台都先用 install.sh 安装 v0.0.3；Debian 11 / 13 随后换成 main 的构建（`v0.1.0-rc`），Debian 12 仍是 v0.0.3（发布后用它验证从 v0.0.3 升级）。
+登录密码记在本机记忆中（用户同意），**不写入仓库**。三台都先用 install.sh 安装 v0.0.3；Debian 11 / 13 随后换成 main 的构建（`v0.1.0-rc`），Debian 12 已用更新脚本从 v0.0.3 升级到 v0.1.0。
 
 - **Debian 12**（SSH 61234，IP 216.23.88.252）：节点 `Reality-443`（443，SNI www.microsoft.com）；没有转发、防火墙关闭；DNS 由 LiteNode 写入 `/etc/resolv.conf`（9.9.9.9 1.1.1.1）；时区 US/Eastern，时间同步开启；没有 swap。`/tmp` 有 `vprobe.sh`、`link2client.py`。
 - **Debian 11**（SSH 22，root，IP 62.84.164.181，有 IPv6；原 Ubuntu 24.04 重装）：节点 `Reality-443`（443，SNI www.microsoft.com），其余未设置。为装 curl 临时注释过 `bullseye-security`，已恢复原 `sources.list`（备份 `/root/sources.list.orig`）。
