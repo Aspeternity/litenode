@@ -535,3 +535,72 @@ func DomainUnresolved(domain string) string {
 
 // ConfirmAddAnyway asks whether to keep a doubtful domain.
 const ConfirmAddAnyway = "仍要添加吗？"
+
+// Node connectivity check (DESIGN section 9.9).
+const (
+	NodeCheck           = "检测节点连通性"
+	NodeCheckDisabled   = "节点已禁用，请先启用节点再检测。"
+	NodeCheckNoClient   = "节点没有启用的客户端，客户端无法连接。请先在“客户端管理”中添加或启用客户端。"
+	NodeCheckXrayDown   = "Xray 没有运行，请先在“Xray 服务”中启动。"
+	ConfirmNodeCheckNft = "检测需要 nftables，目前未安装。现在通过 apt 安装？"
+	NodeCheckIntro      = "请现在用客户端连接这个节点（直连或经线路机都可以）并打开几个网站。\nLiteNode 只在本机统计到达的数据包，不会主动发送探测。"
+	NodeCheckPressEnter = "按回车结束检测"
+	NodeCheckCanceled   = "检测已取消。"
+	NodeCheckFinished   = "检测结束。"
+	NodeCheckTimedOut   = "已达到 30 分钟上限，按当前计数给出结论。"
+	NodeCheckConclusion = "检测结论："
+	NodeCheckHintUDP    = "TCP 已通，但还没有收到 UDP 包：请在客户端开启 UDP，并访问支持 HTTP/3 的网站（如 www.google.com）。"
+	NodeCheckHintNone   = "还没有收到任何数据包：请核对客户端中的地址和端口；经线路机时核对线路机的转发目标。"
+	NodeCheckOpenNote   = "    本机这一侧是通的。如果客户端仍然连不上，请检查客户端配置（链接、密钥、UDP 设置）。"
+	NodeCheckScanners   = "  （来源中可能包含扫描器；经线路机连接时，来源是线路机的 IP）"
+	NodeCheckUFW        = "    被 ufw 拦截：请用 ufw status 检查该端口。LiteNode 添加的规则带 litenode: 备注，缺少时重新打开 LiteNode 或禁用再启用节点会重新同步；同时检查有没有拦截该端口的 deny 规则。"
+	NodeCheckFirewall   = "    被 LiteNode 防火墙拦截：请在“防火墙管理 → 检查并修复规则”中修复。"
+	NodeCheckUDPCauses  = "    TCP 有数据包而 UDP 没有，可能的原因：\n" +
+		"    - 云厂商安全组没有放行 UDP；\n" +
+		"    - 线路机的转发不含 UDP，或使用了 UDP over TCP；\n" +
+		"    - 客户端没有开启 UDP，或检测期间没有 UDP 流量。"
+)
+
+// NodeCheckStatus names the states of one protocol.
+var NodeCheckStatus = []string{"未到达", "检测中", "通", "本机拦截"}
+
+// NodeCheckHeading names the node being checked.
+func NodeCheckHeading(remark string, port int) string {
+	return fmt.Sprintf("检测节点 %s（端口 %d）", remark, port)
+}
+
+// NodeCheckRow is one protocol's live counts.
+func NodeCheckRow(proto string, arrived, passed uint64, status string) string {
+	return fmt.Sprintf("  %-3s  到达 %-6d 通过 %-6d %s", strings.ToUpper(proto), arrived, passed, status)
+}
+
+// NodeCheckElapsed is the time since the check started.
+func NodeCheckElapsed(sec int) string {
+	return fmt.Sprintf("已用时 %d:%02d", sec/60, sec%60)
+}
+
+// NodeCheckResult starts one protocol's conclusion.
+func NodeCheckResult(proto, status string, arrived, passed uint64) string {
+	return fmt.Sprintf("  %s：%s（到达 %d 个包，通过 %d 个）", strings.ToUpper(proto), status, arrived, passed)
+}
+
+// NodeCheckSources lists recorded source addresses.
+func NodeCheckSources(addrs []string) string {
+	return "    来源：" + strings.Join(addrs, "、")
+}
+
+// NodeCheckOther: neither ufw nor the LiteNode firewall is on.
+func NodeCheckOther(where []string) string {
+	if len(where) == 0 {
+		return "    被系统中其他入站过滤规则拦截：请检查 iptables / nftables 中放行该端口的规则。"
+	}
+	return "    被系统中其他入站过滤规则拦截（" + strings.Join(where, "、") + "）：请检查这些规则是否放行该端口。"
+}
+
+// NodeCheckUnreached: no packet of proto arrived.
+func NodeCheckUnreached(proto string, port int) string {
+	return fmt.Sprintf("    没有收到数据包，请检查：\n"+
+		"    - 云厂商安全组 / 运营商防火墙是否放行 %s %d；\n"+
+		"    - 客户端中的地址和端口；\n"+
+		"    - 经线路机时，线路机的转发是否指向本机的 %d 端口。", strings.ToUpper(proto), port, port)
+}
