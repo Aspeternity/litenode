@@ -10,14 +10,16 @@
 - **M10** 检测节点连通性（D-114～D-116，DESIGN 9.9）：用户 2026-10-19 验收通过（经 3x-ui 线路机实测，Vision 流控需改为 `xtls-rprx-vision-udp443` 才有 UDP 443）。
 - **v0.2.0**（M8 ~ M10）2026-10-19 发布。
 - **M11** Hysteria2 节点（D-117～D-120，DESIGN 9.10）：M11-01 ~ M11-03 全部完成，用户 2026-10-20 验收通过。
+- **v0.3.0**（M11）2026-10-20 发布；Debian 12 上用"维护 › 更新脚本"从 v0.2.0 升级到 v0.3.0 验证通过（节点、Xray 服务、`lnode` 链接正常）。
+- **用户决定（2026-10-20）：暂时不增加新功能**。ROADMAP"未排期"中的项目保留，等用户提出再排期。
 
 ## 下次会话从这里开始
 
-1. 询问用户是否发布 v0.3.0（M11），以及从 ROADMAP"未排期"中选下一阶段。
-2. v0.2.0 尚未在测试机上用"维护 › 更新脚本"从 v0.1.0 升级验证，可在 M11 测试时顺带做。
+1. 没有进行中的任务。用户提出新需求或从"未排期"中选定项目后再开始。
 
 ## 测试 VPS 的状态（2026-10-19）
 
+- **v0.3.0 后**：Debian 12 的 `/usr/local/bin/litenode` 为正式版 v0.3.0（经更新脚本从 v0.2.0 升级，`.bak` 为 v0.2.0，之前的构建备份在 `/root/litenode.pre-v030`）。
 - **M11 后**：Debian 11 的 `/usr/local/bin/litenode` 换成 `v0.2.0-m11`（main + M11，旧版备份在 `/root/litenode.m10`），保留节点 `Hy2-58655`（Hysteria2，UDP 58655）供验收，ufw 和 LiteNode 防火墙都已关闭；Debian 13 的 `/tmp/m11relay.sh` 是线路机测试脚本；Debian 12 的 `/tmp` 有支持 hysteria2 的 `link2client.py`、`vprobe.sh`。
 - **M10 后**：Debian 11 的 `/usr/local/bin/litenode` 换成 `v0.1.0-m10`（main + M10），ufw 关闭（保留节点的 `litenode:` 规则），LiteNode 防火墙关闭；Debian 12 的转发测试规则已删除；Debian 12 / 13 的 `/tmp` 有 `m10cli.sh`（经节点 TCP 一次、DNS 查询 6 次）。
 
