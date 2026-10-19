@@ -188,3 +188,44 @@ func TestConflicts(t *testing.T) {
 		t.Errorf("conflicts = %+v", got)
 	}
 }
+
+func ssNode(id int64, port int, remark string, clientID int64) node.Node {
+	return node.Node{
+		ID: id, Remark: remark, Enabled: true, Port: port,
+		Protocol: "shadowsocks", Transport: "tcp", Security: "none",
+		Shadowsocks: &node.Shadowsocks{Method: "2022-blake3-aes-128-gcm", ServerKey: "Q1vZgt0nPdtNEyxt0LUGsw=="},
+		Clients:     []node.Client{{ID: clientID, Remark: remark, Key: "gB+4Ioqq1ywQlfhxV0QbJg==", Enabled: false}},
+	}
+}
+
+func TestDecodeShadowsocks(t *testing.T) {
+	reg, _ := builtin.Registry()
+	build := func(edit func(n *node.Node)) []byte {
+		st := fullState()
+		n := ssNode(9, 34567, "SS-34567", 10)
+		edit(&n)
+		st.Nodes = append(st.Nodes, n)
+		data, _ := Encode(Build(st, "v", time.Now()))
+		return data
+	}
+	e, err := Decode(build(func(*node.Node) {}), reg, nil)
+	if err != nil {
+		t.Fatalf("valid shadowsocks node rejected: %v", err)
+	}
+	if got := e.Nodes[1]; got.Shadowsocks == nil || got.Clients[0].Key != "gB+4Ioqq1ywQlfhxV0QbJg==" || got.Clients[0].UUID != "" {
+		t.Errorf("node = %+v", got)
+	}
+	// Disabled clients are checked too.
+	for name, edit := range map[string]func(n *node.Node){
+		"bad server key":   func(n *node.Node) { n.Shadowsocks.ServerKey = "Q1vZgt0nPdtNEyxt0LUGsw" },
+		"aes-256 key":      func(n *node.Node) { n.Shadowsocks.ServerKey = "ZBrUwP5/c8q05B1ZOtjGqparGNN2NCtw0kWvIG96e6o=" },
+		"other method":     func(n *node.Node) { n.Shadowsocks.Method = "aes-128-gcm" },
+		"bad user key":     func(n *node.Node) { n.Clients[0].Key = "x" },
+		"uuid instead":     func(n *node.Node) { n.Clients[0].Key, n.Clients[0].UUID = "", "5783a3e7-e373-51cd-8642-c83782b807c5" },
+		"missing settings": func(n *node.Node) { n.Shadowsocks = nil },
+	} {
+		if _, err := Decode(build(edit), reg, nil); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: err = %v, want ErrInvalid", name, err)
+		}
+	}
+}

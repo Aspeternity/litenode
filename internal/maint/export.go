@@ -14,6 +14,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/nft"
 	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/node/protocol"
 	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/ports"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -158,7 +159,11 @@ func Check(e Export, reg *node.Registry) error {
 			if err := seen(c.ID); err != nil {
 				return err
 			}
-			if !node.ValidUUID(c.UUID) {
+			if n.Protocol == "shadowsocks" {
+				if !protocol.ValidSS2022Key(c.Key) {
+					return fmt.Errorf("client %d: invalid shadowsocks key", c.ID)
+				}
+			} else if !node.ValidUUID(c.UUID) {
 				return fmt.Errorf("client %d: invalid uuid", c.ID)
 			}
 			if err := checkRemark(c.Remark, node.CheckClientRemark(e.Nodes, c.Remark, c.ID)); err != nil {

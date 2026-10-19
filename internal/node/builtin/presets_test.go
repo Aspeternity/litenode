@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/node/protocol"
 	"github.com/Aspeternity/litenode/internal/node/security"
 )
 
@@ -86,6 +87,34 @@ func TestBuildVLESSEncVision(t *testing.T) {
 	}
 	c := n.Clients[0]
 	if len(n.Clients) != 1 || c.ID != 8 || c.Remark != "Enc-23456" || c.Flow != node.FlowVision || !c.Enabled || !node.ValidUUID(c.UUID) {
+		t.Errorf("client = %+v", c)
+	}
+}
+
+func TestBuildSS2022(t *testing.T) {
+	r, _ := Registry()
+	p, _ := r.Preset(PresetSS2022)
+	if p.Label != "Shadowsocks 2022" || r.PresetFlow("shadowsocks", "tcp", "none") != "" {
+		t.Errorf("preset = %+v", p)
+	}
+	n, err := p.Build(node.BuildInput{NodeID: 7, ClientID: 8, Port: 34567, Remark: "SS-34567", Rand: rand.Reader})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CheckNode(n); err != nil {
+		t.Fatalf("built node is not valid: %v", err)
+	}
+	if n.ID != 7 || n.Port != 34567 || !n.Enabled || n.Remark != "SS-34567" || n.Protocol != "shadowsocks" ||
+		n.Security != "none" || n.Reality != nil || n.VLESSEncryption != nil {
+		t.Errorf("node = %+v", n)
+	}
+	s := n.Shadowsocks
+	if s == nil || s.Method != "2022-blake3-aes-128-gcm" || !protocol.ValidSS2022Key(s.ServerKey) {
+		t.Fatalf("shadowsocks = %+v", s)
+	}
+	c := n.Clients[0]
+	if len(n.Clients) != 1 || c.ID != 8 || c.Remark != "SS-34567" || c.Flow != "" || !c.Enabled ||
+		c.UUID != "" || !protocol.ValidSS2022Key(c.Key) || c.Key == s.ServerKey {
 		t.Errorf("client = %+v", c)
 	}
 }
