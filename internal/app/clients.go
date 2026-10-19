@@ -141,8 +141,12 @@ func (u *nodeUI) modifyClient() error {
 	if err != nil || c == nil {
 		return err
 	}
+	reset, done := text.ClientResetUUID, text.ClientUUIDReset
+	if n.Shadowsocks != nil {
+		reset, done = text.ClientResetKey, text.ClientKeyReset
+	}
 	m := ui.Menu{Heading: text.ClientModify, Status: []string{text.ClientLine(c.Remark)},
-		Items: []ui.Item{{Label: text.ClientRemark, Hint: text.Current(c.Remark)}, {Label: text.ClientResetUUID}}}
+		Items: []ui.Item{{Label: text.ClientRemark, Hint: text.Current(c.Remark)}, {Label: reset}}}
 	choice, err := u.s.Choose(m)
 	if err != nil || choice == 0 {
 		return err
@@ -169,10 +173,10 @@ func (u *nodeUI) modifyClient() error {
 	if err != nil || !ok {
 		return err
 	}
-	if err := u.svc.ResetClientUUID(u.ctx, n.ID, c.ID); err != nil {
+	if err := u.svc.ResetClientCredential(u.ctx, n.ID, c.ID); err != nil {
 		return err
 	}
-	u.showClientLink(n.ID, c.ID, text.ClientUUIDReset)
+	u.showClientLink(n.ID, c.ID, done)
 	return nil
 }
 

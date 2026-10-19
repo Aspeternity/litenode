@@ -926,3 +926,10 @@
 - **客户端用户密钥放在 `Client.Key`（`key`）**，`uuid` 改为不写空值（`omitempty`，只影响写出，不改 `schema_version`）。否决复用 `uuid` 字段存密钥（名字误导，校验和导入检查要按协议区分含义）和单独的 SS 客户端类型（客户端管理、备注唯一性等代码都要分两套）。
 - **校验位置**：`Registry.CheckNode` 要求 `shadowsocks` 协议必须有 `shadowsocks` 参数、其他协议不能有；安全层 `none` 只对 VLESS 要求 VLESS Encryption。方法和密钥格式由协议的 `InboundSettings` 检查，所以生成配置和导入备份（对所有节点和客户端生成一次配置）都会拒绝错误的密钥；导入时另外按协议检查 UUID 或用户密钥，给出更明确的错误。
 - **预设**：`shadowsocks-2022`，标签 "Shadowsocks 2022"，排在两个 VLESS 预设之后（兼容选项）；兼容性表 shadowsocks + tcp + none 只允许无流控。
+
+### D-112 Shadowsocks 2022 菜单与 UDP 端口的实现细节（由 Claude 决定（用户授权），2026-10-19，M9-02）
+
+- **端口协议集中在一处**：`Node.UsesUDP()` / `Node.PortProto()` 和 `ports.NodeKeys` 决定节点占用哪些端口，冲突检查、随机端口、端口占用表、导入冲突检查、防火墙规则和 ufw 规则都从这里取。否决在各处分别判断 `protocol == "shadowsocks"`（以后加 Hysteria2 等 UDP 节点时容易漏改）。
+- **"协议"列显示 `Shadowsocks-2022`**，不按"协议-传输-安全层"拼成 `Shadowsocks-TCP-None`（传输和安全层对 SS 没有意义，会误导用户以为没有加密）。
+- **防火墙用一条 `tcp+udp` 规则**（与转发规则一致，界面显示一行），ufw 每个协议一条（ufw 不支持一条规则同时写两种协议）。
+- **客户端凭据**：添加客户端、重置时按协议生成 UUID 或用户密钥（`nodemgr` 的 `ResetClientCredential`），菜单项和完成提示对 SS 节点显示"重置密钥" / "密钥已重置"。"重新生成密钥"对 SS 节点只换服务端密钥，确认提示沿用"所有客户端的分享链接失效"。

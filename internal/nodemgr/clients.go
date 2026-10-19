@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/node/protocol"
 	"github.com/Aspeternity/litenode/internal/state"
 )
 
@@ -36,9 +37,10 @@ func DefaultClientRemark(st *state.State, n node.Node) string {
 	}
 }
 
-// AddClient adds a client with a new UUID and the same flow as the node's
-// existing clients (D-056). A node without clients takes the flow of the
-// preset for its combination (D-060).
+// AddClient adds a client with a new UUID (a new user key on Shadowsocks
+// 2022 nodes) and the same flow as the node's existing clients (D-056). A
+// node without clients takes the flow of the preset for its combination
+// (D-060).
 func (s *Service) AddClient(ctx context.Context, nodeID int64, remark string) (node.Client, error) {
 	remark, err := node.NormalizeRemark(remark)
 	if err != nil {
@@ -49,15 +51,14 @@ func (s *Service) AddClient(ctx context.Context, nodeID int64, remark string) (n
 		if err := node.CheckClientRemark(st.Nodes, remark, 0); err != nil {
 			return err
 		}
-		uuid, err := node.NewUUID(s.Rand)
-		if err != nil {
-			return err
-		}
 		flow := s.Registry.PresetFlow(n.Protocol, n.Transport, n.Security)
 		if len(n.Clients) > 0 {
 			flow = n.Clients[0].Flow
 		}
-		added = node.Client{ID: st.AllocID(), Remark: remark, UUID: uuid, Flow: flow, Enabled: true}
+		added = node.Client{ID: st.AllocID(), Remark: remark, Flow: flow, Enabled: true}
+		if err := s.newCredential(*n, &added); err != nil {
+			return err
+		}
 		n.Clients = append(n.Clients, added)
 		return nil
 	})
@@ -91,16 +92,34 @@ func (s *Service) SetClientRemark(ctx context.Context, nodeID, clientID int64, r
 	})
 }
 
-// ResetClientUUID gives a client a new UUID: only this client's link stops
-// working, e.g. after it leaked (DESIGN section 9.4).
-func (s *Service) ResetClientUUID(ctx context.Context, nodeID, clientID int64) error {
-	return s.modifyClient(ctx, nodeID, clientID, func(_ *state.State, c *node.Client) error {
-		uuid, err := node.NewUUID(s.Rand)
+// newCredential gives client c of node n a new UUID, or a new user key on
+// a Shadowsocks 2022 node (DESIGN section 9.8).
+func (s *Service) newCredential(n node.Node, c *node.Client) error {
+	if n.Protocol == "shadowsocks" {
+		key, err := protocol.NewSS2022Key(s.Rand)
 		if err != nil {
 			return err
 		}
-		c.UUID = uuid
+		c.Key = key
 		return nil
+	}
+	uuid, err := node.NewUUID(s.Rand)
+	if err != nil {
+		return err
+	}
+	c.UUID = uuid
+	return nil
+}
+
+// ResetClientCredential gives a client a new UUID or user key: only this
+// client's link stops working, e.g. after it leaked (DESIGN section 9.4).
+func (s *Service) ResetClientCredential(ctx context.Context, nodeID, clientID int64) error {
+	return s.modify(ctx, nodeID, func(_ *state.State, n *node.Node) error {
+		c := findClient(n, clientID)
+		if c == nil {
+			return ErrClientNotFound
+		}
+		return s.newCredential(*n, c)
 	})
 }
 
