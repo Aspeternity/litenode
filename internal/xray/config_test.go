@@ -74,6 +74,19 @@ func vlessEncNode() node.Node {
 	}
 }
 
+// ss2022Node uses keys from "openssl rand -base64 16" (DESIGN section 9.8).
+func ss2022Node() node.Node {
+	return node.Node{
+		ID: 14, Remark: "SS-34567", Enabled: true, Port: 34567,
+		Protocol: "shadowsocks", Transport: "tcp", Security: "none",
+		Shadowsocks: &node.Shadowsocks{Method: "2022-blake3-aes-128-gcm", ServerKey: "Q1vZgt0nPdtNEyxt0LUGsw=="},
+		Clients: []node.Client{
+			{ID: 15, Remark: "SS-34567", Key: "gB+4Ioqq1ywQlfhxV0QbJg==", Enabled: true},
+			{ID: 16, Remark: "ss-off", Key: "HDf4Gc/OKTXkvWiqkHOd4g==", Enabled: false},
+		},
+	}
+}
+
 func checkGolden(t *testing.T, name string, got []byte) {
 	t.Helper()
 	path := filepath.Join("testdata", name)
@@ -102,6 +115,9 @@ func TestGenerateConfigGolden(t *testing.T) {
 		// A VLESS Encryption node next to the Reality nodes, which stay
 		// as in xray-nodes.golden.json.
 		"xray-vlessenc.golden.json": append(goldenNodes(), vlessEncNode()),
+		// A Shadowsocks 2022 node next to the other nodes, which stay as
+		// in xray-vlessenc.golden.json.
+		"xray-ss2022.golden.json": append(goldenNodes(), vlessEncNode(), ss2022Node()),
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := GenerateConfig(reg, nodes, "")

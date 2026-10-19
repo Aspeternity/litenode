@@ -920,3 +920,9 @@
 - **参数（由 Claude 决定（用户授权））**：固定 aes-128-gcm（有 AES 硬件加速时最快，密钥短），否决提供方法选择（菜单更复杂、收益小）；多用户（服务端密钥 + 每个客户端的用户密钥），与现有"一个节点多个客户端"的模型一致，否决单用户；同时开放 UDP。
 - **仍然暂缓**：Hysteria2、XHTTP、WS / Trojan + TLS（D-106，等证书方案确定）。
 
+### D-111 Shadowsocks 2022 的数据结构（由 Claude 决定（用户授权），2026-10-19，M9-01）
+
+- **节点字段 `shadowsocks`（`method`、`server_key`）**：与 `reality`、`vless_encryption` 一样是带类型的可选字段（D-039）。方法虽然固定，仍写入状态文件并在生成配置和导入时校验，以后加其他方法不需要迁移。否决只存密钥、方法写死在代码里（以后加方法时旧节点无法区分）。
+- **客户端用户密钥放在 `Client.Key`（`key`）**，`uuid` 改为不写空值（`omitempty`，只影响写出，不改 `schema_version`）。否决复用 `uuid` 字段存密钥（名字误导，校验和导入检查要按协议区分含义）和单独的 SS 客户端类型（客户端管理、备注唯一性等代码都要分两套）。
+- **校验位置**：`Registry.CheckNode` 要求 `shadowsocks` 协议必须有 `shadowsocks` 参数、其他协议不能有；安全层 `none` 只对 VLESS 要求 VLESS Encryption。方法和密钥格式由协议的 `InboundSettings` 检查，所以生成配置和导入备份（对所有节点和客户端生成一次配置）都会拒绝错误的密钥；导入时另外按协议检查 UUID 或用户密钥，给出更明确的错误。
+- **预设**：`shadowsocks-2022`，标签 "Shadowsocks 2022"，排在两个 VLESS 预设之后（兼容选项）；兼容性表 shadowsocks + tcp + none 只允许无流控。

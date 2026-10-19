@@ -2,8 +2,9 @@ package security
 
 import "github.com/Aspeternity/litenode/internal/node"
 
-// None is the empty security layer. It is only legal for VLESS nodes with
-// VLESS Encryption, which encrypts the traffic itself (DESIGN section 9.7).
+// None is the empty security layer. It is only legal for protocols that
+// encrypt the traffic themselves: VLESS with VLESS Encryption (DESIGN
+// section 9.7) and Shadowsocks 2022 (section 9.8).
 type None struct{}
 
 func (None) Name() string  { return "none" }

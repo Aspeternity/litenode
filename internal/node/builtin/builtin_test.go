@@ -10,10 +10,11 @@ func TestBuiltinRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	presets := r.Presets()
-	if len(presets) != 2 || presets[0].ID != PresetVLESSRealityVision || presets[1].ID != PresetVLESSEncVision {
+	if len(presets) != 3 || presets[0].ID != PresetVLESSRealityVision || presets[1].ID != PresetVLESSEncVision ||
+		presets[2].ID != PresetSS2022 {
 		t.Fatalf("presets = %+v", presets)
 	}
-	for _, name := range []string{"vless"} {
+	for _, name := range []string{"vless", "shadowsocks"} {
 		if _, ok := r.Protocol(name); !ok {
 			t.Errorf("protocol %s missing", name)
 		}

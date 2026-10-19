@@ -70,7 +70,7 @@ func TestAddNodeFlow(t *testing.T) {
 	}
 	for _, want := range []string{
 		"═ 主菜单 › 节点管理 ═", // page heading (D-060)
-		"┌─ 添加节点\n│\n◆ 节点类型\n│   1. VLESS + TCP + Reality (Vision)\n│   2. VLESS + TCP + Encryption (Vision)\n│   0. 取消\n", // flow (D-069)
+		"┌─ 添加节点\n│\n◆ 节点类型\n│   1. VLESS + TCP + Reality (Vision)\n│   2. VLESS + TCP + Encryption (Vision)\n│   3. Shadowsocks 2022\n│   0. 取消\n", // flow (D-069)
 		"◆ 1/3 端口 [443]: ", "◆ 2/3 目标网站 (SNI)\n", "◆ 3/3 备注 [Reality-443]: ", "└─ ✓ 节点已添加。\n",
 		"检测到公网地址：203.0.113.10",
 		"www.example.com     3 ms  TLS1.3 ✓  H2 ✓  X25519 ✓  证书 ✓",
