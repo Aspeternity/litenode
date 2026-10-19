@@ -79,7 +79,7 @@ const NoGitHubURL = "https://github.com/Aspeternity/litenode#无法访问-github
 
 // LockFailed is shown when the lock file cannot be created.
 func LockFailed(err error) string {
-	return fmt.Sprintf("无法创建锁文件：%v", err)
+	return fmt.Sprintf("无法创建锁文件：%v\n请确认以 root 运行，且 /run 目录可写。", err)
 }
 
 // StateCorrupt is shown when the state file cannot be parsed.
@@ -96,7 +96,7 @@ func StateTooNew(path string) string {
 
 // StateLoadFailed is shown for other errors while loading the state file.
 func StateLoadFailed(err error) string {
-	return fmt.Sprintf("无法读取状态文件：%v", err)
+	return fmt.Sprintf("无法读取状态文件：%v\n请确认以 root 运行，且 /etc/litenode/ 中的文件可读。", err)
 }
 
 // RollbackDone is printed by the rollback subcommand after a timeout.
@@ -160,7 +160,6 @@ const (
 	MenuMaint        = "维护"
 	StatusUnknown    = "-"
 	XrayNotInstalled = "○ 未安装"
-	XrayInstalled    = "● 已安装"
 )
 
 // StatusXray, StatusNodes, StatusForwards, StatusSSH and StatusFirewall
@@ -230,3 +229,6 @@ const LinkBelow = "分享链接如下"
 
 // KeyGenerated ends the key generation flow; the private key follows it.
 const KeyGenerated = "密钥对已生成，公钥已加入 authorized_keys。"
+
+// Unchanged is shown when a choice equals the current setting.
+const Unchanged = "设置未变化。"

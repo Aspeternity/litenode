@@ -197,7 +197,7 @@ func (u *nodeUI) xrayOutboundIP() error {
 	}
 	mode := xray.OutboundModes[c-1]
 	if mode == cur {
-		u.s.End(text.OutboundIPUnchanged)
+		u.s.End(text.Unchanged)
 		return nil
 	}
 	ipv6, only := xray.OnlyIPv6(mode)

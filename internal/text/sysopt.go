@@ -71,19 +71,22 @@ func SwapMax(max string) string {
 	return "磁盘空间最多可创建 " + max + "（保留 256M 空闲空间）。"
 }
 
+// SwapResizeNote explains why resizing allows less than creating: the
+// new file is made before the old one is removed.
+const SwapResizeNote = "调整大小时先创建新文件再删除旧文件，需要更大的 swap 时可以先删除再创建。"
+
 // ErrNoDiskSpace reports that the disk cannot hold the swap file.
 const ErrNoDiskSpace = "磁盘空间不足（创建后需保留 256M 空闲空间）。"
 
 // IP preference (DESIGN section 15).
 const (
-	SysoptPreference   = "系统 IPv4 / IPv6 优先级"
-	PreferIPv4         = "优先 IPv4"
-	PreferIPv6         = "优先 IPv6（系统默认）"
-	PreferenceHint     = "影响系统程序（curl、apt 等）解析域名后的出站顺序，写入 /etc/gai.conf。不影响节点出站，节点出站在\"Xray 服务\"的\"节点出站 IP\"中设置。"
-	PreferIPv4Done     = "已设置为优先 IPv4。"
-	PreferIPv6Done     = "已恢复为优先 IPv6（系统默认）。"
-	PreferenceUnchange = "设置未变化。"
-	PreferenceForeign  = "/etc/gai.conf 中有其他行设置了优先 IPv4（非 LiteNode 添加），需手动修改该文件才能优先 IPv6。"
+	SysoptPreference  = "系统 IPv4 / IPv6 优先级"
+	PreferIPv4        = "优先 IPv4"
+	PreferIPv6        = "优先 IPv6（系统默认）"
+	PreferenceHint    = "影响系统程序（curl、apt 等）解析域名后的出站顺序，写入 /etc/gai.conf。不影响节点出站，节点出站在\"Xray 服务\"的\"节点出站 IP\"中设置。"
+	PreferIPv4Done    = "已设置为优先 IPv4。"
+	PreferIPv6Done    = "已恢复为优先 IPv6（系统默认）。"
+	PreferenceForeign = "/etc/gai.conf 中有其他行设置了优先 IPv4（非 LiteNode 添加），需手动修改该文件才能优先 IPv6。"
 )
 
 // StatusPreference labels the preference field of the status.
@@ -100,7 +103,7 @@ const (
 	DNSCustom         = "自定义"
 	DNSReset          = "恢复系统默认"
 	PromptDNSServers  = "DNS 服务器 IP（最多 3 个，空格分隔，0 返回）"
-	ErrDNSServers     = "请输入 1 ~ 3 个 IP 地址，用空格分隔。"
+	ErrDNSServers     = "请输入 1 到 3 个 IP 地址，用空格分隔。"
 	ConfirmDNSFailed  = "仍要使用这些 DNS 服务器？"
 	DNSResetDone      = "已恢复系统默认 DNS。"
 	DNSResolvConfNote = "系统未使用 systemd-resolved，将直接修改 /etc/resolv.conf。该文件可能被 DHCP、cloud-init 或 resolvconf 改回，届时请重新设置。"
@@ -122,9 +125,10 @@ func DNSCurrent(servers, source string, resolved bool) string {
 // DNSPresetLabel is a preset choice.
 func DNSPresetLabel(name, servers string) string { return name + "  " + servers }
 
-// DNSProbeFailed reports a DNS server that did not answer.
-func DNSProbeFailed(server string, err error) string {
-	return "⚠ " + server + " 无法解析域名：" + err.Error()
+// DNSProbeFailed reports a DNS server that did not answer; reason comes
+// from NetReason.
+func DNSProbeFailed(server, reason string) string {
+	return "⚠ " + server + " 无法解析域名：" + reason
 }
 
 // DNSSet reports the new DNS servers.
@@ -151,7 +155,7 @@ func StatusClock(tz, synced string) string {
 	if synced == "" {
 		return "时区: " + tz
 	}
-	return "时区: " + tz + " (同步 " + synced + ")"
+	return "时区: " + tz + "（同步 " + synced + "）"
 }
 
 // ClockCurrent describes the time zone and synchronization state.

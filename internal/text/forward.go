@@ -48,13 +48,13 @@ const (
 	ColTarget           = "目标"
 	OnlyIPv4            = "仅 IPv4"
 	OnlyIPv6            = "仅 IPv6"
-	PromptForwardNumber = "请输入规则序号 (0 返回)"
+	PromptForwardNumber = "请输入规则序号（0 返回）"
 	PromptListenPort    = "本机端口（单个端口或 起始-结束，0 返回）"
 	PromptForwardProto  = "协议"
 	PromptTargetHost    = "目标地址（IP 或域名，0 返回）"
 	PromptTargetPort    = "目标端口"
-	PromptForwardRemark = "备注（可以为空）"
-	CurrentMark         = "(当前)"
+	PromptForwardRemark = "备注（可留空）"
+	CurrentMark         = "（当前）"
 	ForwardAdded        = "转发规则已添加。"
 	ForwardUpdated      = "转发规则已修改。"
 	ForwardEnabled      = "转发规则已启用。"
@@ -84,9 +84,10 @@ func ProbeOK(addr string, ms int64) string {
 	return fmt.Sprintf("%s  连通，延迟 %d ms", addr, ms)
 }
 
-// ProbeFailed reports a target address that could not be reached.
-func ProbeFailed(addr string, err error) string {
-	return fmt.Sprintf("%s  无法连接：%v", addr, err)
+// ProbeFailed reports a target address that could not be reached;
+// reason comes from NetReason.
+func ProbeFailed(addr, reason string) string {
+	return addr + "  无法连接：" + reason
 }
 
 // ConfirmDeleteForward asks before deleting a forward.
