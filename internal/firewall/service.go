@@ -58,7 +58,7 @@ type Preflight struct {
 // Check looks at the system before enabling.
 func (s *Service) Check(ctx context.Context) Preflight {
 	r := s.runner()
-	p := Preflight{UFW: ufw.Active(ctx, r), Foreign: DetectForeignFilter(ctx, r), NftMissing: !nftInstalled(ctx, r)}
+	p := Preflight{UFW: ufw.Active(ctx, r), Foreign: DetectForeignFilter(ctx, r), NftMissing: !NftInstalled(ctx, r)}
 	p.Firewalld, _ = system.ServiceActive(ctx, r, FirewalldUnit)
 	_, err := r.Query(ctx, "systemctl", "cat", DockerUnit)
 	p.Docker = err == nil
@@ -67,7 +67,7 @@ func (s *Service) Check(ctx context.Context) Preflight {
 
 // EnsureNft installs the nftables package if nft is missing.
 func EnsureNft(ctx context.Context, r system.Runner) error {
-	if nftInstalled(ctx, r) {
+	if NftInstalled(ctx, r) {
 		return nil
 	}
 	if _, err := r.Exec(ctx, "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "nftables"); err != nil {
@@ -76,7 +76,8 @@ func EnsureNft(ctx context.Context, r system.Runner) error {
 	return nil
 }
 
-func nftInstalled(ctx context.Context, r system.Runner) bool {
+// NftInstalled reports whether the nft command is available.
+func NftInstalled(ctx context.Context, r system.Runner) bool {
 	_, err := r.Query(ctx, nft.NftPath, "--version")
 	return err == nil
 }
