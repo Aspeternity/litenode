@@ -509,4 +509,5 @@
 M0 ~ M7（打磨）全部完成后发布 v0.1.0。发布前：
 
 - README 与 install.sh 报错（M7-12 已完成）。
-- 在 Debian 12 和 Ubuntu 24.04 上完整走一遍所有功能；在 Debian 11 和 13 上冒烟测试：一行命令安装、Xray 集成测试、添加一个节点并连通（D-048）。
+- 在 Debian 12 和 Ubuntu 24.04 上完整走一遍所有功能（M7-13 已完成）；在 Debian 11 和 13 上冒烟测试：一行命令安装、Xray 集成测试、添加一个节点并连通（D-048）。
+  - [x] 冒烟测试（2026-10-19，main 构建）：Debian 13（AWS，442M，用户 admin + sudo）、Debian 11（KVM，952M）三项都通过，客户端在本机和另一台测试机上都连通。发现最小化 Debian 11 没有 curl、Debian 11 已停止安全更新，README 和 install.sh 已补充说明（D-105）。

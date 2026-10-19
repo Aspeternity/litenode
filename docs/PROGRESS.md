@@ -5,19 +5,20 @@
 ## 当前状态
 
 - **阶段**：M0 ~ M6 已完成；M7 全部完成（M7-01 ~ M7-14），等待用户对 M7 实机验收。
-- **发布顺序**（D-101）：M7 验收 → Debian 11 / 13 冒烟测试 → v0.1.0（打标签前先问用户）。
+- **发布顺序**（D-101）：Debian 11 / 13 冒烟测试已通过 → 用户验收 M7 → v0.1.0（打标签前先问用户）。
 
 ## 下次会话从这里开始
 
 1. 用户验收 M7 后准备 v0.1.0（打标签前先问用户）。
-2. v0.1.0 发布前要求在 Debian 11 / 13 上冒烟测试，需要向用户要测试机。发布后在测试机上用"维护 › 更新脚本"从 v0.0.3 升级，验证更新功能。
+2. 发布后在测试机上用"维护 › 更新脚本"从 v0.0.3 升级，验证更新功能。
 
-## 测试 VPS 的状态（2026-10-19 重装后，M7-14 结束时）
+## 测试 VPS 的状态（2026-10-19，冒烟测试结束时）
 
-登录密码记在本机记忆中（用户同意），**不写入仓库**。两台都用 install.sh 安装了 v0.0.3（`/usr/local/bin/litenode`），root 都没有公钥，只能密码登录。`/root` 下有走查用的辅助脚本：`ptyx.py`（按提示文字驱动 pty，用法见文件开头）、`vprobe.sh`、`link2client.py`（`/tmp` 下的副本重启后消失）；Ubuntu 上 `/root/litenode-export-*.json`、`/root/u-backup.json` 是导出的配置。
+登录密码记在本机记忆中（用户同意），**不写入仓库**。三台都先用 install.sh 安装 v0.0.3；Debian 11 / 13 随后换成 main 的构建（`v0.1.0-rc`），Debian 12 仍是 v0.0.3（发布后用它验证从 v0.0.3 升级）。
 
-- **Ubuntu 24.04.5**（SSH 22，IP 62.84.164.181，有 IPv6）：节点 `US-Reality`（443，SNI www.microsoft.com；M7-14 验证时重置过客户端 UUID，旧链接已失效）；转发规则 20443 → Debian 216.23.88.252:443（tcp+udp，备注 to-debian）；LiteNode 防火墙关闭（ufw 未启用）；DNS 由 LiteNode 设为 9.9.9.9 1.1.1.1（systemd-resolved drop-in）；`00-litenode.conf` 管理 `Port 22`；BBR 由镜像的 `99-custom.conf` 开启；没有 sudo 用户。
-- **Debian 12**（SSH 61234，IP 216.23.88.252，磁盘约 770M 空闲）：节点 `Reality-443`（443，SNI www.microsoft.com）；没有转发、防火墙关闭；DNS 由 LiteNode 写入 `/etc/resolv.conf`（9.9.9.9 1.1.1.1）；安装了 systemd-timesyncd，时间同步开启；时区 US/Eastern；BBR 由镜像的 `99-bbr.conf` 开启；没有 swap。
+- **Debian 12**（SSH 61234，IP 216.23.88.252）：节点 `Reality-443`（443，SNI www.microsoft.com）；没有转发、防火墙关闭；DNS 由 LiteNode 写入 `/etc/resolv.conf`（9.9.9.9 1.1.1.1）；时区 US/Eastern，时间同步开启；没有 swap。`/tmp` 有 `vprobe.sh`、`link2client.py`。
+- **Debian 11**（SSH 22，root，IP 62.84.164.181，有 IPv6；原 Ubuntu 24.04 重装）：节点 `Reality-443`（443，SNI www.microsoft.com），其余未设置。为装 curl 临时注释过 `bullseye-security`，已恢复原 `sources.list`（备份 `/root/sources.list.orig`）。
+- **Debian 13**（SSH 22，用户 `admin`，sudo 免密，IP 54.178.218.30，AWS，442M，有 IPv6）：节点 `Reality-443`（443，SNI www.microsoft.com），其余未设置。分享链接时有 IPv4 / IPv6 两个地址可选。
 
 ## 未解决的问题
 

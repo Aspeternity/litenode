@@ -876,3 +876,8 @@
 - **swap 调整大小**：上限不含当前 swap 文件（先建新文件，符合设计），调整时额外提示"需要更大的 swap 时可以先删除再创建"。否决：调整时先删旧文件（中途失败会没有 swap）。
 - **其他**：删除不再使用的 5 条文字；"删除 sudo 用户"的确认改为"是否继续？"；"节点 / 客户端不存在"补充"可能已被删除"；转发备注提示与防火墙一致为"（可留空）"；锁文件、状态文件读取失败补充处理方法；"设置未变化"合并为一条。
 
+### D-105 Debian 11 停止安全更新后的处理、缺少 curl（由 Claude 决定（用户授权），2026-10-19，v0.1.0 冒烟测试）
+
+- **Debian 11**：LTS 已于 2026-08-31 结束，`bullseye-security` 的软件包已下架（apt 返回 404），但 LiteNode 在 Debian 11 上冒烟测试全部通过，需要的 nftables、systemd-timesyncd 来自 bullseye 主仓库，不受影响。v0.1.0 继续支持 Debian 11，README 说明已停止安全更新、建议 Debian 12 / 13，并写明 404 时的处理方法。否决：v0.1.0 去掉 Debian 11（改变支持范围需要用户同意，而且实际可用）；LiteNode 自动修改 apt 源（超出职责，修改用户的系统配置）。
+- **curl**：最小化的 Debian 11 镜像没有 curl，一行安装命令只会报 `curl: command not found`。README 在安装命令后说明先执行 `apt install -y curl`；install.sh 在找不到 curl 时报错并给出同样的命令（脚本是保存下来或用 wget 获取时才会走到这里）。否决：install.sh 自动用 apt 安装 curl（一行命令在执行脚本前就需要 curl，自动安装帮不上一行命令；而且装包会改动系统）；改用 wget（Debian 最小化镜像同样不一定有 wget）。
+

@@ -17,6 +17,7 @@
 - **测试域名转发的重新解析**（M4-02）：在线路机 `/etc/hosts` 写入测试域名（纯 Go 解析器读取 hosts，只有 A 记录时 AAAA 查询返回 `no suitable address found`），用 `LN_FWD=add` 添加指向该域名的转发，再修改 hosts 中的 IP，循环检查 `nft list table inet litenode` 中的 DNAT 地址并看 `journalctl -u litenode-resolve.service`。持锁跳过：`flock /run/litenode.lock sleep 3 & litenode internal resolve`。测试后删除 hosts 中的测试行。
 - 测试防火墙重启后的状态：先装一个开机 10 分钟后 `nft delete table inet litenode` 的临时服务（`Type=simple`，oneshot 会拖住 `multi-user.target`）作为应急，验证后删除。远程 `pkill -f` 的模式会匹配执行它的 shell，按端口结束进程用 `fuser -k <端口>/tcp`。
 - 测试机上用户可能开着 `lnode`（实例锁）：运行菜单前先 `pgrep -x lnode` 检查，不要结束用户的进程；远程 `pkill -f` 的匹配模式不能匹配到执行它的 shell 命令本身。
+- 非 root 用户登录的测试机（如 AWS 的 Debian 13 用 `admin`）：`VPS_USER=admin scripts/dev/vps.sh 'sudo ...'`。
 - 验证脚本只输出结论（PASS / FAIL、关键几行），不要把整屏菜单或完整日志拿回会话（节省 token，见 CLAUDE.md）。
 
 ## 资源占用（M7-11，2026-10-19）
