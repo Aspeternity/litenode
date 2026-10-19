@@ -81,6 +81,52 @@ func TestVLESSEncLinkMatchesDesign(t *testing.T) {
 	}
 }
 
+// ssNode uses keys from "openssl rand -base64 16"; the user key contains
+// "+" and "/" (DESIGN section 9.8).
+func ssNode() node.Node {
+	return node.Node{
+		ID: 5, Remark: "SS-34567", Enabled: true, Port: 34567,
+		Protocol: "shadowsocks", Transport: "tcp", Security: "none",
+		Shadowsocks: &node.Shadowsocks{Method: "2022-blake3-aes-128-gcm", ServerKey: "Q1vZgt0nPdtNEyxt0LUGsw=="},
+		Clients:     []node.Client{{ID: 6, Remark: "my phone", Key: "gB+4Ioqq1ywQlfhxV0QbJg==", Enabled: true}},
+	}
+}
+
+func TestSS2022LinkMatchesDesign(t *testing.T) {
+	reg, _ := builtin.Registry()
+	n := ssNode()
+	got, err := Link(reg, n, n.Clients[0], "203.0.113.10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// DESIGN section 9.8: SIP002 with the 2022 user info percent-encoded,
+	// not base64; no query parameters.
+	want := "ss://2022-blake3-aes-128-gcm:Q1vZgt0nPdtNEyxt0LUGsw%3D%3D%3AgB%2B4Ioqq1ywQlfhxV0QbJg%3D%3D@203.0.113.10:34567#my%20phone"
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+	// Standard URL parsing gives back the method and both keys.
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pw, _ := u.User.Password(); u.User.Username() != "2022-blake3-aes-128-gcm" || pw != "Q1vZgt0nPdtNEyxt0LUGsw==:gB+4Ioqq1ywQlfhxV0QbJg==" ||
+		u.Port() != "34567" || u.Fragment != "my phone" || u.RawQuery != "" {
+		t.Errorf("parsed = %q %q %q %q", u.User, u.Port(), u.Fragment, u.RawQuery)
+	}
+	n.SharePort = 30001
+	if got, _ := LinkFor(reg, n, n.Clients[0], "2001:db8::1", false); got != "ss://2022-blake3-aes-128-gcm:Q1vZgt0nPdtNEyxt0LUGsw%3D%3D%3AgB%2B4Ioqq1ywQlfhxV0QbJg%3D%3D@[2001:db8::1]:30001#my%20phone-IPv6" {
+		t.Errorf("IPv6 / share port link = %s", got)
+	}
+	if qr, err := QR(want, false); err != nil || len([]rune(strings.SplitN(qr, "\n", 2)[0])) > 65 {
+		t.Errorf("QR too wide or failed: %v", err)
+	}
+	n.Clients[0].Key = "bad"
+	if _, err := Link(reg, n, n.Clients[0], "203.0.113.10"); err == nil {
+		t.Error("invalid user key accepted")
+	}
+}
+
 func TestLinkVariants(t *testing.T) {
 	reg, _ := builtin.Registry()
 	tests := []struct {
