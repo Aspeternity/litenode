@@ -492,11 +492,33 @@
 
 ---
 
+## M8 VLESS Encryption 节点
+
+用户 2026-10-19 决定：只加入 VLESS + TCP + VLESS Encryption，其他类型暂不开发（D-106）。设计见 DESIGN 第 9.7 节、D-107。
+
+### M8-01 VLESS Encryption 节点模型与配置生成 `未开始`
+- 逻辑层：节点保存 VLESS Encryption 的私钥 / 公钥；注册组合 VLESS + TCP + none（带 encryption，流控 Vision）；生成服务端 `decryption` 和客户端 `encryption` 字符串；Xray 入站配置。
+- 验收：
+  - [ ] 单元测试：密钥用真实 `xray vlessenc` / `xray x25519` 输出作测试向量；入站配置与 DESIGN 9.7 一致；已有 Reality 节点的配置不变。
+  - [ ] [VPS] 生成的配置通过 `xray run -test`；确认 VLESS Encryption 需要的最低 Xray 版本并写入 DESIGN。
+
+### M8-02 添加 / 修改节点菜单 `未开始`
+- 选择节点类型新增"VLESS + TCP + Encryption (Vision)"；添加流程（提示、随机端口、不问目标网站、备注 `Enc-<端口>`）；修改节点显示端口、重新生成密钥、分享端口、备注；"更新 Xray"输入低于最低版本时警告。依赖 M8-01。
+- 验收：
+  - [ ] 菜单和提示与 DESIGN 9.7 一致，界面文字在 `internal/text`。
+  - [ ] [VPS] 添加、修改端口、重新生成密钥、启用 / 禁用、删除都正常，防火墙 / ufw 同步。
+
+### M8-03 分享链接与客户端实测 `未开始`
+- 生成 VLESS Encryption 链接和二维码，链接下方加客户端支持提示；实测支持的客户端和最低版本，写入 README。依赖 M8-01。
+- 验收：
+  - [ ] 单元测试：链接格式与 DESIGN 9.7 一致。
+  - [ ] [VPS] 用 Xray 客户端（导入链接生成的配置）从另一台测试机连通，也测试经 LiteNode 端口转发连通；至少再实测一个常用客户端（如 mihomo）。
+
 ## 未排期
 
 产品成熟后再决定（D-089）：
 
-- 更多节点类型（开始前先讨论 DESIGN 第 18 节第 2 项 TLS 证书来源）。候选：VLESS + XHTTP + Reality、VLESS + TCP（纯 VLESS，选择时显示警告）、Shadowsocks 2022、VLESS + WS + TLS、Trojan + TCP + TLS。
+- 更多节点类型（开始前先讨论 DESIGN 第 18 节第 2 项 TLS 证书来源）。候选（D-106）：Shadowsocks 2022（仅作兼容选项，Xray 已标记弃用）、VLESS + XHTTP + TLS / Reality、Hysteria2、VLESS + WS + TLS、Trojan + TCP + TLS。
 - 命令行子命令（如 `litenode node list`、`litenode node link <序号>`，命名先与用户确认）。
 - 独立于节点的"用户"（一个用户可用多个节点，需要改数据结构）。
 - 单个节点覆盖全局的节点出站 IP（D-084 提议）。
