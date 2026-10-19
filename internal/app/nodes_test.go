@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/netip"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -69,8 +70,8 @@ func TestAddNodeFlow(t *testing.T) {
 	}
 	for _, want := range []string{
 		"═ 主菜单 › 节点管理 ═", // page heading (D-060)
-		"┌─ 添加节点\n│\n◆ 1/4 节点类型\n│   1. VLESS + TCP + Reality (Vision)\n│   2. VLESS + TCP + Encryption (Vision)\n│   0. 取消\n", // flow (D-069)
-		"◆ 2/4 端口 [443]: ", "◆ 3/4 目标网站 (SNI)\n", "◆ 4/4 备注 [Reality-443]: ", "└─ ✓ 节点已添加。\n",
+		"┌─ 添加节点\n│\n◆ 节点类型\n│   1. VLESS + TCP + Reality (Vision)\n│   2. VLESS + TCP + Encryption (Vision)\n│   0. 取消\n", // flow (D-069)
+		"◆ 1/3 端口 [443]: ", "◆ 2/3 目标网站 (SNI)\n", "◆ 3/3 备注 [Reality-443]: ", "└─ ✓ 节点已添加。\n",
 		"检测到公网地址：203.0.113.10",
 		"www.example.com     3 ms  TLS1.3 ✓  H2 ✓  X25519 ✓  证书 ✓",
 		"节点已添加。",
@@ -369,5 +370,84 @@ func TestDescribeXrayDownload(t *testing.T) {
 	got := describe(fmt.Errorf("update: %w", &xray.DownloadError{Err: errors.New("404")}))
 	if !strings.Contains(got, text.NoGitHubURL) || !strings.Contains(got, "404") {
 		t.Errorf("describe = %q", got)
+	}
+}
+
+// TestAddVLESSEncNodeFlow: a VLESS Encryption node asks no target, picks
+// a random port and an "Enc-<port>" remark (DESIGN section 9.7); its
+// modify menu has no target or fallback limit.
+func TestAddVLESSEncNodeFlow(t *testing.T) {
+	f := nodeSystem()
+	// 1 nodes, 1 add, preset 2, port and remark default; 2 modify, node
+	// 1, 2 regenerate keys (y); back out.
+	input := strings.Join([]string{"1", "1", "2", "", "", "2", "1", "2", "y", "0", "0", "0"}, "\n") + "\n"
+	r := runNodes(t, f, input)
+	if r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	for _, want := range []string{
+		text.VLESSEncHint, "◆ 1/2 端口 [", "◆ 2/2 备注 [Enc-", "└─ ✓ 节点已添加。\n",
+		"?encryption=mlkem768x25519plus.native.0rtt.", "&flow=xtls-rprx-vision&security=none&type=tcp#Enc-",
+		"VLESS-TCP-Encryption",
+		" 1. 端口", " 2. 重新生成密钥", " 3. 分享端口", " 4. 备注",
+		"└─ ✓ " + text.KeysRegenerated, text.NewLinksTitle,
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"目标网站", "回落限速", text.Non443Hint, "[443]"} {
+		if strings.Contains(r.stdout, unwanted) {
+			t.Errorf("output has %q", unwanted)
+		}
+	}
+	st, err := state.NewStore(f).Load()
+	if err != nil || len(st.Nodes) != 1 {
+		t.Fatalf("state = %+v, %v", st, err)
+	}
+	n := st.Nodes[0]
+	if n.VLESSEncryption == nil || n.Reality != nil || n.Port < 10000 || n.Port > 60000 || n.Remark != "Enc-"+strconv.Itoa(n.Port) {
+		t.Errorf("node = %+v", n)
+	}
+	if !strings.Contains(r.stdout, n.VLESSEncryption.PublicKey) {
+		t.Error("links do not use the regenerated public key")
+	}
+	if cfg := string(f.Files[xray.ConfigPath]); !strings.Contains(cfg, `"decryption": "mlkem768x25519plus.native.600s.`+n.VLESSEncryption.PrivateKey+`"`) {
+		t.Errorf("xray config:\n%s", cfg)
+	}
+}
+
+// TestAddVLESSEncNodeOldXray: an installed Xray below the minimum version
+// stops the flow before any question.
+func TestAddVLESSEncNodeOldXray(t *testing.T) {
+	f := supported()
+	f.Files["/proc/net/tcp"] = []byte("  sl  local_address\n")
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Xray 25.8.3 (Xray, Penetrates Everything.)\n"}}, xray.BinPath, "version")
+	r := runNodes(t, f, "1\n1\n2\n0\n0\n")
+	if !strings.Contains(r.stdout, text.XrayTooOldForVLESSEnc("v25.8.3", "v25.9.5")) || strings.Contains(r.stdout, "端口 [") {
+		t.Errorf("old xray:\n%s", r.stdout)
+	}
+	if st, _ := state.NewStore(f).Load(); len(st.Nodes) != 0 {
+		t.Error("node added")
+	}
+}
+
+// TestXrayUpdateWarnsVLESSEnc: updating to a version without VLESS
+// Encryption warns when such a node exists.
+func TestXrayUpdateWarnsVLESSEnc(t *testing.T) {
+	f := nodeSystem()
+	env := func() Env {
+		return Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
+			TargetChecker: fakeChecker{}, AddressDetector: fakeDetector{}, XrayFetcher: releaseFetcher{}}
+	}
+	runEnv(t, env(), strings.Join([]string{"1", "1", "2", "", "", "0", "0"}, "\n")+"\n")
+	// 5 Xray, 6 update to v25.8.3 (the download fails).
+	r := runEnv(t, env(), "5\n6\nv25.8.3\n0\n0\n")
+	if !strings.Contains(r.stdout, text.XrayOldVersionVLESSEnc("v25.8.3", "v25.9.5")) {
+		t.Errorf("no VLESS Encryption warning:\n%s", r.stdout)
+	}
+	r = runEnv(t, env(), "5\n6\nv26.3.27\n0\n0\n")
+	if strings.Contains(r.stdout, "不支持 VLESS Encryption") {
+		t.Errorf("warning for a supported version:\n%s", r.stdout)
 	}
 }

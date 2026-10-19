@@ -465,6 +465,20 @@ func duration(s int64) string {
 // XrayUpdated reports a successful update.
 func XrayUpdated(v string) string { return "Xray 已更新到 " + v + "。" }
 
+// VLESSEncHint follows the choice of a VLESS Encryption node (DESIGN
+// section 9.7).
+const VLESSEncHint = "适合经中转连接的落地机；需要客户端支持 VLESS Encryption。"
+
+// XrayTooOldForVLESSEnc stops adding a VLESS Encryption node on an old Xray.
+func XrayTooOldForVLESSEnc(v, min string) string {
+	return fmt.Sprintf("当前 Xray %s 低于 %s，不支持 VLESS Encryption。请先在\"Xray 服务\"中选择\"更新 Xray\"。", v, min)
+}
+
+// XrayOldVersionVLESSEnc warns that VLESS Encryption nodes need a newer Xray.
+func XrayOldVersionVLESSEnc(v, min string) string {
+	return fmt.Sprintf("⚠ %s 低于 %s，不支持 VLESS Encryption 节点：配置检查会失败，Xray 保持当前版本。", v, min)
+}
+
 // XrayOldVersion warns about a version without ML-KEM target support.
 func XrayOldVersion(v, min string) string {
 	return fmt.Sprintf("⚠ %s 低于 %s，使用 X25519MLKEM768 的目标网站（多数大型网站）将无法使用。", v, min)
