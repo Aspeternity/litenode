@@ -296,7 +296,9 @@ func Conflicts(e Export, current *state.State, listening map[ports.Key]bool) []p
 	own := map[ports.Key]bool{}
 	for _, n := range current.Nodes {
 		if n.Enabled {
-			own[ports.Key{Proto: ports.TCP, Port: n.Port}] = true
+			for _, k := range ports.NodeKeys(n, n.Port) {
+				own[k] = true
+			}
 		}
 	}
 	var out []ports.Claim

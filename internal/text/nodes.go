@@ -204,14 +204,21 @@ func ChangeFailed(err error, restored bool) string {
 const (
 	NodeAdded         = "节点已添加。"
 	ShareLinkTitle    = "分享链接："
-	SecurityGroupHint = "连不上时，请检查云厂商的安全组或防火墙是否放行了 TCP 端口 %d。"
+	SecurityGroupHint = "连不上时，请检查云厂商的安全组或防火墙是否放行了 %s 端口 %d。"
 )
 
 // VLESSEncClientHint follows a VLESS Encryption link (DESIGN section 9.7).
 const VLESSEncClientHint = "需要客户端支持 VLESS Encryption（支持的客户端见 README）。"
 
-// SecurityGroup formats the security group hint.
-func SecurityGroup(port int) string { return fmt.Sprintf(SecurityGroupHint, port) }
+// SecurityGroup formats the security group hint. udp: the node serves
+// UDP too (Shadowsocks 2022).
+func SecurityGroup(port int, udp bool) string {
+	proto := "TCP"
+	if udp {
+		proto = "TCP 和 UDP"
+	}
+	return fmt.Sprintf(SecurityGroupHint, proto, port)
+}
 
 // ForeignFilter warns about existing inbound filtering (D-044).
 func ForeignFilter(port int, where []string) string {
@@ -327,12 +334,14 @@ const (
 	ClientDelete       = "删除客户端"
 	ClientRemark       = "备注"
 	ClientResetUUID    = "重置 UUID"
+	ClientResetKey     = "重置密钥"
 	PromptClientNumber = "请输入客户端序号（0 返回）"
 	ClientAdded        = "客户端已添加。"
 	ClientEnabled      = "客户端已启用。"
 	ClientDisabled     = "客户端已禁用。"
 	ClientDeleted      = "客户端已删除。"
 	ClientUUIDReset    = "UUID 已重置，该客户端的旧链接已失效。"
+	ClientKeyReset     = "密钥已重置，该客户端的旧链接已失效。"
 	ConfirmResetUUID   = "重置后该客户端的旧链接立即失效（其他客户端不受影响），是否继续？"
 	ClientNone         = "（暂无客户端）"
 	ClientNoNodes      = "（暂无节点，请先在\"节点管理\"中添加节点）"
@@ -471,6 +480,10 @@ func XrayUpdated(v string) string { return "Xray 已更新到 " + v + "。" }
 // VLESSEncHint follows the choice of a VLESS Encryption node (DESIGN
 // section 9.7).
 const VLESSEncHint = "适合经中转连接的落地机；需要客户端支持 VLESS Encryption。"
+
+// SS2022Hint follows the choice of a Shadowsocks 2022 node (DESIGN
+// section 9.8).
+const SS2022Hint = "兼容选项：客户端支持时优先使用 VLESS Encryption。"
 
 // XrayTooOldForVLESSEnc stops adding a VLESS Encryption node on an old Xray.
 func XrayTooOldForVLESSEnc(v, min string) string {

@@ -95,12 +95,22 @@ type Claim struct {
 // NodeOwner names a node as a claim owner.
 func NodeOwner(id int64) string { return "node:" + strconv.FormatInt(id, 10) }
 
+// NodeKeys lists the keys a node uses on port: TCP, and UDP for nodes
+// that serve it (Shadowsocks 2022).
+func NodeKeys(n node.Node, port int) []Key {
+	if n.UsesUDP() {
+		return []Key{{TCP, port}, {UDP, port}}
+	}
+	return []Key{{TCP, port}}
+}
+
 // NodeClaims lists the ports of all nodes, enabled or not.
 func NodeClaims(nodes []node.Node) []Claim {
 	var out []Claim
 	for _, n := range nodes {
-		// Every current transport runs over TCP.
-		out = append(out, Claim{Key{TCP, n.Port}, NodeOwner(n.ID)})
+		for _, k := range NodeKeys(n, n.Port) {
+			out = append(out, Claim{k, NodeOwner(n.ID)})
+		}
 	}
 	return out
 }
@@ -192,17 +202,18 @@ func Range(protos string, from, to int) []Key {
 	return out
 }
 
-// RandomFree picks a free TCP port in 10000-60000 for a new node when the
-// default is taken. It gives up after many tries and returns 0. A nil rng
-// uses the global source.
-func (c Checker) RandomFree(rng *rand.Rand) int {
+// RandomFree picks a port in 10000-60000 for a new node n when the
+// default is taken, free for every key the node needs (NodeKeys). It
+// gives up after many tries and returns 0. A nil rng uses the global
+// source.
+func (c Checker) RandomFree(rng *rand.Rand, n node.Node) int {
 	intN := rand.IntN
 	if rng != nil {
 		intN = rng.IntN
 	}
 	for range 1000 {
 		p := 10000 + intN(50001)
-		if len(c.Check([]Key{{TCP, p}}, "", nil)) == 0 {
+		if len(c.Check(NodeKeys(n, p), "", nil)) == 0 {
 			return p
 		}
 	}

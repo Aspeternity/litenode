@@ -16,6 +16,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/node/protocol"
 	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/ports"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -97,9 +98,10 @@ func (s *Service) PortChecker(st *state.State) (ports.Checker, error) {
 	return ports.Checker{Listening: l, Claims: ports.StateClaims(st.Nodes, st.Forwards)}, nil
 }
 
-// checkPort fails with *PortTakenError if port cannot be used by the node
-// with the given ID (0 for a new node). A node keeps its own current port.
-func (s *Service) checkPort(st *state.State, id int64, port int) error {
+// checkPort fails with *PortTakenError if port cannot be used by node n
+// (ID 0 for a new node). A node keeps its own current port. Nodes that
+// serve UDP need the port free for TCP and UDP.
+func (s *Service) checkPort(st *state.State, n node.Node, port int) error {
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("invalid port %d", port)
 	}
@@ -109,13 +111,13 @@ func (s *Service) checkPort(st *state.State, id int64, port int) error {
 	}
 	owner := ""
 	var selfPorts []ports.Key
-	if n := find(st, id); n != nil {
-		owner = ports.NodeOwner(id)
-		if n.Enabled {
-			selfPorts = []ports.Key{{Proto: ports.TCP, Port: n.Port}}
+	if cur := find(st, n.ID); cur != nil {
+		owner = ports.NodeOwner(n.ID)
+		if cur.Enabled {
+			selfPorts = ports.NodeKeys(*cur, cur.Port)
 		}
 	}
-	if conflicts := c.Check([]ports.Key{{Proto: ports.TCP, Port: port}}, owner, selfPorts); len(conflicts) > 0 {
+	if conflicts := c.Check(ports.NodeKeys(n, port), owner, selfPorts); len(conflicts) > 0 {
 		return &PortTakenError{Conflicts: conflicts}
 	}
 	return nil
@@ -163,7 +165,7 @@ func (s *Service) Add(ctx context.Context, in AddInput) (node.Node, error) {
 	if err := node.CheckClientRemark(st.Nodes, remark, 0); err != nil {
 		return node.Node{}, err
 	}
-	if err := s.checkPort(st, 0, in.Port); err != nil {
+	if err := s.checkPort(st, node.Node{Protocol: p.Combo.Protocol}, in.Port); err != nil {
 		return node.Node{}, err
 	}
 	n, err := p.Build(node.BuildInput{
@@ -230,7 +232,7 @@ func (s *Service) modify(ctx context.Context, id int64, fn func(st *state.State,
 // SetPort moves a node to another port (links change).
 func (s *Service) SetPort(ctx context.Context, id int64, port int) error {
 	return s.modify(ctx, id, func(st *state.State, n *node.Node) error {
-		if err := s.checkPort(st, id, port); err != nil {
+		if err := s.checkPort(st, *n, port); err != nil {
 			return err
 		}
 		n.Port = port
@@ -265,10 +267,18 @@ func (s *Service) SetFallbackLimit(ctx context.Context, id int64, l node.Fallbac
 	})
 }
 
-// RegenerateKeys replaces the key pair, and the shortId of a REALITY node
-// (links change).
+// RegenerateKeys replaces the key pair, and the shortId of a REALITY node,
+// or the server key of a Shadowsocks 2022 node (links change).
 func (s *Service) RegenerateKeys(ctx context.Context, id int64) error {
 	return s.modify(ctx, id, func(_ *state.State, n *node.Node) error {
+		if n.Shadowsocks != nil {
+			key, err := protocol.NewSS2022Key(s.Rand)
+			if err != nil {
+				return err
+			}
+			n.Shadowsocks.ServerKey = key
+			return nil
+		}
 		if n.Reality == nil && n.VLESSEncryption == nil {
 			return errors.New("node has no keys")
 		}
@@ -320,7 +330,7 @@ func (s *Service) SetRemark(ctx context.Context, id int64, remark string) error 
 func (s *Service) SetEnabled(ctx context.Context, id int64, enabled bool) error {
 	return s.modify(ctx, id, func(st *state.State, n *node.Node) error {
 		if enabled && !n.Enabled {
-			if err := s.checkPort(st, id, n.Port); err != nil {
+			if err := s.checkPort(st, *n, n.Port); err != nil {
 				return err
 			}
 		}

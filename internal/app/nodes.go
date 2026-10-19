@@ -82,6 +82,9 @@ func (u *nodeUI) protocolLabel(n node.Node) string {
 	p, pok := u.svc.Registry.Protocol(n.Protocol)
 	t, tok := u.svc.Registry.Transport(n.Transport)
 	s, sok := u.svc.Registry.Security(n.Security)
+	if n.Shadowsocks != nil {
+		return "Shadowsocks-2022"
+	}
 	sec := label(s, sok, n.Security)
 	if n.VLESSEncryption != nil {
 		sec = "Encryption"
@@ -153,12 +156,15 @@ func (u *nodeUI) add() error {
 	if !reality {
 		steps = 2
 	}
-	if preset.ID == builtin.PresetVLESSEncVision {
+	switch preset.ID {
+	case builtin.PresetVLESSEncVision:
 		u.s.Println(text.VLESSEncHint)
 		if v, ok := u.svc.Xray.Installed(u.ctx); ok && !xray.SupportsVLESSEnc(v) {
 			u.s.EndWarn(text.XrayTooOldForVLESSEnc(v, xray.MinVLESSEncVersion))
 			return nil
 		}
+	case builtin.PresetSS2022:
+		u.s.Println(text.SS2022Hint)
 	}
 
 	addr, err := u.ensureShareAddresses()
@@ -166,7 +172,7 @@ func (u *nodeUI) add() error {
 		return err // "" : the user went back
 	}
 	u.s.Step(1, steps, text.PromptPort)
-	port, err := u.askNewPort(addr, reality)
+	port, err := u.askNewPort(addr, preset)
 	if err != nil {
 		return err
 	}
@@ -221,7 +227,7 @@ func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, isDefault, fu
 	if n.SharePort > 0 {
 		port = n.SharePort
 	}
-	u.s.Println(text.SecurityGroup(port))
+	u.s.Println(text.SecurityGroup(port, n.UsesUDP()))
 	if n.VLESSEncryption != nil {
 		u.s.Println(text.VLESSEncClientHint)
 	}
@@ -254,18 +260,21 @@ func (u *nodeUI) printLinks(id int64) {
 	}
 }
 
-// askNewPort asks for a free port for a new node. REALITY nodes default
-// to 443 if free (DESIGN section 9.2 step 2), other nodes to a random free
-// port (section 9.7).
-func (u *nodeUI) askNewPort(addr string, reality bool) (int, error) {
+// askNewPort asks for a free port for a new node of preset p. REALITY
+// nodes default to 443 if free (DESIGN section 9.2 step 2), other nodes to
+// a random free port (sections 9.7 and 9.8). Nodes that serve UDP need
+// the port free for TCP and UDP.
+func (u *nodeUI) askNewPort(addr string, p node.Preset) (int, error) {
 	st := u.state()
 	pc, err := u.svc.PortChecker(st)
 	if err != nil {
 		return 0, err
 	}
+	reality := p.Combo.Security == "reality"
+	tmpl := node.Node{Protocol: p.Combo.Protocol}
 	def := 443
-	if !reality || len(pc.Check([]ports.Key{{Proto: ports.TCP, Port: def}}, "", nil)) > 0 {
-		def = pc.RandomFree(nil)
+	if !reality || len(pc.Check(ports.NodeKeys(tmpl, def), "", nil)) > 0 {
+		def = pc.RandomFree(nil, tmpl)
 	}
 	if ip := net.ParseIP(addr); ip != nil && !u.detector.OnInterface(addr) {
 		u.s.Println(u.s.Colors.Warn(text.NATHint))
@@ -275,7 +284,7 @@ func (u *nodeUI) askNewPort(addr string, reality bool) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		if conflicts := pc.Check([]ports.Key{{Proto: ports.TCP, Port: port}}, "", nil); len(conflicts) > 0 {
+		if conflicts := pc.Check(ports.NodeKeys(tmpl, port), "", nil); len(conflicts) > 0 {
 			for _, c := range conflicts {
 				u.s.Println(u.s.Colors.Warn(text.PortTaken(c.Port, string(c.Proto), c.Owner)))
 			}
@@ -288,13 +297,16 @@ func (u *nodeUI) askNewPort(addr string, reality bool) (int, error) {
 	}
 }
 
-// defaultRemark is "Reality-<port>" or, for VLESS Encryption,
-// "Enc-<port>", made unique with "-2", "-3", ...
+// defaultRemark is "Reality-<port>", "Enc-<port>" for VLESS Encryption or
+// "SS-<port>" for Shadowsocks 2022, made unique with "-2", "-3", ...
 func (u *nodeUI) defaultRemark(p node.Preset, port int) string {
 	st := u.state()
 	prefix := "Reality-"
-	if p.ID == builtin.PresetVLESSEncVision {
+	switch p.ID {
+	case builtin.PresetVLESSEncVision:
 		prefix = "Enc-"
+	case builtin.PresetSS2022:
+		prefix = "SS-"
 	}
 	base := prefix + strconv.Itoa(port)
 	r := base

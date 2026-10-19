@@ -16,6 +16,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/nft"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
+	"github.com/Aspeternity/litenode/internal/node/protocol"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
@@ -340,5 +341,66 @@ func TestVLESSEncNode(t *testing.T) {
 	}
 	if err := fx.svc.SetTarget(ctx, n.ID, "www.apple.com:443"); err == nil {
 		t.Error("target set on a VLESS Encryption node")
+	}
+}
+
+// TestSS2022Node checks the TCP and UDP port handling and the keys of a
+// Shadowsocks 2022 node (DESIGN section 9.8).
+func TestSS2022Node(t *testing.T) {
+	fx := newFixture(t)
+	ctx := context.Background()
+	// A program listens on UDP 34567 (0x8707) only.
+	fx.f.Files["/proc/net/udp"] = []byte(procTCPHeader + "   0: 00000000:8707 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 1 1 0\n")
+	var pt *PortTakenError
+	if _, err := fx.svc.Add(ctx, AddInput{PresetID: builtin.PresetSS2022, Port: 34567, Remark: "SS-34567"}); !errors.As(err, &pt) {
+		t.Fatalf("UDP port taken: err = %v", err)
+	}
+	n, err := fx.svc.Add(ctx, AddInput{PresetID: builtin.PresetSS2022, Port: 34568, Remark: "SS-34568"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fx.inbounds(t); !slices.Equal(got, []int{34568}) {
+		t.Errorf("inbounds = %v", got)
+	}
+	execs := strings.Join(fx.ufwExecs(), "\n")
+	for _, p := range []string{"tcp", "udp"} {
+		if want := "ufw allow proto " + p + " to any port 34568 comment litenode:node:" + itoa(n.ID); !strings.Contains(execs, want) {
+			t.Errorf("missing %q in\n%s", want, execs)
+		}
+	}
+	// A REALITY node on the same port only needs TCP, still taken by the
+	// Shadowsocks node.
+	if _, err := fx.svc.Add(ctx, AddInput{PresetID: builtin.PresetVLESSRealityVision, Port: 34568, Target: "www.microsoft.com:443", Remark: "R"}); !errors.As(err, &pt) {
+		t.Errorf("port of the shadowsocks node: err = %v", err)
+	}
+	if err := fx.svc.SetPort(ctx, n.ID, 34567); !errors.As(err, &pt) {
+		t.Errorf("move to UDP-taken port: err = %v", err)
+	}
+
+	oldServer := fx.state(t).Nodes[0].Shadowsocks.ServerKey
+	if err := fx.svc.RegenerateKeys(ctx, n.ID); err != nil {
+		t.Fatal(err)
+	}
+	if k := fx.state(t).Nodes[0].Shadowsocks.ServerKey; k == oldServer || !protocol.ValidSS2022Key(k) {
+		t.Errorf("server key %q not regenerated", k)
+	}
+
+	c, err := fx.svc.AddClient(ctx, n.ID, "phone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.UUID != "" || c.Flow != "" || !protocol.ValidSS2022Key(c.Key) {
+		t.Errorf("new client = %+v", c)
+	}
+	first := fx.state(t).Nodes[0].Clients[0].Key
+	if err := fx.svc.ResetClientCredential(ctx, n.ID, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	cl := fx.state(t).Nodes[0].Clients
+	if cl[0].Key != first || cl[1].Key == c.Key || !protocol.ValidSS2022Key(cl[1].Key) || cl[1].UUID != "" {
+		t.Errorf("after reset: %+v", cl)
+	}
+	if got := fx.clientsInConfig(t); len(got) != 2 {
+		t.Errorf("config clients = %v", got)
 	}
 }

@@ -63,7 +63,7 @@ func TestClients(t *testing.T) {
 
 	// Resetting one UUID leaves the others alone.
 	firstUUID := fx.state(t).Nodes[0].Clients[0].UUID
-	if err := fx.svc.ResetClientUUID(ctx, n.ID, c.ID); err != nil {
+	if err := fx.svc.ResetClientCredential(ctx, n.ID, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	cl := fx.state(t).Nodes[0].Clients
@@ -111,7 +111,7 @@ func TestClients(t *testing.T) {
 	if got := fx.inbounds(t); !slices.Contains(got, n.Port) {
 		t.Errorf("inbounds after adding a client = %v", got)
 	}
-	if err := fx.svc.ResetClientUUID(ctx, n.ID, 9999); !errors.Is(err, ErrClientNotFound) {
+	if err := fx.svc.ResetClientCredential(ctx, n.ID, 9999); !errors.Is(err, ErrClientNotFound) {
 		t.Errorf("unknown client: %v", err)
 	}
 }
