@@ -18,6 +18,8 @@ const (
 	PresetVLESSEncVision = "vless-tcp-encryption-vision"
 	// PresetSS2022 is Shadowsocks 2022 (D-110).
 	PresetSS2022 = "shadowsocks-2022"
+	// PresetHysteria2 is Hysteria2 with a self-signed certificate (D-117).
+	PresetHysteria2 = "hysteria2"
 )
 
 // Registry returns the registry of all compiled-in components.
@@ -76,6 +78,14 @@ func Registry() (*node.Registry, error) {
 				Label: "Shadowsocks 2022",
 				Combo: node.Combo{Protocol: "shadowsocks", Transport: "tcp", Security: "none"},
 				Build: buildSS2022,
+			})
+		},
+		func() error {
+			return r.AddPreset(node.Preset{
+				ID:    PresetHysteria2,
+				Label: "Hysteria2",
+				Combo: node.Combo{Protocol: "hysteria", Transport: "hysteria", Security: "tls"},
+				Build: buildHysteria2,
 			})
 		},
 	}

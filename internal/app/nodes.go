@@ -85,6 +85,9 @@ func (u *nodeUI) protocolLabel(n node.Node) string {
 	if n.Shadowsocks != nil {
 		return "Shadowsocks-2022"
 	}
+	if n.Protocol == "hysteria" {
+		return "Hysteria2"
+	}
 	sec := label(s, sok, n.Security)
 	if n.VLESSEncryption != nil {
 		sec = "Encryption"
@@ -161,11 +164,17 @@ func (u *nodeUI) add() error {
 	case builtin.PresetVLESSEncVision:
 		u.s.Println(text.VLESSEncHint)
 		if v, ok := u.svc.Xray.Installed(u.ctx); ok && !xray.SupportsVLESSEnc(v) {
-			u.s.EndWarn(text.XrayTooOldForVLESSEnc(v, xray.MinVLESSEncVersion))
+			u.s.EndWarn(text.XrayTooOldFor(text.FeatureVLESSEnc, v, xray.MinVLESSEncVersion))
 			return nil
 		}
 	case builtin.PresetSS2022:
 		u.s.Println(text.SS2022Hint)
+	case builtin.PresetHysteria2:
+		u.s.Println(text.Hy2Hint)
+		if v, ok := u.svc.Xray.Installed(u.ctx); ok && !xray.SupportsHysteria(v) {
+			u.s.EndWarn(text.XrayTooOldFor(text.FeatureHysteria, v, xray.MinHysteriaVersion))
+			return nil
+		}
 	}
 
 	addr, err := u.ensureShareAddresses()
@@ -228,7 +237,7 @@ func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, isDefault, fu
 	if n.SharePort > 0 {
 		port = n.SharePort
 	}
-	u.s.Println(text.SecurityGroup(port, n.UsesUDP()))
+	u.s.Println(text.SecurityGroup(port, n.PortProto()))
 	if n.VLESSEncryption != nil {
 		u.s.Println(text.VLESSEncClientHint)
 	}
@@ -263,8 +272,8 @@ func (u *nodeUI) printLinks(id int64) {
 
 // askNewPort asks for a free port for a new node of preset p. REALITY
 // nodes default to 443 if free (DESIGN section 9.2 step 2), other nodes to
-// a random free port (sections 9.7 and 9.8). Nodes that serve UDP need
-// the port free for TCP and UDP.
+// a random free port (sections 9.7, 9.8 and 9.10). The port must be free
+// for every protocol the node listens on (ports.NodeKeys).
 func (u *nodeUI) askNewPort(addr string, p node.Preset) (int, error) {
 	st := u.state()
 	pc, err := u.svc.PortChecker(st)
@@ -298,8 +307,9 @@ func (u *nodeUI) askNewPort(addr string, p node.Preset) (int, error) {
 	}
 }
 
-// defaultRemark is "Reality-<port>", "Enc-<port>" for VLESS Encryption or
-// "SS-<port>" for Shadowsocks 2022, made unique with "-2", "-3", ...
+// defaultRemark is "Reality-<port>", "Enc-<port>" for VLESS Encryption,
+// "SS-<port>" for Shadowsocks 2022 or "Hy2-<port>" for Hysteria2, made
+// unique with "-2", "-3", ...
 func (u *nodeUI) defaultRemark(p node.Preset, port int) string {
 	st := u.state()
 	prefix := "Reality-"
@@ -308,6 +318,8 @@ func (u *nodeUI) defaultRemark(p node.Preset, port int) string {
 		prefix = "Enc-"
 	case builtin.PresetSS2022:
 		prefix = "SS-"
+	case builtin.PresetHysteria2:
+		prefix = "Hy2-"
 	}
 	base := prefix + strconv.Itoa(port)
 	r := base

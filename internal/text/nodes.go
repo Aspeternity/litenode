@@ -210,14 +210,11 @@ const (
 // VLESSEncClientHint follows a VLESS Encryption link (DESIGN section 9.7).
 const VLESSEncClientHint = "需要客户端支持 VLESS Encryption（支持的客户端见 README）。"
 
-// SecurityGroup formats the security group hint. udp: the node serves
-// UDP too (Shadowsocks 2022).
-func SecurityGroup(port int, udp bool) string {
-	proto := "TCP"
-	if udp {
-		proto = "TCP 和 UDP"
-	}
-	return fmt.Sprintf(SecurityGroupHint, proto, port)
+// SecurityGroup formats the security group hint for the node's port
+// protocol: "tcp", "udp" or "tcp+udp" (node.PortProto).
+func SecurityGroup(port int, proto string) string {
+	label := map[string]string{"tcp": "TCP", "udp": "UDP", "tcp+udp": "TCP 和 UDP"}[proto]
+	return fmt.Sprintf(SecurityGroupHint, label, port)
 }
 
 // ForeignFilter warns about existing inbound filtering (D-044).
@@ -256,7 +253,12 @@ const (
 	LinksWillBreak  = "此操作会让该节点所有客户端的分享链接失效，是否继续？"
 	NewLinksTitle   = "该节点所有客户端的新链接："
 	KeysRegenerated = "已重新生成密钥。"
-	SharePortSet    = "分享端口已修改。"
+	// ModRegenCert replaces ModRegenKeys on Hysteria2 nodes (DESIGN
+	// section 9.10).
+	ModRegenCert     = "重新生成证书"
+	ConfirmRegenCert = "重新生成证书会更换证书指纹：线路机需要改用新的指纹，所有客户端的旧链接失效。是否继续？"
+	CertRegenerated  = "已重新生成证书，请在线路机上更新证书指纹。"
+	SharePortSet     = "分享端口已修改。"
 )
 
 // PortSet ends a successful port change.
@@ -342,6 +344,8 @@ const (
 	ClientDeleted      = "客户端已删除。"
 	ClientUUIDReset    = "UUID 已重置，该客户端的旧链接已失效。"
 	ClientKeyReset     = "密钥已重置，该客户端的旧链接已失效。"
+	ClientResetPass    = "重置密码"
+	ClientPassReset    = "密码已重置，该客户端的旧链接已失效。"
 	ConfirmResetUUID   = "重置后该客户端的旧链接立即失效（其他客户端不受影响），是否继续？"
 	ClientNone         = "（暂无客户端）"
 	ClientNoNodes      = "（暂无节点，请先在\"节点管理\"中添加节点）"
@@ -485,14 +489,25 @@ const VLESSEncHint = "适合经中转连接的落地机；需要客户端支持 
 // section 9.8).
 const SS2022Hint = "兼容选项：客户端支持时优先使用 VLESS Encryption。"
 
-// XrayTooOldForVLESSEnc stops adding a VLESS Encryption node on an old Xray.
-func XrayTooOldForVLESSEnc(v, min string) string {
-	return fmt.Sprintf("当前 Xray %s 低于 %s，不支持 VLESS Encryption。请先在\"Xray 服务\"中选择\"更新 Xray\"。", v, min)
+// Hy2Hint follows the choice of a Hysteria2 node (DESIGN section 9.10).
+const Hy2Hint = "适合线路机出站连接落地机：使用自签证书，线路机按证书指纹连接；只使用 UDP 端口。"
+
+// FeatureVLESSEnc and FeatureHysteria name node types that need a minimum
+// Xray version.
+const (
+	FeatureVLESSEnc = "VLESS Encryption"
+	FeatureHysteria = "Hysteria2"
+)
+
+// XrayTooOldFor stops adding a node of a type (FeatureVLESSEnc, ...) that
+// an old Xray does not support.
+func XrayTooOldFor(feature, v, min string) string {
+	return fmt.Sprintf("当前 Xray %s 低于 %s，不支持 %s。请先在\"Xray 服务\"中选择\"更新 Xray\"。", v, min, feature)
 }
 
-// XrayOldVersionVLESSEnc warns that VLESS Encryption nodes need a newer Xray.
-func XrayOldVersionVLESSEnc(v, min string) string {
-	return fmt.Sprintf("⚠ %s 低于 %s，不支持 VLESS Encryption 节点：配置检查会失败，Xray 保持当前版本。", v, min)
+// XrayOldVersionFor warns that existing nodes of a type need a newer Xray.
+func XrayOldVersionFor(feature, v, min string) string {
+	return fmt.Sprintf("⚠ %s 低于 %s，不支持 %s 节点：配置检查会失败，Xray 保持当前版本。", v, min, feature)
 }
 
 // XrayOldVersion warns about a version without ML-KEM target support.

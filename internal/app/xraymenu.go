@@ -149,8 +149,12 @@ func (u *nodeUI) xrayUpdate() error {
 		if !xray.SupportsMLKEMTargets(v) {
 			u.s.Println(u.s.Colors.Warn(text.XrayOldVersion(v, xray.MinMLKEMVersion)))
 		}
-		if !xray.SupportsVLESSEnc(v) && slices.ContainsFunc(u.state().Nodes, func(n node.Node) bool { return n.VLESSEncryption != nil }) {
-			u.s.Println(u.s.Colors.Warn(text.XrayOldVersionVLESSEnc(v, xray.MinVLESSEncVersion)))
+		nodes := u.state().Nodes
+		if !xray.SupportsVLESSEnc(v) && slices.ContainsFunc(nodes, func(n node.Node) bool { return n.VLESSEncryption != nil }) {
+			u.s.Println(u.s.Colors.Warn(text.XrayOldVersionFor(text.FeatureVLESSEnc, v, xray.MinVLESSEncVersion)))
+		}
+		if !xray.SupportsHysteria(v) && slices.ContainsFunc(nodes, func(n node.Node) bool { return n.Protocol == "hysteria" }) {
+			u.s.Println(u.s.Colors.Warn(text.XrayOldVersionFor(text.FeatureHysteria, v, xray.MinHysteriaVersion)))
 		}
 	}
 	u.s.Println(text.XrayUpdating)

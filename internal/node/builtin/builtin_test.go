@@ -10,8 +10,8 @@ func TestBuiltinRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	presets := r.Presets()
-	if len(presets) != 3 || presets[0].ID != PresetVLESSRealityVision || presets[1].ID != PresetVLESSEncVision ||
-		presets[2].ID != PresetSS2022 {
+	if len(presets) != 4 || presets[0].ID != PresetVLESSRealityVision || presets[1].ID != PresetVLESSEncVision ||
+		presets[2].ID != PresetSS2022 || presets[3].ID != PresetHysteria2 {
 		t.Fatalf("presets = %+v", presets)
 	}
 	for _, name := range []string{"vless", "shadowsocks", "hysteria"} {
