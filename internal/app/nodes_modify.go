@@ -37,8 +37,12 @@ func (u *nodeUI) modify() error {
 				ui.Item{Label: text.ModFallback, Hint: text.Current(text.FallbackDescribe(limit.AfterBytes, limit.BytesPerSec)),
 					Action: func() error { return u.modFallback(id, target) }})
 		}
+		regen := text.ModRegenKeys
+		if n.TLS != nil {
+			regen = text.ModRegenCert
+		}
 		items = append(items,
-			ui.Item{Label: text.ModRegenKeys, Action: func() error { return u.modRegenKeys(id) }},
+			ui.Item{Label: regen, Action: func() error { return u.modRegenKeys(id, n.TLS != nil) }},
 			ui.Item{Label: text.ModSharePort, Hint: text.SharePortCurrent(n.SharePort), Action: func() error { return u.modSharePort(id, n.SharePort) }},
 			ui.Item{Label: text.ModRemark, Hint: text.Current(n.Remark), Action: func() error { return u.modRemark(id, n.Remark) }},
 		)
@@ -156,15 +160,21 @@ func (u *nodeUI) modFallback(id int64, target string) error {
 	return nil
 }
 
-func (u *nodeUI) modRegenKeys(id int64) error {
-	ok, err := u.confirmLinks()
+// modRegenKeys regenerates the keys, or the certificate of a TLS node
+// (cert), whose pinned fingerprint changes too (DESIGN section 9.10).
+func (u *nodeUI) modRegenKeys(id int64, cert bool) error {
+	confirm, done := text.LinksWillBreak, text.KeysRegenerated
+	if cert {
+		confirm, done = text.ConfirmRegenCert, text.CertRegenerated
+	}
+	ok, err := u.s.Confirm(confirm)
 	if err != nil || !ok {
 		return err
 	}
 	if err := u.svc.RegenerateKeys(u.ctx, id); err != nil {
 		return err
 	}
-	u.s.Done(text.KeysRegenerated)
+	u.s.Done(done)
 	u.printLinks(id)
 	return nil
 }

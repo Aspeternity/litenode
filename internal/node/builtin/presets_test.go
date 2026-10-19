@@ -126,7 +126,11 @@ func TestBuildHysteria2(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
-	n, err := buildHysteria2(node.BuildInput{NodeID: 7, ClientID: 8, Port: 45678, Remark: "Hy2-45678", Rand: rand.Reader, Now: now})
+	p, _ := r.Preset(PresetHysteria2)
+	if p.Label != "Hysteria2" || r.PresetFlow("hysteria", "hysteria", "tls") != "" {
+		t.Errorf("preset = %+v", p)
+	}
+	n, err := p.Build(node.BuildInput{NodeID: 7, ClientID: 8, Port: 45678, Remark: "Hy2-45678", Rand: rand.Reader, Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}

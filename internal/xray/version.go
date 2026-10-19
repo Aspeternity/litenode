@@ -49,6 +49,16 @@ func SupportsVLESSEnc(v string) bool {
 	return v != "" && CompareVersions(v, MinVLESSEncVersion) >= 0
 }
 
+// MinHysteriaVersion is the first Xray with the Hysteria2 inbound
+// (D-118): v26.2.6 only has the outbound.
+const MinHysteriaVersion = "v26.3.27"
+
+// SupportsHysteria reports whether Xray version v supports Hysteria2
+// nodes.
+func SupportsHysteria(v string) bool {
+	return v != "" && CompareVersions(v, MinHysteriaVersion) >= 0
+}
+
 // SupportsMLKEMTargets reports whether Xray version v can use REALITY
 // targets that pick X25519MLKEM768.
 func SupportsMLKEMTargets(v string) bool {

@@ -43,6 +43,10 @@ func TestNodePorts(t *testing.T) {
 	if !slices.Equal(re, []nft.ProbePort{{Proto: "tcp", Port: 443}}) {
 		t.Errorf("vless: %v", re)
 	}
+	hy := NodePorts(node.Node{Protocol: "hysteria", Port: 45678})
+	if !slices.Equal(hy, []nft.ProbePort{{Proto: "udp", Port: 45678}}) {
+		t.Errorf("hysteria: %v", hy)
+	}
 }
 
 func TestStatus(t *testing.T) {
@@ -148,6 +152,8 @@ func TestConclude(t *testing.T) {
 		{"udp only unreached", []Proto{open, {Name: "udp"}}, Env{}, [][]Reason{{ReasonOpen}, {ReasonUnreachedUDP}}},
 		{"blocked tcp counts as arrived", []Proto{{Name: "tcp", Status: Blocked}, {Name: "udp"}}, Env{UFW: true}, [][]Reason{{ReasonBlockedUFW}, {ReasonUnreachedUDP}}},
 		{"nothing", []Proto{{Name: "tcp"}, {Name: "udp"}}, Env{}, [][]Reason{{ReasonUnreached}, {ReasonUnreached}}},
+		// Hysteria2 has UDP only: no TCP to compare with.
+		{"udp only node", []Proto{{Name: "udp"}}, Env{}, [][]Reason{{ReasonUnreached}}},
 	} {
 		got := Conclude(tc.protos, tc.env)
 		for i, f := range got {

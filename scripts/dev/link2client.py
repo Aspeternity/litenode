@@ -1,6 +1,7 @@
 # Development helper (not installed): turn a vless:// share link (REALITY or
-# VLESS Encryption with security=none) or an ss:// Shadowsocks 2022 link
-# into a minimal Xray client config with a local SOCKS inbound, to test
+# VLESS Encryption with security=none), an ss:// Shadowsocks 2022 link or
+# a hysteria2:// link (certificate pinned with pinSHA256) into a minimal
+# Xray client config with a local SOCKS inbound, to test
 # links with the official Xray client:
 #   python3 -I scripts/dev/link2client.py "<link>" 10808 [10853] > client.json
 #   xray run -c client.json &  curl --socks5-hostname 127.0.0.1:10808 https://www.cloudflare.com/cdn-cgi/trace
@@ -20,6 +21,10 @@ if u.scheme == "ss":
   method, _, password = u.netloc.rsplit("@", 1)[0].partition(":")
   cfg["outbounds"] = [{"protocol": "shadowsocks", "settings": {"servers": [{"address": u.hostname, "port": u.port,
     "method": method, "password": urllib.parse.unquote(password)}]}}]
+elif u.scheme == "hysteria2":
+  cfg["outbounds"] = [{"protocol": "hysteria", "settings": {"version": 2, "address": u.hostname, "port": u.port},
+    "streamSettings": {"network": "hysteria", "hysteriaSettings": {"version": 2, "auth": urllib.parse.unquote(u.username)},
+      "security": "tls", "tlsSettings": {"serverName": q["sni"], "pinnedPeerCertSha256": q["pinSHA256"]}}}]
 else:
   cfg["outbounds"] = [{"protocol": "vless",
     "settings": {"vnext": [{"address": u.hostname, "port": u.port,

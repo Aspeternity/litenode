@@ -981,3 +981,10 @@
 - **数据结构**：协议、传输都叫 `hysteria`（与 Xray 一致，显示名 Hysteria2），安全层 `tls`，节点的 `tls` 字段保存 `server_name`、`certificate`、`key`（PEM），以后 TLS 类节点可以复用。客户端密码放在客户端的 `key` 字段（与 SS2022 用户密钥同一字段），32 位小写十六进制（16 字节，链接中无需编码）。`Node.UsesTCP()` 对 hysteria 为假，`PortProto()` 为 `udp`，端口冲突、ufw、防火墙、连通性检测因此只看 UDP。导入备份时检查证书能解析、与私钥匹配、名称不为空，密码格式正确。
 - **指纹的两种形式**：证书 SHA-256（十六进制，Xray / Hysteria 链接 `pinSHA256` / mihomo）和公钥（SPKI）SHA-256（base64，sing-box），测试向量取自 openssl。
 - **预设**到 M11-02 再注册（加入添加节点菜单），M11-01 合并后菜单不出现未完成的类型。
+
+### D-119 Hysteria2 菜单细节（由 Claude 决定（用户授权），2026-10-20，M11-02）
+
+- **添加**：端口默认随机（与 VLESS Encryption、SS2022 一致：经线路机连接，不需要伪装成 443），备注 `Hy2-<端口>`；选择类型后一行提示用途、证书指纹和"只使用 UDP 端口"；已安装 Xray 低于 v26.3.27 时直接结束（与 D-109 相同的做法，提示文字合并为通用的 `XrayTooOldFor` / `XrayOldVersionFor`）。
+- **修改**："重新生成密钥"对 TLS 节点显示为"重新生成证书"，确认提示说明证书指纹会变、线路机要更新；证书名称保持 `www.bing.com`。客户端"重置 UUID"显示为"重置密码"。
+- **安全组提示**按节点的端口协议显示 TCP / UDP / TCP 和 UDP。
+- **实测**（Debian 11）：添加、修改端口、重新生成证书（旧指纹连不上、新指纹连通）、删除后 Xray 正常运行；ufw 和 LiteNode 防火墙都只有 UDP 规则（ufw 含 v6）；连通性检测只列 UDP 并得出"连通"。
