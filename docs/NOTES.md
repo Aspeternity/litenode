@@ -19,6 +19,25 @@
 - 测试机上用户可能开着 `lnode`（实例锁）：运行菜单前先 `pgrep -x lnode` 检查，不要结束用户的进程；远程 `pkill -f` 的匹配模式不能匹配到执行它的 shell 命令本身。
 - 验证脚本只输出结论（PASS / FAIL、关键几行），不要把整屏菜单或完整日志拿回会话（节省 token，见 CLAUDE.md）。
 
+## 资源占用（M7-11，2026-10-19）
+
+测量对象：main 构建（与 release 相同：`CGO_ENABLED=0 -trimpath -ldflags "-s -w"`，Go 1.27.2）和 LiteNode 默认安装的 Xray v26.10.17，两台 1G 测试机，Xray 各有一个 Reality 节点、空闲（无客户端流量）。方法：菜单在 `script` 创建的 pty 中运行，读 `/proc/<pid>/status`（VmRSS、VmHWM、RssAnon、RssFile）和 `/proc/<pid>/stat` 的 CPU 时间，空闲 60 秒，再依次进入主菜单的 9 个页面并返回。
+
+| 项目 | Debian 12（1 核，973M） | Ubuntu 24.04（2 核，937M） |
+|---|---|---|
+| litenode 程序大小 | 8.2 MiB（8573088 字节） | 同左 |
+| Xray 程序（`/usr/local/lib/litenode`） | 33.4 MiB | 同左 |
+| 菜单启动后 RSS | 9.5 MiB，7 线程 | 8.2 MiB，8 线程 |
+| 进入全部页面后 RSS / 峰值 | 10.5 MiB | 9.5 MiB |
+| 菜单空闲 60 秒 CPU | 0 ms | 0 ms |
+| Xray RSS（运行约 30~55 分钟） | 38.8 MiB（匿名 12.0 MiB，文件映射 26.8 MiB） | 33.1 MiB（匿名 6.4 MiB，文件映射 26.7 MiB） |
+| Xray cgroup 内存（MemoryCurrent） | 12.5 MiB | 6.8 MiB |
+| Xray 空闲 60 秒 CPU | 10 ms | 0 ms |
+
+- 不使用菜单时 LiteNode 没有常驻进程：`litenode-nft.service`、`litenode-rollback-boot.service` 是一次性服务；`litenode-resolve.timer` 只在有域名目标的转发规则时存在，每次运行几毫秒后退出。
+- Xray 的 RSS 大部分是程序文件的映射页，内存紧张时可以被回收；实际独占内存看 RssAnon 或 cgroup 的值。
+- 结论：没有需要单独修复的问题。1G 内存的机器上 LiteNode 菜单约 10M、Xray 空闲约 7~12M 独占内存，空闲 CPU 可以忽略。没有测量有流量时 Xray 的内存（取决于连接数，由 Xray 本身决定）。
+
 ## 实现约定
 
 - 界面（D-069）：页面中的选项默认作为操作流程运行，打开其他页面的选项要标 `Page: true`；操作成功时调用 `s.Done(text.X)` 结束流程（之后输出的链接等不加前缀），多步操作用 `s.Step(n, total, 名称)` 标步骤；没有调用 `Done` 就返回 nil 显示为"已取消"。显示了需要阅读的内容（链接、日志、密钥、测试结果）的操作调用 `s.Hold()`；以警告结束用 `s.EndWarn(text.X)`（自动停住）；返回错误自动停住（D-097）。
