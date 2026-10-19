@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/reality"
 	"github.com/Aspeternity/litenode/internal/share"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -70,7 +71,7 @@ func TestAddNodeFlow(t *testing.T) {
 	}
 	for _, want := range []string{
 		"═ 主菜单 › 节点管理 ═", // page heading (D-060)
-		"┌─ 添加节点\n│\n◆ 节点类型\n│   1. VLESS + TCP + Reality (Vision)\n│   2. VLESS + TCP + Encryption (Vision)\n│   3. Shadowsocks 2022\n│   0. 取消\n", // flow (D-069)
+		"┌─ 添加节点\n│\n◆ 节点类型\n│   1. VLESS + TCP + Reality (Vision)\n│   2. VLESS + TCP + Encryption (Vision)\n│   3. Shadowsocks 2022\n│   4. Hysteria2\n│   0. 取消\n", // flow (D-069)
 		"◆ 1/3 端口 [443]: ", "◆ 2/3 目标网站 (SNI)\n", "◆ 3/3 备注 [Reality-443]: ", "└─ ✓ 节点已添加。\n",
 		"检测到公网地址：203.0.113.10",
 		"www.example.com     3 ms  TLS1.3 ✓  H2 ✓  X25519 ✓  证书 ✓",
@@ -424,7 +425,7 @@ func TestAddVLESSEncNodeOldXray(t *testing.T) {
 	f.Files["/proc/net/tcp"] = []byte("  sl  local_address\n")
 	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Xray 25.8.3 (Xray, Penetrates Everything.)\n"}}, xray.BinPath, "version")
 	r := runNodes(t, f, "1\n1\n2\n0\n0\n")
-	if !strings.Contains(r.stdout, text.XrayTooOldForVLESSEnc("v25.8.3", "v25.9.5")) || strings.Contains(r.stdout, "端口 [") {
+	if !strings.Contains(r.stdout, text.XrayTooOldFor(text.FeatureVLESSEnc, "v25.8.3", "v25.9.5")) || strings.Contains(r.stdout, "端口 [") {
 		t.Errorf("old xray:\n%s", r.stdout)
 	}
 	if st, _ := state.NewStore(f).Load(); len(st.Nodes) != 0 {
@@ -443,7 +444,7 @@ func TestXrayUpdateWarnsVLESSEnc(t *testing.T) {
 	runEnv(t, env(), strings.Join([]string{"1", "1", "2", "", "", "0", "0"}, "\n")+"\n")
 	// 5 Xray, 6 update to v25.8.3 (the download fails).
 	r := runEnv(t, env(), "5\n6\nv25.8.3\n0\n0\n")
-	if !strings.Contains(r.stdout, text.XrayOldVersionVLESSEnc("v25.8.3", "v25.9.5")) {
+	if !strings.Contains(r.stdout, text.XrayOldVersionFor(text.FeatureVLESSEnc, "v25.8.3", "v25.9.5")) {
 		t.Errorf("no VLESS Encryption warning:\n%s", r.stdout)
 	}
 	r = runEnv(t, env(), "5\n6\nv26.3.27\n0\n0\n")
@@ -506,5 +507,81 @@ func TestAddSS2022NodeFlow(t *testing.T) {
 	st, _ = state.NewStore(f).Load()
 	if cl := st.Nodes[0].Clients; len(cl) != 2 || cl[1].Key == "" || cl[1].UUID != "" {
 		t.Errorf("clients = %+v", cl)
+	}
+}
+
+// TestAddHysteria2NodeFlow covers DESIGN section 9.10: hint, random port
+// free for UDP, "Hy2-<port>" remark, hysteria2:// link with the pinned
+// certificate, UDP-only security group hint, certificate regeneration and
+// the client password reset.
+func TestAddHysteria2NodeFlow(t *testing.T) {
+	f := nodeSystem()
+	// 1 nodes, 1 add, preset 4, port and remark default; 2 modify, node
+	// 1, 2 regenerate certificate (y); back out.
+	input := strings.Join([]string{"1", "1", "4", "", "", "2", "1", "2", "y", "0", "0", "0"}, "\n") + "\n"
+	r := runNodes(t, f, input)
+	if r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	st, err := state.NewStore(f).Load()
+	if err != nil || len(st.Nodes) != 1 {
+		t.Fatalf("state = %+v, %v", st, err)
+	}
+	n := st.Nodes[0]
+	if n.TLS == nil || n.Port < 10000 || n.Port > 60000 || n.Remark != "Hy2-"+strconv.Itoa(n.Port) {
+		t.Fatalf("node = %+v", n)
+	}
+	fp, err := security.CertFingerprints(n.TLS.Certificate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		text.Hy2Hint, "◆ 1/2 端口 [", "◆ 2/2 备注 [Hy2-", "└─ ✓ 节点已添加。\n",
+		"hysteria2://", "/?sni=www.bing.com&pinSHA256=", "放行了 UDP 端口", "Hysteria2",
+		" 1. 端口", " 2. " + text.ModRegenCert, " 3. 分享端口", " 4. 备注",
+		text.ConfirmRegenCert, "└─ ✓ " + text.CertRegenerated, text.NewLinksTitle,
+		// The links after regenerating pin the new certificate.
+		"pinSHA256=" + fp.CertHex(),
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"目标网站", "回落限速", text.Non443Hint, "[443]", "TCP 和 UDP", "放行了 TCP"} {
+		if strings.Contains(r.stdout, unwanted) {
+			t.Errorf("output has %q", unwanted)
+		}
+	}
+	if cfg := string(f.Files[xray.ConfigPath]); !strings.Contains(cfg, `"auth": "`+n.Clients[0].Key+`"`) ||
+		!strings.Contains(cfg, `"network": "hysteria"`) || !strings.Contains(cfg, "-----BEGIN PRIVATE KEY-----") {
+		t.Errorf("xray config:\n%s", cfg)
+	}
+
+	// 2 clients: 1 add (default remark); 2 modify, client 2, 2 reset
+	// password (y).
+	r = runNodes(t, f, strings.Join([]string{"2", "1", "", "2", "2", "2", "y", "0", "0"}, "\n")+"\n")
+	for _, want := range []string{"客户端已添加。", " 2. " + text.ClientResetPass, text.ClientPassReset} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+	st, _ = state.NewStore(f).Load()
+	if cl := st.Nodes[0].Clients; len(cl) != 2 || len(cl[1].Key) != 32 || cl[1].UUID != "" || cl[1].Key == cl[0].Key {
+		t.Errorf("clients = %+v", cl)
+	}
+}
+
+// TestAddHysteria2NodeOldXray: an Xray without the Hysteria2 inbound
+// stops the flow before any question.
+func TestAddHysteria2NodeOldXray(t *testing.T) {
+	f := supported()
+	f.Files["/proc/net/tcp"] = []byte("  sl  local_address\n")
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "Xray 26.2.6 (Xray, Penetrates Everything.)\n"}}, xray.BinPath, "version")
+	r := runNodes(t, f, "1\n1\n4\n0\n0\n")
+	if !strings.Contains(r.stdout, text.XrayTooOldFor(text.FeatureHysteria, "v26.2.6", "v26.3.27")) || strings.Contains(r.stdout, "端口 [") {
+		t.Errorf("old xray:\n%s", r.stdout)
+	}
+	if st, _ := state.NewStore(f).Load(); len(st.Nodes) != 0 {
+		t.Error("node added")
 	}
 }

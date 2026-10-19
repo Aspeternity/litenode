@@ -269,9 +269,18 @@ func (s *Service) SetFallbackLimit(ctx context.Context, id int64, l node.Fallbac
 }
 
 // RegenerateKeys replaces the key pair, and the shortId of a REALITY node,
-// or the server key of a Shadowsocks 2022 node (links change).
+// the server key of a Shadowsocks 2022 node, or the certificate of a TLS
+// node (links and pinned fingerprints change).
 func (s *Service) RegenerateKeys(ctx context.Context, id int64) error {
 	return s.modify(ctx, id, func(_ *state.State, n *node.Node) error {
+		if n.TLS != nil {
+			t, err := security.NewTLS(s.Rand, time.Now())
+			if err != nil {
+				return err
+			}
+			n.TLS = t
+			return nil
+		}
 		if n.Shadowsocks != nil {
 			key, err := protocol.NewSS2022Key(s.Rand)
 			if err != nil {

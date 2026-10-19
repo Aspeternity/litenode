@@ -142,8 +142,11 @@ func (u *nodeUI) modifyClient() error {
 		return err
 	}
 	reset, done := text.ClientResetUUID, text.ClientUUIDReset
-	if n.Shadowsocks != nil {
+	switch n.Protocol {
+	case "shadowsocks":
 		reset, done = text.ClientResetKey, text.ClientKeyReset
+	case "hysteria":
+		reset, done = text.ClientResetPass, text.ClientPassReset
 	}
 	m := ui.Menu{Heading: text.ClientModify, Status: []string{text.ClientLine(c.Remark)},
 		Items: []ui.Item{{Label: text.ClientRemark, Hint: text.Current(c.Remark)}, {Label: reset}}}
