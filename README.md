@@ -3,7 +3,7 @@
 LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web 界面的 3x-ui。
 
 - 单个 Go 程序，没有其他依赖，通过数字菜单操作，适合小内存、低配 CPU 的 VPS。
-- 功能：Xray 节点（VLESS + TCP + Reality、VLESS + TCP + VLESS Encryption）和客户端管理、分享链接和二维码、nftables 端口转发、nftables 防火墙、SSH 安全配置、系统优化（BBR、swap、DNS 等）、备份与更新。
+- 功能：Xray 节点（VLESS + TCP + Reality、VLESS + TCP + VLESS Encryption、Shadowsocks 2022）和客户端管理、分享链接和二维码、nftables 端口转发、nftables 防火墙、SSH 安全配置、系统优化（BBR、swap、DNS 等）、备份与更新。
 - 支持系统：Debian 11 / 12 / 13，Ubuntu 22.04 / 24.04 及之后的 LTS；架构 amd64、arm64。需要 systemd 和 root 权限。
 - Debian 11 已于 2026-08-31 停止安全更新，建议使用 Debian 12 或 13。在 Debian 11 上 apt 从 `bullseye-security` 下载时如果返回 404（该源的软件包已下架），可以暂时注释掉 `/etc/apt/sources.list` 中 `bullseye-security` 那一行再安装。
 
@@ -66,6 +66,15 @@ lnode
   - Xray v25.9.5 及以上：可以直接使用分享链接（链接中的 `encryption` 参数就是客户端配置中的 `encryption`）。v2rayN、v2rayNG 等以 Xray 为内核的客户端需要内核不低于 v25.9.5，并且客户端本身能识别链接中的 `encryption` 参数。
   - mihomo（Clash Meta 内核）v1.19.13 及以上：在代理配置中写 `encryption: "<链接中 encryption 的值>"`，`tls: false`、`flow: xtls-rprx-vision`。v1.19.12 及以下连不上。
   - sing-box（v1.14.3）：不支持。
+
+### Shadowsocks 2022 节点
+
+"Shadowsocks 2022"（`2022-blake3-aes-128-gcm`）是**兼容选项**：给不支持 VLESS Encryption 的客户端（sing-box 及以它为内核的客户端、Surge、Shadowrocket 等）使用，同样适合经中转连接的落地机。它没有前向保密，Xray 启动时会打印弃用警告，客户端支持时优先用 VLESS Encryption。
+
+- 添加时端口默认随机，备注默认 `SS-<端口>`。节点同时使用 **TCP 和 UDP**：LiteNode 防火墙和 ufw 会同时放行两种协议，云厂商的安全组也要放行 UDP（否则只有 TCP 可用）；经端口转发时转发规则选"TCP + UDP"。
+- 每个客户端有自己的密钥。"重新生成密钥"会让所有客户端的链接失效；只换一个客户端用"客户端管理 → 修改客户端 → 重置密钥"。
+- 分享链接为 SIP002 格式，2022 方法的用户信息不做 base64：`ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口>#<备注>`。手动填写客户端时，密码为 `<服务端密钥>:<用户密钥>`（两段用英文冒号连接）。
+- 实测（2026-10，直连和经 LiteNode 端口转发，TCP 和 UDP 都通）：Xray v26.10.17、mihomo v1.19.32（直接导入分享链接）、sing-box v1.14.3。
 
 ### 改 SSH 和防火墙时的保护
 
