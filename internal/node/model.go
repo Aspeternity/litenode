@@ -26,7 +26,19 @@ type Node struct {
 	VLESSEncryption *VLESSEncryption `json:"vless_encryption,omitempty"`
 	// Shadowsocks is set for Shadowsocks 2022 nodes (DESIGN section 9.8).
 	Shadowsocks *Shadowsocks `json:"shadowsocks,omitempty"`
-	Clients     []Client     `json:"clients"`
+	// TLS is set when Security is "tls" (Hysteria2, DESIGN section 9.10).
+	TLS     *TLS     `json:"tls,omitempty"`
+	Clients []Client `json:"clients"`
+}
+
+// TLS holds a node's self-signed certificate (D-117). Clients pin its
+// fingerprint instead of trusting a CA, so ServerName is only what they
+// send as SNI.
+type TLS struct {
+	ServerName string `json:"server_name"`
+	// Certificate and Key are PEM encoded.
+	Certificate string `json:"certificate"`
+	Key         string `json:"key"`
 }
 
 // Shadowsocks holds the method and the server key of a Shadowsocks 2022
@@ -36,15 +48,22 @@ type Shadowsocks struct {
 	ServerKey string `json:"server_key"`
 }
 
-// UsesUDP reports whether the node's inbound serves UDP besides TCP:
-// Shadowsocks 2022 nodes do (network "tcp,udp", DESIGN section 9.8).
-func (n Node) UsesUDP() bool { return n.Protocol == "shadowsocks" }
+// UsesTCP reports whether the node's inbound listens on TCP: all nodes
+// except Hysteria2, which is QUIC over UDP only (DESIGN section 9.10).
+func (n Node) UsesTCP() bool { return n.Protocol != "hysteria" }
+
+// UsesUDP reports whether the node's inbound listens on UDP: Shadowsocks
+// 2022 (network "tcp,udp", DESIGN section 9.8) and Hysteria2.
+func (n Node) UsesUDP() bool { return n.Protocol == "shadowsocks" || n.Protocol == "hysteria" }
 
 // PortProto is the protocol of the node's port as in firewall rules:
-// "tcp" or "tcp+udp".
+// "tcp", "udp" or "tcp+udp".
 func (n Node) PortProto() string {
-	if n.UsesUDP() {
+	switch {
+	case n.UsesTCP() && n.UsesUDP():
 		return "tcp+udp"
+	case n.UsesUDP():
+		return "udp"
 	}
 	return "tcp"
 }
@@ -79,12 +98,13 @@ type FallbackLimit struct {
 
 // Client is one user of a node. Its remark is the Xray "email" and is
 // unique across all clients of all nodes. VLESS clients have a UUID,
-// Shadowsocks 2022 clients a user key instead.
+// Shadowsocks 2022 and Hysteria2 clients a key instead.
 type Client struct {
 	ID     int64  `json:"id"`
 	Remark string `json:"remark"`
 	UUID   string `json:"uuid,omitempty"`
-	// Key is the Shadowsocks 2022 user key (standard base64).
+	// Key is the Shadowsocks 2022 user key (standard base64) or the
+	// Hysteria2 password.
 	Key     string `json:"key,omitempty"`
 	Flow    string `json:"flow,omitempty"`
 	Enabled bool   `json:"enabled"`

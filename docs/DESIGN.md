@@ -250,7 +250,7 @@ docs/
 - `ssh`：LiteNode 管理的 sshd 设置（D-061，见第 13 节）。每个字段不写表示不管理，交给系统原有配置；全部不写时不生成 `00-litenode.conf`。
 - 节点的 `share_port`：分享链接使用的端口，不写（或 0）表示与 `port` 相同（NAT 机，D-043）。
 - 转发的 `resolved_ipv4` / `resolved_ipv6`：目标为域名时分别解析的 A / AAAA 记录（D-046，见第 11 节）。
-- `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。VLESS Encryption 节点（第 9.7 节）的 `security` 为 `none`，参数写在 `vless_encryption`（`private_key`、`public_key`），没有 `reality`。Shadowsocks 2022 节点（第 9.8 节）的 `protocol` 为 `shadowsocks`、`security` 为 `none`，参数写在 `shadowsocks`（`method`、`server_key`）；它的客户端没有 `uuid`，用户密钥写在 `key`（D-111）。
+- `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。VLESS Encryption 节点（第 9.7 节）的 `security` 为 `none`，参数写在 `vless_encryption`（`private_key`、`public_key`），没有 `reality`。Shadowsocks 2022 节点（第 9.8 节）的 `protocol` 为 `shadowsocks`、`security` 为 `none`，参数写在 `shadowsocks`（`method`、`server_key`）；它的客户端没有 `uuid`，用户密钥写在 `key`（D-111）。Hysteria2 节点（第 9.10 节）的 `protocol`、`transport` 为 `hysteria`、`security` 为 `tls`，证书写在 `tls`（`server_name`、`certificate`、`key`，PEM）；客户端密码写在 `key`（D-118）。
 - **备注**（D-039）：节点备注在所有节点之间唯一；客户端备注即 Xray 的 `email`，在所有节点的所有客户端之间唯一；节点备注和客户端备注互不影响，可以相同。格式：去掉首尾空白后 1～32 个字符（中文算一个字符），不含控制字符；比较时不区分大小写（`LA` 与 `la` 视为重复）。
 - 每个节点、客户端、转发规则、防火墙规则有内部稳定 ID：全局一个递增计数器 `next_id`，所有类型共用，只增不减，删除后不复用；菜单显示的是连续的序号。
 
@@ -698,14 +698,17 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
   - 未到达：TCP 未到达时检查云厂商安全组 / 运营商防火墙、客户端的地址和端口、线路机；只有 UDP 未到达时列出：安全组没有放行 UDP、线路机的转发不含 UDP 或使用了 UDP over TCP、线路机使用 Vision 流控时 Xray 默认拒绝 UDP 443（QUIC）、客户端没有开启 UDP 或没有 UDP 流量（不直接断定被拦截）。
 - **分层**：计数规则和 `nft -j` 输出的解析在 `internal/nft`（纯函数，单元测试）；执行与状态判断在 `internal/nodecheck`（Runner）；菜单在 `internal/app`；文字在 `internal/text`。临时表不写状态文件、不走配置变更流程（不是持久配置）。
 
-### 9.10 Hysteria2 节点（D-117，M11）
+### 9.10 Hysteria2 节点（D-117、D-118，M11）
 
-用于线路机出站连接落地机（客户端是线路机的 Xray / mihomo / sing-box）。使用 Xray 内置的 hysteria2 入站，只占用 UDP 端口（端口冲突、防火墙、ufw 都只有 UDP，走 `Node.PortProto()`，D-112）。
+用于线路机出站连接落地机（客户端是线路机的 Xray / mihomo / sing-box）。使用 Xray 内置的 hysteria2 入站，只占用 UDP 端口（端口冲突、防火墙、ufw、连通性检测都只有 UDP，`Node.UsesTCP()` 为假、`PortProto()` 为 `udp`）。需要 Xray **v26.3.27** 或更高版本（第一个有 hysteria 入站的版本，M11-01 实测）。
 
-- **证书**：添加节点时用标准库生成自签证书（ECDSA P-256，有效期 10 年），证书和私钥保存在状态文件中、随备份导出导入，生成 Xray 配置时写入文件。线路机用指纹固定。修改节点中"重新生成证书"会更换指纹，提示需要更新线路机。
-- **客户端**：每个客户端一个密码（与现有"一个节点多个客户端"一致）。
-- **第一版不做**：Salamander 混淆、端口跳跃、带宽菜单（Brutal 带宽由线路机声明）。
-- **待 M11 实测后补充**（由 Claude 决定并记录）：Xray 入站的具体字段、SNI 默认值、链接格式和线路机出站参数的显示方式。
+- **组合**：协议 `hysteria`、传输 `hysteria`、安全层 `tls`，无流控。节点的 `tls` 字段保存 `server_name`、`certificate`、`key`（PEM）。
+- **入站**：`"protocol": "hysteria"`，`settings` 为 `{"version": 2, "clients": [{"auth": <密码>, "email": <备注>}]}`；`streamSettings` 为 `"network": "hysteria", "security": "tls", "hysteriaSettings": {"version": 2}, "tlsSettings": {"certificates": [{"certificate": [<PEM 各行>], "key": [<PEM 各行>]}]}`。证书内联在 `xray.json` 中，不另写文件（D-118）。不写 `quicParams`：服务端发送用 BBR，Brutal 只在线路机出站声明 `up` 时用于线路机发送方向。
+- **证书**：添加节点时用标准库生成自签证书（ECDSA P-256，CN / SAN `www.bing.com`，有效期 10 年），证书和私钥保存在状态文件中、随备份导出导入（导入时检查证书与私钥匹配）。线路机用指纹固定：证书 SHA-256（十六进制）或公钥 SHA-256（base64）。修改节点中"重新生成证书"会更换指纹，提示需要更新线路机。
+- **客户端**：每个客户端一个密码（32 位小写十六进制，保存在客户端的 `key` 字段），"重置 UUID"对这种节点显示为"重置密码"。
+- **链接**：`hysteria2://<密码>@<地址>:<端口>/?sni=www.bing.com&pinSHA256=<证书 SHA-256>#<备注>`。
+- **第一版不做**：Salamander 混淆、端口跳跃、带宽菜单。
+- **待 M11-02 / M11-03 补充**：菜单细节、线路机出站参数的显示方式。
 
 ## 10. Reality 目标网站
 

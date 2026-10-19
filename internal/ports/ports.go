@@ -95,13 +95,17 @@ type Claim struct {
 // NodeOwner names a node as a claim owner.
 func NodeOwner(id int64) string { return "node:" + strconv.FormatInt(id, 10) }
 
-// NodeKeys lists the keys a node uses on port: TCP, and UDP for nodes
-// that serve it (Shadowsocks 2022).
+// NodeKeys lists the keys a node uses on port: TCP and UDP for
+// Shadowsocks 2022, UDP only for Hysteria2, TCP for the others.
 func NodeKeys(n node.Node, port int) []Key {
-	if n.UsesUDP() {
-		return []Key{{TCP, port}, {UDP, port}}
+	var out []Key
+	if n.UsesTCP() {
+		out = append(out, Key{TCP, port})
 	}
-	return []Key{{TCP, port}}
+	if n.UsesUDP() {
+		out = append(out, Key{UDP, port})
+	}
+	return out
 }
 
 // NodeClaims lists the ports of all nodes, enabled or not.

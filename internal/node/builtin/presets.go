@@ -88,3 +88,24 @@ func buildSS2022(in node.BuildInput) (node.Node, error) {
 		}},
 	}, nil
 }
+
+// buildHysteria2 builds a Hysteria2 node (DESIGN section 9.10): a new
+// self-signed certificate and the first client with its own password.
+func buildHysteria2(in node.BuildInput) (node.Node, error) {
+	t, err := security.NewTLS(in.Rand, in.Now)
+	if err != nil {
+		return node.Node{}, err
+	}
+	pw, err := protocol.NewHysteriaPassword(in.Rand)
+	if err != nil {
+		return node.Node{}, err
+	}
+	return node.Node{
+		ID: in.NodeID, Remark: in.Remark, Enabled: true, Port: in.Port,
+		Protocol: "hysteria", Transport: "hysteria", Security: "tls",
+		TLS: t,
+		Clients: []node.Client{{
+			ID: in.ClientID, Remark: in.Remark, Key: pw, Enabled: true,
+		}},
+	}, nil
+}

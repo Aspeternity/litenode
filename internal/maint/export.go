@@ -155,16 +155,28 @@ func Check(e Export, reg *node.Registry) error {
 				return fmt.Errorf("node %d: vless encryption key pair does not match", n.ID)
 			}
 		}
+		if n.TLS != nil {
+			if err := security.CheckTLS(n.TLS); err != nil {
+				return fmt.Errorf("node %d: %w", n.ID, err)
+			}
+		}
 		for _, c := range n.Clients {
 			if err := seen(c.ID); err != nil {
 				return err
 			}
-			if n.Protocol == "shadowsocks" {
+			switch n.Protocol {
+			case "shadowsocks":
 				if !protocol.ValidSS2022Key(c.Key) {
 					return fmt.Errorf("client %d: invalid shadowsocks key", c.ID)
 				}
-			} else if !node.ValidUUID(c.UUID) {
-				return fmt.Errorf("client %d: invalid uuid", c.ID)
+			case "hysteria":
+				if !protocol.ValidHysteriaPassword(c.Key) {
+					return fmt.Errorf("client %d: invalid hysteria password", c.ID)
+				}
+			default:
+				if !node.ValidUUID(c.UUID) {
+					return fmt.Errorf("client %d: invalid uuid", c.ID)
+				}
 			}
 			if err := checkRemark(c.Remark, node.CheckClientRemark(e.Nodes, c.Remark, c.ID)); err != nil {
 				return fmt.Errorf("client %d: %w", c.ID, err)

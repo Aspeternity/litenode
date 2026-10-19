@@ -128,8 +128,12 @@ func TestNodeKeys(t *testing.T) {
 	if got := NodeKeys(ss, 34568); !slices.Equal(got, []Key{{TCP, 34568}, {UDP, 34568}}) {
 		t.Errorf("shadowsocks = %v", got)
 	}
-	want := []Claim{{Key{TCP, 443}, "node:1"}, {Key{TCP, 34567}, "node:2"}, {Key{UDP, 34567}, "node:2"}}
-	if got := NodeClaims([]node.Node{vless, ss}); !slices.Equal(got, want) {
+	hy := node.Node{ID: 3, Protocol: "hysteria", Port: 45678}
+	if got := NodeKeys(hy, 45679); !slices.Equal(got, []Key{{UDP, 45679}}) {
+		t.Errorf("hysteria = %v", got)
+	}
+	want := []Claim{{Key{TCP, 443}, "node:1"}, {Key{TCP, 34567}, "node:2"}, {Key{UDP, 34567}, "node:2"}, {Key{UDP, 45678}, "node:3"}}
+	if got := NodeClaims([]node.Node{vless, ss, hy}); !slices.Equal(got, want) {
 		t.Errorf("NodeClaims = %v", got)
 	}
 }

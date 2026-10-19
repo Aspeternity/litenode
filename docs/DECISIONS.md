@@ -971,3 +971,13 @@
 - **否决**：内置 ACME 自动申请（第三方依赖或 acme.sh、需要开放端口或 DNS API、定时续期并重载 Xray，对这个场景没有收益）；`insecure`（跨境这一段有中间人风险）。**暂缓**："手动指定证书文件"（以后需要给不支持指纹固定的终端客户端用时再做）。
 - **第一版不做**：Salamander 混淆、端口跳跃（用户决定：线路机到落地机这一段暂不考虑运营商 UDP 限速和 QUIC 识别；端口跳跃还需要整套端口范围支持）。Brutal 带宽由线路机出站声明，服务端不忽略客户端带宽，不增加带宽菜单（M11-01 实测 Xray 是否支持）。
 - **分享**：除 `hysteria2://` 链接外，显示线路机出站参数（地址、端口、密码、SNI、证书 SHA-256、公钥 SHA-256），具体格式在 M11-03 实测 3x-ui / mihomo / sing-box 后确定。
+
+### D-118 Hysteria2 的 Xray 字段、证书写法与数据结构（由 Claude 决定（用户授权），2026-10-20，M11-01）
+
+- **实测**（Debian 12 / 11，Xray v26.10.17）：入站 `protocol: "hysteria"` + `settings.version: 2`、`clients[].auth/email`；`streamSettings.network: "hysteria"`、`hysteriaSettings.version: 2`、`security: "tls"`（ALPN 由传输层自动设为 h3）。v26.3.27 是第一个有 hysteria **入站**的版本（v26.2.6 只有出站，v25.10.15 不认识 `hysteria` 传输），即节点的最低 Xray 版本。Xray 出站用 `pinnedPeerCertSha256`（证书 SHA-256，十六进制）固定指纹：匹配叶证书时不再检查名称；指纹错误时连接失败。另一台机器经 Xray 出站连通 TCP 和 UDP（列出客户端时自动开启 UDP 中继）。
+- **Brutal**：Xray 服务端只有设置了 `finalmask.quicParams.brutalUp` 才用 Brutal，否则不论客户端声明多少带宽，服务端发送（线路机下载方向）都用 BBR。第一版不写 `quicParams`，即服务端 BBR；线路机出站声明的 `up` 只影响线路机的发送方向。不加带宽菜单（与 D-117 一致）。
+- **证书写进 Xray 配置**：`tlsSettings.certificates[].certificate / key` 用行数组内联，不另写证书文件。`xray.json` 本来就是 `0640 root:litenode-xray`，已含 REALITY 私钥，权限相同；证书随配置一起原子写入、备份和回滚，没有文件和配置不一致的问题。否决：写 `/etc/litenode/certs/*.pem` 并在配置中引用（多一类文件要管理权限、原子更新和回滚，没有收益）。因此 M11-02 不需要"证书文件写入"。
+- **证书内容**：ECDSA P-256，CN 和 SAN 都是 `www.bing.com`，有效期从生成前 1 天到 10 年后，序列号 128 位随机，私钥 PKCS #8。名称不验证（指纹固定），`www.bing.com` 是自签 Hysteria2 证书的常见写法，握手中的 SNI 不显眼，也不带任何能识别 LiteNode 的字符串。第一版不提供修改。否决：每个节点随机名称（SNI 本身显得异常）、`litenode`（可被主动探测识别）。
+- **数据结构**：协议、传输都叫 `hysteria`（与 Xray 一致，显示名 Hysteria2），安全层 `tls`，节点的 `tls` 字段保存 `server_name`、`certificate`、`key`（PEM），以后 TLS 类节点可以复用。客户端密码放在客户端的 `key` 字段（与 SS2022 用户密钥同一字段），32 位小写十六进制（16 字节，链接中无需编码）。`Node.UsesTCP()` 对 hysteria 为假，`PortProto()` 为 `udp`，端口冲突、ufw、防火墙、连通性检测因此只看 UDP。导入备份时检查证书能解析、与私钥匹配、名称不为空，密码格式正确。
+- **指纹的两种形式**：证书 SHA-256（十六进制，Xray / Hysteria 链接 `pinSHA256` / mihomo）和公钥（SPKI）SHA-256（base64，sing-box），测试向量取自 openssl。
+- **预设**到 M11-02 再注册（加入添加节点菜单），M11-01 合并后菜单不出现未完成的类型。

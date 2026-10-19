@@ -87,6 +87,28 @@ func ss2022Node() node.Node {
 	}
 }
 
+// hysteriaNode uses the openssl certificate of the security package's
+// test data (DESIGN section 9.10).
+func hysteriaNode(t *testing.T) node.Node {
+	t.Helper()
+	read := func(name string) string {
+		b, err := os.ReadFile(filepath.Join("..", "node", "security", "testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	return node.Node{
+		ID: 17, Remark: "Hy2-45678", Enabled: true, Port: 45678,
+		Protocol: "hysteria", Transport: "hysteria", Security: "tls",
+		TLS: &node.TLS{ServerName: "www.bing.com", Certificate: read("openssl-cert.pem"), Key: read("openssl-key.pem")},
+		Clients: []node.Client{
+			{ID: 18, Remark: "Hy2-45678", Key: "0123456789abcdef0123456789abcdef", Enabled: true},
+			{ID: 19, Remark: "hy-off", Key: "ffffffffffffffffffffffffffffffff", Enabled: false},
+		},
+	}
+}
+
 func checkGolden(t *testing.T, name string, got []byte) {
 	t.Helper()
 	path := filepath.Join("testdata", name)
@@ -118,6 +140,9 @@ func TestGenerateConfigGolden(t *testing.T) {
 		// A Shadowsocks 2022 node next to the other nodes, which stay as
 		// in xray-vlessenc.golden.json.
 		"xray-ss2022.golden.json": append(goldenNodes(), vlessEncNode(), ss2022Node()),
+		// A Hysteria2 node after all the others, which stay as in
+		// xray-ss2022.golden.json.
+		"xray-hysteria2.golden.json": append(goldenNodes(), vlessEncNode(), ss2022Node(), hysteriaNode(t)),
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := GenerateConfig(reg, nodes, "")
