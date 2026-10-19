@@ -494,6 +494,7 @@ Xray 状态为"● 运行中 / ○ 已停止 / ○ 已停止（手动） / ○ �
 ──────────────────────────────────────────────
  1. VLESS + TCP + Reality (Vision)
  2. VLESS + TCP + Encryption (Vision)
+ 3. Shadowsocks 2022
 ──────────────────────────────────────────────
  0. 返回
 ```
@@ -654,6 +655,23 @@ vless://<uuid>@<地址>:<端口>?encryption=mlkem768x25519plus.native.0rtt.<公�
 
   参数顺序和编码规则与第 9.5 节相同。链接下方的固定提示增加一行"需要客户端支持 VLESS Encryption（支持的客户端见 README）"。M8-03 实测：Xray 客户端 ≥ v25.9.5、mihomo ≥ v1.19.13 可用（mihomo v1.19.12 连不上），sing-box v1.14.3 不支持，写入 README。
 - **Xray 版本**：VLESS Encryption 需要 Xray **v25.9.5** 或更高版本（M8-01 实测：v25.8.3 拒绝该配置；v25.8.29、v25.8.31 是预发布版，能运行但不作为下限；v25.9.5 是第一个包含该功能的正式版，与 v26.10.17 互通）。LiteNode 默认安装的版本满足；用户在"更新 Xray"中输入的版本低于最低版本且存在这种节点时警告（更新时 `xray run -test` 会失败，自动保留当前版本）。
+
+### 9.8 Shadowsocks 2022 节点（D-110，M9）
+
+兼容选项：给不支持 VLESS Encryption 的客户端（如 sing-box、Surge、Shadowrocket）使用，也用于经中转连接的落地机。不需要证书和目标网站。Xray 对 Shadowsocks 入站打印弃用警告（不会删除）；没有前向保密，所以选择类型后提示一行"兼容选项：客户端支持时优先使用 VLESS Encryption"。
+
+- **组合**：协议 `shadowsocks`、传输 TCP、安全层 none，无流控。入站 `network` 为 `tcp,udp`（同时提供 UDP）。
+- **加密方法**：固定 `2022-blake3-aes-128-gcm`（密钥 16 字节，标准 base64；VPS 普遍有 AES 硬件加速，密钥和链接比 256 位方法短）。不提供选择。
+- **多用户**：节点保存服务端密钥（`shadowsocks.server_key`），每个客户端有自己的用户密钥（客户端的 `key` 字段，代替 UUID），对应 Xray 的 `settings.password` 和 `clients[].password`；客户端备注仍作为 `email`。"修改客户端"中的"重置 UUID"对这种节点显示为"重置密钥"。
+- **端口**：节点同时占用 TCP 和 UDP 端口：端口冲突检查、LiteNode 防火墙和 ufw 规则都包含 TCP 和 UDP。默认随机 10000～60000 中 TCP 和 UDP 都空闲的端口，备注默认 `SS-<端口>`。不询问目标网站。
+- **修改节点**：端口、重新生成服务端密钥、分享端口、备注。重新生成服务端密钥会让所有客户端的链接失效。
+- **链接**（SIP002，2022 方法的用户信息不做 base64，按 URL 编码）：
+
+```
+ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口>#<备注>
+```
+
+  密钥中的 `+`、`/`、`=` 按 URL 编码。各客户端能否导入这种链接在 M9-03 实测后写入 README（若常用客户端只认 base64 形式，再改用 base64 并记录）。
 
 ## 10. Reality 目标网站
 
