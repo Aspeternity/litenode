@@ -552,11 +552,34 @@
   - [x] 菜单和提示与 DESIGN 9.9 一致，界面文字在 `internal/text`。
   - [x] [VPS] SS2022 节点：TCP 和 UDP 都通时自动结束；ufw 删掉节点的 udp 规则 → UDP 本机拦截；LiteNode 防火墙删掉节点规则 → 本机拦截并提示检查修复；线路机转发不含 UDP → UDP 未到达；Reality 节点只看 TCP；Ctrl+C 后临时表被删除。
 
+## M11 Hysteria2 节点
+
+用户 2026-10-20 决定（D-117）。设计见 DESIGN 第 9.10 节。
+
+### M11-01 实测与节点模型、证书、配置生成 `未开始`
+- 先在测试机实测 Xray hysteria2 入站（版本、字段、自签证书、Brutal、线路机 Xray 出站的指纹固定），结论写进 DESIGN 9.10。
+- 逻辑层：注册组合 hysteria2；自签证书生成与指纹（证书 SHA-256、公钥 SHA-256）；每客户端密码；Xray 入站配置；导入备份时校验证书和私钥。
+- 验收：
+  - [ ] 单元测试：证书生成与指纹、配置生成（golden）、端口只占 UDP、导入校验。
+  - [ ] [VPS] 生成的配置通过 `xray run -test` 并能用 Xray 出站连通。
+
+### M11-02 菜单、证书文件与 UDP 端口 `未开始`
+- 添加 / 修改节点（端口、重新生成证书、分享端口、备注）；证书文件写入与原子更新；防火墙、ufw、连通性检测只看 UDP。依赖 M11-01。
+- 验收：
+  - [ ] 菜单和提示与 DESIGN 9.10 一致，界面文字在 `internal/text`。
+  - [ ] [VPS] 添加、修改、重新生成证书、删除节点后 Xray 正常运行，防火墙 / ufw 规则正确。
+
+### M11-03 分享与线路机实测 `未开始`
+- `hysteria2://` 链接和线路机出站参数（地址、端口、密码、SNI、证书和公钥 SHA-256）。依赖 M11-02。
+- 验收：
+  - [ ] [VPS] 3x-ui（Xray）、mihomo、sing-box 作为线路机出站，用指纹固定连通 LiteNode 落地机；结果写进 DESIGN 9.10。
+
 ## 未排期
 
 产品成熟后再决定（D-089）：
 
-- 更多节点类型（开始前先讨论 DESIGN 第 18 节第 2 项 TLS 证书来源）。候选（D-106）：VLESS + XHTTP + TLS / Reality、Hysteria2、VLESS + WS + TLS、Trojan + TCP + TLS。
+- 更多节点类型（证书方案见 D-117）。候选（D-106）：VLESS + XHTTP + TLS / Reality、VLESS + WS + TLS、Trojan + TCP + TLS。
+- Hysteria2 的 Salamander 混淆、端口跳跃、手动指定证书文件（D-117 暂缓）。
 - 命令行子命令（如 `litenode node list`、`litenode node link <序号>`，命名先与用户确认）。
 - 独立于节点的"用户"（一个用户可用多个节点，需要改数据结构）。
 - 单个节点覆盖全局的节点出站 IP（D-084 提议）。
