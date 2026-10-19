@@ -2,8 +2,10 @@ package app
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
@@ -176,6 +178,9 @@ func (u *nodeUI) modRegenKeys(id int64, cert bool) error {
 	}
 	u.s.Done(done)
 	u.printLinks(id)
+	if cert {
+		u.printFingerprints(id)
+	}
 	return nil
 }
 
@@ -206,4 +211,17 @@ func (u *nodeUI) modRemark(id int64, current string) error {
 	}
 	u.s.Done(text.Done)
 	return nil
+}
+
+// printFingerprints shows the pinned hashes of a TLS node's certificate.
+func (u *nodeUI) printFingerprints(id int64) {
+	for _, n := range u.state().Nodes {
+		if n.ID != id || n.TLS == nil {
+			continue
+		}
+		if fp, err := security.CertFingerprints(n.TLS.Certificate); err == nil {
+			u.s.Println("\n" + text.NewFingerprintsTitle)
+			u.s.Println(strings.TrimRight(text.Fingerprints(fp.CertHex(), fp.PublicKeyBase64()), "\n"))
+		}
+	}
 }

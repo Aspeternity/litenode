@@ -569,10 +569,10 @@
   - [x] 菜单和提示与 DESIGN 9.10 一致，界面文字在 `internal/text`。
   - [x] [VPS] 添加、修改、重新生成证书、删除节点后 Xray 正常运行，防火墙 / ufw 规则正确。
 
-### M11-03 分享与线路机实测 `未开始`
+### M11-03 分享与线路机实测 `已完成`
 - `hysteria2://` 链接和线路机出站参数（地址、端口、密码、SNI、证书和公钥 SHA-256）。依赖 M11-02。
 - 验收：
-  - [ ] [VPS] 3x-ui（Xray）、mihomo、sing-box 作为线路机出站，用指纹固定连通 LiteNode 落地机；结果写进 DESIGN 9.10。
+  - [x] [VPS] 3x-ui（Xray）、mihomo、sing-box 作为线路机出站，用指纹固定连通 LiteNode 落地机；结果写进 DESIGN 9.10。
 
 ## 未排期
 

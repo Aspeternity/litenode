@@ -489,6 +489,26 @@ const VLESSEncHint = "适合经中转连接的落地机；需要客户端支持 
 // section 9.8).
 const SS2022Hint = "兼容选项：客户端支持时优先使用 VLESS Encryption。"
 
+// RelayParams lists a Hysteria2 client's outbound settings for the relay
+// below its link (DESIGN section 9.10, D-120).
+func RelayParams(host string, port int, password, sni, certHex, pubB64 string) string {
+	return fmt.Sprintf("线路机出站参数（3x-ui 可以直接导入上面的链接）：\n"+
+		"  地址：%s\n  端口：%d\n  密码：%s\n  SNI：%s\n%s"+
+		"  不要开启跳过证书验证（insecure / skip-cert-verify），用证书指纹固定证书。",
+		host, port, password, sni, Fingerprints(certHex, pubB64))
+}
+
+// Fingerprints are a Hysteria2 node's pinned hashes with the client
+// fields they go into.
+func Fingerprints(certHex, pubB64 string) string {
+	return fmt.Sprintf("  证书 SHA-256：%s\n    （Xray / 3x-ui pinnedPeerCertSha256、mihomo fingerprint）\n"+
+		"  公钥 SHA-256：%s\n    （sing-box certificate_public_key_sha256）\n", certHex, pubB64)
+}
+
+// NewFingerprintsTitle heads the fingerprints after the certificate was
+// regenerated.
+const NewFingerprintsTitle = "新的证书指纹（请更新线路机的出站配置）："
+
 // Hy2Hint follows the choice of a Hysteria2 node (DESIGN section 9.10).
 const Hy2Hint = "适合线路机出站连接落地机：使用自签证书，线路机按证书指纹连接；只使用 UDP 端口。"
 

@@ -988,3 +988,9 @@
 - **修改**："重新生成密钥"对 TLS 节点显示为"重新生成证书"，确认提示说明证书指纹会变、线路机要更新；证书名称保持 `www.bing.com`。客户端"重置 UUID"显示为"重置密码"。
 - **安全组提示**按节点的端口协议显示 TCP / UDP / TCP 和 UDP。
 - **实测**（Debian 11）：添加、修改端口、重新生成证书（旧指纹连不上、新指纹连通）、删除后 Xray 正常运行；ufw 和 LiteNode 防火墙都只有 UDP 规则（ufw 含 v6）；连通性检测只列 UDP 并得出"连通"。
+
+### D-120 Hysteria2 的分享与线路机出站参数（由 Claude 决定（用户授权），2026-10-20，M11-03）
+
+- **链接**：`hysteria2://<密码>@<地址>:<端口>/?sni=www.bing.com&pinSHA256=<证书 SHA-256 十六进制>#<备注>`（Hysteria 官方 URI 格式），二维码不超过 65 列。
+- **线路机出站参数**：添加节点、导出单个链接、添加客户端 / 重置密码后显示链接时，在链接下方列出地址、端口、密码、SNI、证书 SHA-256（注明 Xray / 3x-ui `pinnedPeerCertSha256`、mihomo `fingerprint`）、公钥 SHA-256（base64，注明 sing-box `certificate_public_key_sha256`），并提示不要开启跳过证书验证。"导出全部链接"只列链接（与其他类型一致）。重新生成证书后，在新链接下方列出新的两个指纹。否决：为每种软件输出完整的出站配置片段（三种格式、随软件版本变化，界面过长；README 给出字段名即可）。
+- **实测**（落地机 Debian 11 用 LiteNode 添加的节点，线路机 Debian 13）：Xray v26.10.17 按 3x-ui v3.10.2 导入链接生成的出站（源码 `parseHysteria2Link`）、mihomo v1.19.32（`fingerprint`）、sing-box v1.14.3（`certificate_public_key_sha256`）都连通，TCP 和 UDP 都可用；把指纹改错后三者都连不上（mihomo 报 certificate fingerprint 错误）。Xray v26.2.6 作为客户端也能连通。没有在真实的 3x-ui 面板中操作，而是用 3x-ui 源码中的导入逻辑生成同样的配置。
