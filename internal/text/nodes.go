@@ -549,7 +549,7 @@ const (
 	NodeCheckFinished   = "检测结束。"
 	NodeCheckTimedOut   = "已达到 30 分钟上限，按当前计数给出结论。"
 	NodeCheckConclusion = "检测结论："
-	NodeCheckHintUDP    = "TCP 已通，但还没有收到 UDP 包：请在客户端开启 UDP，并访问支持 HTTP/3 的网站（如 www.google.com）。"
+	NodeCheckHintUDP    = "TCP 已连通，但还没有收到 UDP 包：请在客户端开启 UDP，并访问支持 HTTP/3 的网站（如 www.google.com）。"
 	NodeCheckHintNone   = "还没有收到任何数据包：请核对客户端中的地址和端口；经线路机时核对线路机的转发目标。"
 	NodeCheckOpenNote   = "    本机这一侧是通的。如果客户端仍然连不上，请检查客户端配置（链接、密钥、UDP 设置）。"
 	NodeCheckScanners   = "  （来源中可能包含扫描器；经线路机连接时，来源是线路机的 IP）"
@@ -558,11 +558,12 @@ const (
 	NodeCheckUDPCauses  = "    TCP 有数据包而 UDP 没有，可能的原因：\n" +
 		"    - 云厂商安全组没有放行 UDP；\n" +
 		"    - 线路机的转发不含 UDP，或使用了 UDP over TCP；\n" +
+		"    - 线路机使用 Vision 流控时，Xray 默认拒绝 UDP 443（QUIC）；\n" +
 		"    - 客户端没有开启 UDP，或检测期间没有 UDP 流量。"
 )
 
 // NodeCheckStatus names the states of one protocol.
-var NodeCheckStatus = []string{"未到达", "检测中", "通", "本机拦截"}
+var NodeCheckStatus = []string{"未到达", "检测中", "连通", "本机拦截"}
 
 // NodeCheckHeading names the node being checked.
 func NodeCheckHeading(remark string, port int) string {

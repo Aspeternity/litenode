@@ -33,7 +33,7 @@ func TestNodeCheckOpen(t *testing.T) {
 	r := runNodes(t, f, "1\n4\n1\n\n0\n0\n")
 	for _, want := range []string{
 		"请现在用客户端连接这个节点",
-		"│   检测结论：\n│     TCP：通（到达 12 个包，通过 12 个）\n│       本机这一侧是通的。",
+		"│   检测结论：\n│     TCP：连通（到达 12 个包，通过 12 个）\n│       本机这一侧是通的。",
 		"│       来源：192.0.2.7\n", "└─ 检测结束。",
 	} {
 		if !strings.Contains(r.stdout, want) {
