@@ -207,6 +207,9 @@ const (
 	SecurityGroupHint = "连不上时，请检查云厂商的安全组或防火墙是否放行了 TCP 端口 %d。"
 )
 
+// VLESSEncClientHint follows a VLESS Encryption link (DESIGN section 9.7).
+const VLESSEncClientHint = "需要客户端支持 VLESS Encryption（支持的客户端见 README）。"
+
 // SecurityGroup formats the security group hint.
 func SecurityGroup(port int) string { return fmt.Sprintf(SecurityGroupHint, port) }
 
