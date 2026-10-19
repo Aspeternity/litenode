@@ -9,6 +9,7 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/ssh"
+	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ufw"
 	"github.com/Aspeternity/litenode/internal/ui"
@@ -210,6 +211,9 @@ func (u *sshUI) deleteSudoUser() error {
 		return err
 	}
 	a := users[choice-1]
+	if err := u.svc.CheckDeleteSudoUser(u.ctx, a.Name); err != nil {
+		return err
+	}
 	ok, err := u.s.Confirm(text.ConfirmDeleteUser(a.Name, a.Home))
 	if err != nil || !ok {
 		return err
@@ -310,7 +314,7 @@ func (u *sshUI) addKey() error {
 // pasteKey asks until a valid key is pasted; nil means back.
 func (u *sshUI) pasteKey() (*ssh.Key, error) {
 	for {
-		in, err := u.s.Prompt(text.PromptPublicKey + ": ")
+		in, err := u.s.PromptValue(text.PromptPublicKey, "")
 		if err != nil || in == "" {
 			return nil, err
 		}
@@ -325,7 +329,7 @@ func (u *sshUI) pasteKey() (*ssh.Key, error) {
 // githubKeys downloads a GitHub user's keys and lets the user pick.
 func (u *sshUI) githubKeys() ([]ssh.Key, error) {
 	for {
-		user, err := u.s.Prompt(text.PromptGitHubUser + ": ")
+		user, err := u.s.PromptValue(text.PromptGitHubUser, "")
 		if err != nil || user == "" {
 			return nil, err
 		}
@@ -522,7 +526,7 @@ func (u *sshUI) oldPortRules(old int) error {
 func (u *sshUI) createSudoUser() error {
 	var name string
 	for {
-		in, err := u.s.Prompt(text.PromptSudoName + ": ")
+		in, err := u.s.PromptValue(text.PromptSudoName, "")
 		if err != nil || in == "" {
 			return err
 		}
@@ -601,6 +605,20 @@ func (u *sshUI) deleteKey() error {
 }
 
 func (u *sshUI) rollback() error {
+	prev, cur, err := u.svc.RollBackPlan()
+	if errors.Is(err, ssh.ErrNothingToRollBack) {
+		u.s.End(text.ErrNothingToRollBack)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if lines := rollbackChanges(cur, prev); len(lines) > 0 {
+		u.s.Println(text.RollbackTitle)
+		for _, l := range lines {
+			u.s.Println(l)
+		}
+	}
 	ok, err := u.s.Confirm(text.ConfirmRollback)
 	if err != nil || !ok {
 		return err
@@ -610,6 +628,39 @@ func (u *sshUI) rollback() error {
 	}
 	_, err = u.confirmed(text.ChangeKept)
 	return err
+}
+
+// rollbackChanges lists the SSH settings that differ between cur and
+// prev; an unset setting is left to the system's sshd configuration.
+func rollbackChanges(cur, prev state.SSH) []string {
+	port := func(s state.SSH) string {
+		if s.Port == 0 {
+			return text.SSHSystemSetting
+		}
+		return strconv.Itoa(s.Port)
+	}
+	method := func(s state.SSH) string {
+		if s.PubkeyAuth == nil || s.PasswordAuth == nil {
+			return text.SSHSystemSetting
+		}
+		return text.LoginMethod(*s.PubkeyAuth, *s.PasswordAuth)
+	}
+	root := func(s state.SSH) string {
+		if s.PermitRootLogin == "" {
+			return text.SSHSystemSetting
+		}
+		return rootLabel(s.PermitRootLogin)
+	}
+	var lines []string
+	for _, f := range []struct {
+		name string
+		get  func(state.SSH) string
+	}{{text.SSHPortName, port}, {text.SSHMethodName, method}, {text.SSHRootName, root}} {
+		if c, p := f.get(cur), f.get(prev); c != p {
+			lines = append(lines, text.RollbackChange(f.name, c, p))
+		}
+	}
+	return lines
 }
 
 // describeSSH maps SSH errors to text; ok is false for other errors.

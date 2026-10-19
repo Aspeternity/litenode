@@ -32,8 +32,8 @@ const (
 
 	SSHPasteKey      = "粘贴公钥"
 	SSHGitHubImport  = "从 GitHub 导入"
-	PromptPublicKey  = "粘贴公钥（一行，直接回车返回）"
-	PromptGitHubUser = "GitHub 用户名（直接回车返回）"
+	PromptPublicKey  = "粘贴公钥（一行，0 返回）"
+	PromptGitHubUser = "GitHub 用户名（0 返回）"
 	PromptKeyChoice  = "导入哪些？输入序号（如 1,3），直接回车导入全部，0 返回"
 	PromptKeyNumber  = "请输入公钥序号 (0 返回)"
 	ChooseAccount    = "选择用户"
@@ -45,7 +45,7 @@ const (
 	ConfirmGenerate  = "将生成新的 ed25519 密钥对，私钥只显示一次，请准备好保存。是否继续？"
 
 	PromptNewPort     = "新的 SSH 端口 (0 返回)"
-	PromptSudoName    = "用户名（小写字母、数字、_、-，直接回车返回）"
+	PromptSudoName    = "用户名（小写字母、数字、_、-，0 返回）"
 	SudoPasswordGen   = "自动生成强密码（推荐，只显示一次）"
 	SudoPasswordInput = "手动输入密码"
 	ChoosePassword    = "设置密码（sudo 时需要输入）"
@@ -53,6 +53,11 @@ const (
 	PromptPassword2   = "再次输入密码"
 	PasswordMismatch  = "两次输入的密码不一致。"
 	ConfirmRollback   = "恢复为上次修改前的 SSH 设置？"
+	RollbackTitle     = "上次修改前的 SSH 设置（当前 → 恢复后）："
+	SSHSystemSetting  = "系统原有设置"
+	SSHPortName       = "端口"
+	SSHMethodName     = "登录方式"
+	SSHRootName       = "root 登录"
 	SSHOldRulesNone   = "防火墙中没有需要处理的旧端口规则。"
 	PasswordWarn      = "⚠"
 )
@@ -63,6 +68,11 @@ func SSHStatusLines(ports, method, root string, keys, sudoUsers int) []string {
 		fmt.Sprintf("端口: %s   登录方式: %s", ports, method),
 		fmt.Sprintf("root 登录: %s   公钥: %d 个   sudo 用户: %d 个", root, keys, sudoUsers),
 	}
+}
+
+// RollbackChange is one setting the rollback changes.
+func RollbackChange(name, cur, prev string) string {
+	return fmt.Sprintf("  %s: %s → %s", name, cur, prev)
 }
 
 // LoginMethod names a combination of key and password login.

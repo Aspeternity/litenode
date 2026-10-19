@@ -80,6 +80,7 @@ func (u *nodeUI) modPort(id int64) error {
 		if port != 443 {
 			u.s.Println(u.s.Colors.Warn(text.Non443Hint))
 		}
+		u.s.Done(text.PortSet(port))
 		u.printLinks(id)
 		return nil
 	}
@@ -102,6 +103,7 @@ func (u *nodeUI) modTarget(id int64, current string) error {
 	if err := u.svc.SetTarget(u.ctx, id, target); err != nil {
 		return err
 	}
+	u.s.Done(text.TargetSet(target))
 	u.printLinks(id)
 	return nil
 }
@@ -173,6 +175,7 @@ func (u *nodeUI) modSharePort(id int64, current int) error {
 	if err := u.svc.SetSharePort(u.ctx, id, port); err != nil {
 		return err
 	}
+	u.s.Done(text.SharePortSet)
 	u.printLinks(id)
 	return nil
 }

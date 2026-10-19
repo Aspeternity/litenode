@@ -10,8 +10,8 @@ const (
 	MaintRemove = "卸载脚本"
 	MaintPurge  = "全部卸载"
 
-	PromptExportPath = "导出文件路径"
-	PromptImportPath = "导入文件路径（直接回车取消）"
+	PromptExportPath = "导出文件路径（0 返回）"
+	PromptImportPath = "导入文件路径（0 返回）"
 	ExportNote       = "导出文件不包含 SSH 设置、系统优化设置、主机地址和节点出站 IP。"
 	ExportSecret     = "文件包含节点私钥和客户端 UUID，权限已设为 600，请妥善保管，不要发给他人。"
 	ImportNote       = "导入会替换当前的节点、客户端、转发规则和手动防火墙规则（导入前自动备份当前状态）；SSH、系统优化和防火墙开关保持不变。"

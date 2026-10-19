@@ -194,8 +194,8 @@ func (u *sysoptUI) promptSwapSize(def int) (mb int, ok bool, err error) {
 	}
 	def = max(min(def, limit), sysopt.MinSwapMB)
 	for {
-		in, err := u.s.PromptDefault(text.PromptSwapSize, sysopt.FormatMB(def))
-		if err != nil {
+		in, err := u.s.PromptValue(text.PromptSwapSize, sysopt.FormatMB(def))
+		if err != nil || in == "" {
 			return 0, false, err
 		}
 		mb, err := sysopt.ParseSize(in)
@@ -276,7 +276,7 @@ func (u *sysoptUI) dns() error {
 		servers = sysopt.DNSPresets[c-1].Servers
 	} else {
 		for {
-			in, err := u.s.Prompt(text.PromptDNSServers + ": ")
+			in, err := u.s.PromptValue(text.PromptDNSServers, "")
 			if err != nil || in == "" {
 				return err
 			}
@@ -365,7 +365,7 @@ func (u *sysoptUI) timezone(cur string) error {
 	var tz string
 	if c <= len(sysopt.CommonTimezones) {
 		tz = sysopt.CommonTimezones[c-1]
-	} else if tz, err = u.s.Prompt(text.PromptTimezone + ": "); err != nil || tz == "" {
+	} else if tz, err = u.s.PromptValue(text.PromptTimezone, ""); err != nil || tz == "" {
 		return err
 	}
 	if err := u.svc.SetTimezone(u.ctx, strings.TrimSpace(tz)); err != nil {

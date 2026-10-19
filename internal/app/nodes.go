@@ -429,7 +429,7 @@ func (u *nodeUI) scanCenter() (netip.Addr, bool) {
 
 func (u *nodeUI) manualTarget() (string, error) {
 	for {
-		in, err := u.s.Prompt(text.PromptTarget + ": ")
+		in, err := u.s.PromptValue(text.PromptTarget, "")
 		if err != nil {
 			return "", err
 		}

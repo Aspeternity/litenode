@@ -145,6 +145,18 @@ func (s *Service) SudoUsers(ctx context.Context) ([]Admin, error) {
 // LiteNode through sudo), and when afterwards neither root nor another
 // sudo user could log in under the policy sshd uses (D-096).
 func (s *Service) DeleteSudoUser(ctx context.Context, name string) error {
+	if err := s.CheckDeleteSudoUser(ctx, name); err != nil {
+		return err
+	}
+	if _, err := s.runner().Exec(ctx, "userdel", "--remove", "--", name); err != nil {
+		return fmt.Errorf("userdel %s: %w", name, err)
+	}
+	return nil
+}
+
+// CheckDeleteSudoUser returns the error DeleteSudoUser would refuse with,
+// without deleting anything, so that it is shown before confirming.
+func (s *Service) CheckDeleteSudoUser(ctx context.Context, name string) error {
 	admins, err := s.Admins(ctx)
 	if err != nil {
 		return err
@@ -168,9 +180,6 @@ func (s *Service) DeleteSudoUser(ctx context.Context, name string) error {
 	// pgrep exits 0 when it finds a process.
 	if _, err := r.Query(ctx, "pgrep", "-u", name); err == nil {
 		return fmt.Errorf("%w: %s", ErrUserInUse, name)
-	}
-	if _, err := r.Exec(ctx, "userdel", "--remove", "--", name); err != nil {
-		return fmt.Errorf("userdel %s: %w", name, err)
 	}
 	return nil
 }

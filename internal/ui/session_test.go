@@ -162,6 +162,23 @@ func TestConfirm(t *testing.T) {
 	}
 }
 
+func TestPromptValue(t *testing.T) {
+	for _, c := range []struct{ in, def, want string }{
+		{"0\n", "", ""},
+		{"\n", "", ""},
+		{"a\n", "", "a"},
+		{"0\n", "d", ""},
+		{"\n", "d", "d"},
+		{"a\n", "d", "a"},
+	} {
+		s, _, _ := newTestSession(strings.NewReader(c.in))
+		got, err := s.PromptValue("路径", c.def)
+		if err != nil || got != c.want {
+			t.Errorf("PromptValue(%q, def %q) = (%q, %v), want %q", c.in, c.def, got, err, c.want)
+		}
+	}
+}
+
 func TestRunErrBackLeavesMenu(t *testing.T) {
 	s, _, _ := newTestSession(strings.NewReader("1\n"))
 	err := s.Run(func() Menu {

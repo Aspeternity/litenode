@@ -26,6 +26,13 @@ func TestRollBackLast(t *testing.T) {
 	st.Nodes = []node.Node{{ID: 9, Port: 443, Enabled: true}}
 	svc.Store.Save(st)
 
+	// The plan shows what would be restored, without changing anything.
+	if prev, cur, err := svc.RollBackPlan(); err != nil || prev != (state.SSH{}) || cur.PasswordAuth == nil || *cur.PasswordAuth {
+		t.Errorf("plan = %+v, %+v, %v", prev, cur, err)
+	}
+	if _, ok := f.Files[ConfigPath]; !ok {
+		t.Error("plan changed the configuration")
+	}
 	prev, err := svc.RollBackLast(ctx)
 	if err != nil {
 		t.Fatal(err)

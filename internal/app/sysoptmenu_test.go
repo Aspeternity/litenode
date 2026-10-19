@@ -65,6 +65,11 @@ func TestSysoptMenuSwap(t *testing.T) {
 	if strings.Contains(string(f.Files["/etc/fstab"]), "litenode.swap") {
 		t.Errorf("fstab:\n%s", f.Files["/etc/fstab"])
 	}
+	// A size of 0 goes back.
+	r = runSysopt(t, f, "8", "2", "0", "0", "0")
+	if strings.Contains(r.stdout, "大小须在") || !strings.Contains(r.stdout, "└─ "+text.FlowCanceled) || strings.Contains(r.stdout, text.SwapCreated("1G")) {
+		t.Errorf("swap size 0:\n%s", r.stdout)
+	}
 }
 
 func TestSysoptMenuPreference(t *testing.T) {
@@ -105,13 +110,16 @@ func TestSysoptMenuDNSCustomEmptyGoesBack(t *testing.T) {
 	f := supported()
 	f.Files["/etc/resolv.conf"] = []byte("nameserver 10.0.0.1\n")
 	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")
-	// main: 8; 2 DNS; 4 custom; empty answer; back; quit.
-	r := runSysopt(t, f, "8", "2", "4", "", "0", "0")
-	if strings.Contains(r.stdout, text.ErrDNSServers) || !strings.Contains(r.stdout, "空格分隔，直接回车返回）") {
-		t.Errorf("custom DNS with an empty answer:\n%s", r.stdout)
-	}
-	if got := string(f.Files["/etc/resolv.conf"]); got != "nameserver 10.0.0.1\n" {
-		t.Errorf("resolv.conf changed:\n%s", got)
+	for _, answer := range []string{"", "0"} {
+		// main: 8; 2 DNS; 4 custom; empty or 0; back; quit.
+		r := runSysopt(t, f, "8", "2", "4", answer, "0", "0")
+		if strings.Contains(r.stdout, text.ErrDNSServers) || !strings.Contains(r.stdout, "空格分隔，0 返回）: ") ||
+			!strings.Contains(r.stdout, text.FlowCanceled) {
+			t.Errorf("custom DNS with answer %q:\n%s", answer, r.stdout)
+		}
+		if got := string(f.Files["/etc/resolv.conf"]); got != "nameserver 10.0.0.1\n" {
+			t.Errorf("resolv.conf changed:\n%s", got)
+		}
 	}
 }
 

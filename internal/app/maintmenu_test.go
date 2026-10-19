@@ -14,6 +14,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
+	"github.com/Aspeternity/litenode/internal/text"
 )
 
 func TestMaintExportImport(t *testing.T) {
@@ -44,6 +45,11 @@ func TestMaintExportImport(t *testing.T) {
 	}
 	if st, _ := state.NewStore(f).Load(); len(st.Nodes) != 1 {
 		t.Errorf("nodes after import: %d", len(st.Nodes))
+	}
+	// 0 goes back from both paths: no file named "0".
+	r = runNodes(t, f, "9\n1\n0\n2\n0\n0\n0\n")
+	if _, ok := f.Files["0"]; ok || strings.Count(r.stdout, "└─ "+text.FlowCanceled) != 2 || !strings.Contains(r.stdout, "导入文件路径（0 返回）: ") {
+		t.Errorf("0 answers:\n%s", r.stdout)
 	}
 	// Errors: missing file, not an export.
 	f.Files["/root/state.json"] = []byte(`{"schema_version":1}`)
