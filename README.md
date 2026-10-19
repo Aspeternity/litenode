@@ -5,6 +5,7 @@ LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web �
 - 单个 Go 程序，没有其他依赖，通过数字菜单操作，适合小内存、低配 CPU 的 VPS。
 - 功能：Xray 节点（VLESS + TCP + Reality）和客户端管理、分享链接和二维码、nftables 端口转发、nftables 防火墙、SSH 安全配置、系统优化（BBR、swap、DNS 等）、备份与更新。
 - 支持系统：Debian 11 / 12 / 13，Ubuntu 22.04 / 24.04 及之后的 LTS；架构 amd64、arm64。需要 systemd 和 root 权限。
+- Debian 11 已于 2026-08-31 停止安全更新，建议使用 Debian 12 或 13。在 Debian 11 上 apt 从 `bullseye-security` 下载时如果返回 404（该源的软件包已下架），可以暂时注释掉 `/etc/apt/sources.list` 中 `bullseye-security` 那一行再安装。
 
 > 目前是测试版本，主要在 Debian 12 和 Ubuntu 24.04 上测试。
 
@@ -15,6 +16,8 @@ LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web �
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/scripts/install.sh)
 ```
+
+最小化安装的系统可能没有 curl（如部分 Debian 11 镜像），先执行 `apt update && apt install -y curl`。
 
 安装脚本从 GitHub Releases 下载最新版本，校验 sha256 后安装为 `/usr/local/bin/litenode`，同时创建快捷命令 `lnode`，然后进入主菜单。再次执行同一条命令会把程序更新到最新版本，节点和设置不受影响。
 

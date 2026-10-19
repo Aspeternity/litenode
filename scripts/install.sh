@@ -64,6 +64,14 @@ check_os() {
 	esac
 }
 
+# The one-line install already needs curl; this catches running a saved
+# or wget-fetched copy on a minimal system.
+check_curl() {
+	if ! command -v curl >/dev/null 2>&1; then
+		die "未找到 curl。请先执行 apt update && apt install -y curl，再重新执行安装命令。"
+	fi
+}
+
 detect_arch() {
 	case "$(uname -m)" in
 	x86_64 | amd64) echo amd64 ;;
@@ -114,6 +122,7 @@ install_link() {
 main() {
 	check_root
 	check_os
+	check_curl
 	local arch name
 	arch="$(detect_arch)"
 	name="litenode-linux-${arch}"
