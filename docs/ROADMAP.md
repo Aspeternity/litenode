@@ -530,11 +530,11 @@
   - [x] 菜单和提示与 DESIGN 9.8 一致，界面文字在 `internal/text`；已有节点只放行 TCP 不变（D-112）。
   - [x] [VPS] 添加、修改端口、重新生成密钥、客户端重置密钥、启用 / 禁用、删除都正常，防火墙 / ufw 的 TCP 和 UDP 规则同步（Debian 11 上分别测 ufw 和 LiteNode 防火墙；Debian 12 当时用户正打开着 lnode，未使用）。
 
-### M9-03 分享链接与客户端实测 `未开始`
+### M9-03 分享链接与客户端实测 `已完成`
 - 生成 SS2022 链接和二维码；实测客户端导入链接并连通，写入 README。依赖 M9-01。
 - 验收：
-  - [ ] 单元测试：链接格式与 DESIGN 9.8 一致。
-  - [ ] [VPS] Xray、mihomo、sing-box 客户端连通（TCP 和 UDP），并测试经 LiteNode 端口转发（tcp+udp）连通。
+  - [x] 单元测试：链接格式与 DESIGN 9.8 一致。
+  - [x] [VPS] Xray、mihomo、sing-box 客户端连通（TCP 和 UDP），并测试经 LiteNode 端口转发（tcp+udp）连通（D-113）。
 
 ## 未排期
 
