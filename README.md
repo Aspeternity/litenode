@@ -7,7 +7,7 @@ LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web �
 - 支持系统：Debian 11 / 12 / 13，Ubuntu 22.04 / 24.04 及之后的 LTS；架构 amd64、arm64。需要 systemd 和 root 权限。
 - Debian 11 已于 2026-08-31 停止安全更新，建议使用 Debian 12 或 13。在 Debian 11 上 apt 从 `bullseye-security` 下载时如果返回 404（该源的软件包已下架），可以暂时注释掉 `/etc/apt/sources.list` 中 `bullseye-security` 那一行再安装。
 
-> 目前是测试版本，主要在 Debian 12 和 Ubuntu 24.04 上测试。
+> 主要在 Debian 12 和 Ubuntu 24.04 上测试，Debian 11 / 13 做过冒烟测试。
 
 ## 安装
 
