@@ -222,6 +222,9 @@ func (u *nodeUI) showLink(n node.Node, c node.Client, addr string, isDefault, fu
 		port = n.SharePort
 	}
 	u.s.Println(text.SecurityGroup(port))
+	if n.VLESSEncryption != nil {
+		u.s.Println(text.VLESSEncClientHint)
+	}
 	// Only without a firewall LiteNode keeps in step (D-044).
 	if !u.state().Firewall.Enabled && !ufw.Active(u.ctx, u.svc.Runner) {
 		if f := firewall.DetectForeignFilter(u.ctx, u.svc.Runner); f.Found() {

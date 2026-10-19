@@ -41,6 +41,46 @@ func TestLinkMatchesDesign(t *testing.T) {
 	}
 }
 
+// encNode uses the key pair of a real "xray vlessenc" output (D-107).
+func encNode() node.Node {
+	return node.Node{
+		ID: 3, Remark: "Enc-23456", Enabled: true, Port: 23456,
+		Protocol: "vless", Transport: "tcp", Security: "none",
+		VLESSEncryption: &node.VLESSEncryption{
+			PrivateKey: "6Eaa3cii4SQoHqeVHDrJ1XTamvh74GFemgtE1-ONWk4",
+			PublicKey:  "4xx3hMnM-YmlYM_RE17rfPlYKg7DAOcuJVKRpGi9PF4",
+		},
+		Clients: []node.Client{{ID: 4, Remark: "me", UUID: "5783a3e7-e373-51cd-8642-c83782b807c5", Flow: node.FlowVision, Enabled: true}},
+	}
+}
+
+func TestVLESSEncLinkMatchesDesign(t *testing.T) {
+	reg, _ := builtin.Registry()
+	n := encNode()
+	got, err := Link(reg, n, n.Clients[0], "203.0.113.10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// DESIGN section 9.7.
+	want := "vless://5783a3e7-e373-51cd-8642-c83782b807c5@203.0.113.10:23456" +
+		"?encryption=mlkem768x25519plus.native.0rtt.4xx3hMnM-YmlYM_RE17rfPlYKg7DAOcuJVKRpGi9PF4" +
+		"&flow=xtls-rprx-vision&security=none&type=tcp#me"
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+	n.SharePort = 30001
+	if got, _ := LinkFor(reg, n, n.Clients[0], "2001:db8::1", false); !strings.HasPrefix(got, "vless://5783a3e7-e373-51cd-8642-c83782b807c5@[2001:db8::1]:30001?encryption=mlkem768x25519plus.") || !strings.HasSuffix(got, "#me-IPv6") {
+		t.Errorf("IPv6 / share port link = %s", got)
+	}
+	n.Clients[0].Flow = ""
+	if got, _ := Link(reg, n, n.Clients[0], "203.0.113.10"); !strings.Contains(got, "PF4&security=none&type=tcp#") {
+		t.Errorf("no-flow link = %s", got)
+	}
+	if qr, err := QR(want, false); err != nil || len([]rune(strings.SplitN(qr, "\n", 2)[0])) > 65 {
+		t.Errorf("QR too wide or failed: %v", err)
+	}
+}
+
 func TestLinkVariants(t *testing.T) {
 	reg, _ := builtin.Registry()
 	tests := []struct {

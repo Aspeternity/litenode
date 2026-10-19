@@ -652,7 +652,7 @@ VLESS + TCP + VLESS Encryption（后量子密钥交换，有前向保密），�
 vless://<uuid>@<地址>:<端口>?encryption=mlkem768x25519plus.native.0rtt.<公钥>&flow=xtls-rprx-vision&security=none&type=tcp#<备注>
 ```
 
-  参数顺序和编码规则与第 9.5 节相同。链接下方的固定提示增加一行"需要客户端支持 VLESS Encryption"，具体支持的客户端和最低版本在 M8-03 实测后写入 README。
+  参数顺序和编码规则与第 9.5 节相同。链接下方的固定提示增加一行"需要客户端支持 VLESS Encryption（支持的客户端见 README）"。M8-03 实测：Xray 客户端 ≥ v25.9.5、mihomo ≥ v1.19.13 可用（mihomo v1.19.12 连不上），sing-box v1.14.3 不支持，写入 README。
 - **Xray 版本**：VLESS Encryption 需要 Xray **v25.9.5** 或更高版本（M8-01 实测：v25.8.3 拒绝该配置；v25.8.29、v25.8.31 是预发布版，能运行但不作为下限；v25.9.5 是第一个包含该功能的正式版，与 v26.10.17 互通）。LiteNode 默认安装的版本满足；用户在"更新 Xray"中输入的版本低于最低版本且存在这种节点时警告（更新时 `xray run -test` 会失败，自动保留当前版本）。
 
 ## 10. Reality 目标网站
