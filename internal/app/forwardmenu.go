@@ -292,7 +292,7 @@ func (u *forwardUI) probe() error {
 	for _, r := range u.svc.Probe(u.ctx, *f) {
 		if r.Err != nil {
 			allOK = false
-			u.s.Println(u.s.Colors.Warn(text.ProbeFailed(r.Address, r.Err)))
+			u.s.Println(u.s.Colors.Warn(text.ProbeFailed(r.Address, text.NetReason(r.Err))))
 			continue
 		}
 		u.s.Println(text.ProbeOK(r.Address, r.Latency.Milliseconds()))

@@ -138,7 +138,7 @@ func (u *sysoptUI) swap() error {
 			suggest = sysopt.FormatMB(mb)
 		}
 		u.s.Println(text.SwapMemory(sysopt.FormatMB(sw.MemMB), suggest))
-		mb, ok, err := u.promptSwapSize(sysopt.SuggestMB(sw.MemMB))
+		mb, ok, err := u.promptSwapSize(sysopt.SuggestMB(sw.MemMB), false)
 		if err != nil || !ok {
 			return err
 		}
@@ -164,7 +164,7 @@ func (u *sysoptUI) swap() error {
 		u.s.Done(text.SwapDeleted)
 		return nil
 	}
-	mb, ok, err := u.promptSwapSize(sw.Own.SizeMB)
+	mb, ok, err := u.promptSwapSize(sw.Own.SizeMB, true)
 	if err != nil || !ok {
 		return err
 	}
@@ -178,8 +178,9 @@ func (u *sysoptUI) swap() error {
 
 // promptSwapSize asks for a size within what the disk can hold; ok is
 // false when the disk has no room. def (MiB) is the default when it
-// fits, 1G otherwise.
-func (u *sysoptUI) promptSwapSize(def int) (mb int, ok bool, err error) {
+// fits, 1G otherwise. resize adds why the limit can be below the
+// current size plus the free space.
+func (u *sysoptUI) promptSwapSize(def int, resize bool) (mb int, ok bool, err error) {
 	limit, err := u.svc.MaxCreateMB(u.ctx)
 	if err != nil {
 		return 0, false, err
@@ -189,6 +190,9 @@ func (u *sysoptUI) promptSwapSize(def int) (mb int, ok bool, err error) {
 		return 0, false, nil
 	}
 	u.s.Println(text.SwapMax(sysopt.FormatMB(limit)))
+	if resize {
+		u.s.Println(text.SwapResizeNote)
+	}
 	if def <= 0 {
 		def = 1024
 	}
@@ -224,7 +228,7 @@ func (u *sysoptUI) preference() error {
 	}
 	ipv4 := c == 1
 	if ipv4 == p.IPv4 {
-		u.s.End(text.PreferenceUnchange)
+		u.s.End(text.Unchanged)
 		return nil
 	}
 	if err := u.svc.SetPreference(u.ctx, ipv4); err != nil {
@@ -289,7 +293,7 @@ func (u *sysoptUI) dns() error {
 	failed := false
 	for _, srv := range servers {
 		if err := u.probeDNS(u.ctx, srv); err != nil {
-			u.s.Println(u.s.Colors.Warn(text.DNSProbeFailed(srv, err)))
+			u.s.Println(u.s.Colors.Warn(text.DNSProbeFailed(srv, text.NetReason(err))))
 			failed = true
 		}
 	}

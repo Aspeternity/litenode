@@ -132,6 +132,13 @@ func extractXray(archive []byte) ([]byte, error) {
 	return nil, errors.New("xray program not found in archive")
 }
 
+// DownloadError means querying or downloading a release failed; nothing
+// was changed.
+type DownloadError struct{ Err error }
+
+func (e *DownloadError) Error() string { return "download xray: " + e.Err.Error() }
+func (e *DownloadError) Unwrap() error { return e.Err }
+
 // Install downloads Xray (DefaultVersion if version is empty),
 // creates its user and systemd unit, and returns the installed version.
 // It does not start the service: Xray only runs while there are enabled
@@ -198,11 +205,11 @@ func (in *Installer) Update(ctx context.Context, version string) (string, error)
 	}
 	v, err := in.resolve(ctx, version)
 	if err != nil {
-		return "", err
+		return "", &DownloadError{Err: err}
 	}
 	bin, err := in.download(ctx, v)
 	if err != nil {
-		return "", err
+		return "", &DownloadError{Err: err}
 	}
 	running, err := system.ServiceActive(ctx, in.Runner, UnitName)
 	if err != nil {
