@@ -92,9 +92,18 @@ func (s *Service) SetClientRemark(ctx context.Context, nodeID, clientID int64, r
 	})
 }
 
-// newCredential gives client c of node n a new UUID, or a new user key on
-// a Shadowsocks 2022 node (DESIGN section 9.8).
+// newCredential gives client c of node n a new UUID, a new user key on a
+// Shadowsocks 2022 node (DESIGN section 9.8) or a new password on a
+// Hysteria2 node (section 9.10).
 func (s *Service) newCredential(n node.Node, c *node.Client) error {
+	if n.Protocol == "hysteria" {
+		pw, err := protocol.NewHysteriaPassword(s.Rand)
+		if err != nil {
+			return err
+		}
+		c.Key = pw
+		return nil
+	}
 	if n.Protocol == "shadowsocks" {
 		key, err := protocol.NewSS2022Key(s.Rand)
 		if err != nil {

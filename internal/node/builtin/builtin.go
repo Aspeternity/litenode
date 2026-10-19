@@ -26,9 +26,12 @@ func Registry() (*node.Registry, error) {
 	steps := []func() error{
 		func() error { return r.AddProtocol(protocol.VLESS{}) },
 		func() error { return r.AddProtocol(protocol.Shadowsocks{}) },
+		func() error { return r.AddProtocol(protocol.Hysteria{}) },
 		func() error { return r.AddTransport(transport.TCP{}) },
+		func() error { return r.AddTransport(transport.Hysteria{}) },
 		func() error { return r.AddSecurity(security.Reality{}) },
 		func() error { return r.AddSecurity(security.None{}) },
+		func() error { return r.AddSecurity(security.TLS{}) },
 
 		// Vision requires VLESS over raw TCP with REALITY or TLS.
 		func() error {
@@ -42,6 +45,12 @@ func Registry() (*node.Registry, error) {
 		},
 		func() error {
 			return r.AddCompat(node.Compat{Protocol: "shadowsocks", Transport: "tcp", Security: "none",
+				Flows: []string{""}})
+		},
+		// The hysteria protocol only runs over its own transport, which
+		// always uses TLS.
+		func() error {
+			return r.AddCompat(node.Compat{Protocol: "hysteria", Transport: "hysteria", Security: "tls",
 				Flows: []string{""}})
 		},
 

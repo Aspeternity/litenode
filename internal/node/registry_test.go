@@ -20,7 +20,7 @@ func (f fake) ShareLink(Node, Client, string, int, []Param) (string, error) {
 	return "", nil
 }
 
-// testRegistry has vless/trojan/shadowsocks, tcp/xhttp, reality/tls/none and a small
+// testRegistry has vless/trojan/shadowsocks/hysteria, tcp/xhttp/hysteria, reality/tls/none and a small
 // compatibility table, independent of the built-in components.
 func testRegistry(t *testing.T) *Registry {
 	t.Helper()
@@ -34,6 +34,8 @@ func testRegistry(t *testing.T) *Registry {
 	must(r.AddProtocol(fake{"vless"}))
 	must(r.AddProtocol(fake{"trojan"}))
 	must(r.AddProtocol(fake{"shadowsocks"}))
+	must(r.AddProtocol(fake{"hysteria"}))
+	must(r.AddTransport(fake{"hysteria"}))
 	must(r.AddTransport(fake{"tcp"}))
 	must(r.AddTransport(fake{"xhttp"}))
 	must(r.AddSecurity(fake{"reality"}))
@@ -45,6 +47,7 @@ func testRegistry(t *testing.T) *Registry {
 	must(r.AddCompat(Compat{Protocol: "vless", Transport: "tcp", Security: "none", Flows: []string{FlowVision, ""}}))
 	must(r.AddCompat(Compat{Protocol: "trojan", Transport: "tcp", Security: "none", Flows: []string{""}}))
 	must(r.AddCompat(Compat{Protocol: "shadowsocks", Transport: "tcp", Security: "none", Flows: []string{""}}))
+	must(r.AddCompat(Compat{Protocol: "hysteria", Transport: "hysteria", Security: "tls", Flows: []string{""}}))
 	return r
 }
 
@@ -188,6 +191,30 @@ func TestCheckNodeVLESSEncryption(t *testing.T) {
 	trojan.Clients = []Client{{ID: 2}}
 	if err := r.CheckNode(trojan); err == nil {
 		t.Error("vless encryption on trojan accepted")
+	}
+}
+
+func TestCheckNodeTLS(t *testing.T) {
+	r := testRegistry(t)
+	hy := Node{ID: 1, Protocol: "hysteria", Transport: "hysteria", Security: "tls",
+		TLS: &TLS{ServerName: "s", Certificate: "c", Key: "k"}, Clients: []Client{{ID: 2, Key: "p"}}}
+	if err := r.CheckNode(hy); err != nil {
+		t.Errorf("valid node rejected: %v", err)
+	}
+	noTLS := hy
+	noTLS.TLS = nil
+	if err := r.CheckNode(noTLS); err == nil {
+		t.Error("tls node without settings accepted")
+	}
+	onTCP := hy
+	onTCP.Transport = "tcp"
+	if err := r.CheckNode(onTCP); !errors.Is(err, ErrIllegalCombo) {
+		t.Errorf("hysteria over tcp: err = %v, want ErrIllegalCombo", err)
+	}
+	reality := Node{ID: 1, Protocol: "vless", Transport: "tcp", Security: "reality", Reality: &Reality{},
+		TLS: hy.TLS, Clients: []Client{{ID: 2}}}
+	if err := r.CheckNode(reality); err == nil {
+		t.Error("tls settings on a reality node accepted")
 	}
 }
 

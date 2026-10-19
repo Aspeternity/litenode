@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"time"
 )
 
 // Param is one query parameter of a share link. Links keep the order in
@@ -98,6 +99,8 @@ type BuildInput struct {
 	// Target is the REALITY target "host:port" (security layers that use
 	// one).
 	Target string
+	// Now is the current time, the start of certificate validity.
+	Now time.Time
 	// Rand is the randomness source (crypto/rand.Reader).
 	Rand io.Reader
 }
@@ -268,6 +271,9 @@ func (r *Registry) CheckNode(n Node) error {
 	}
 	if n.VLESSEncryption != nil && n.Protocol != "vless" {
 		return fmt.Errorf("node %d: vless encryption on protocol %q", n.ID, n.Protocol)
+	}
+	if (n.Security == "tls") != (n.TLS != nil) {
+		return fmt.Errorf("node %d: tls settings on security %q", n.ID, n.Security)
 	}
 	if (n.Protocol == "shadowsocks") != (n.Shadowsocks != nil) {
 		return fmt.Errorf("node %d: shadowsocks settings on protocol %q", n.ID, n.Protocol)
