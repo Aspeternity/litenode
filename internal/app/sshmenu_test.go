@@ -9,6 +9,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
+	"github.com/Aspeternity/litenode/internal/text"
 )
 
 const testPub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJM6hmNMYG91sPhBXixk2IaSolPl/BTm0oP6H+4Febf+ laptop"
@@ -145,10 +146,31 @@ func TestSSHMenuPortChange(t *testing.T) {
 	}
 }
 
+func TestSSHMenuSudoUserNameBack(t *testing.T) {
+	f := sshSystem(effective22)
+	// 5 accounts, 2 create: 0 goes back.
+	r := runSSH(t, f, "6", "5", "2", "0", "0", "0", "0")
+	if strings.Contains(r.stdout, "用户名格式不正确") || !strings.Contains(r.stdout, "0 返回）: ") || !strings.Contains(r.stdout, text.FlowCanceled) {
+		t.Errorf("sudo name 0:\n%s", r.stdout)
+	}
+}
+
 func TestSSHMenuRollbackNothing(t *testing.T) {
-	r := runSSH(t, sshSystem(effective22), "6", "6", "y", "0", "0")
-	if !strings.Contains(r.stdout, "没有可以回滚的 SSH 修改。") {
+	// Told before any confirmation.
+	r := runSSH(t, sshSystem(effective22), "6", "6", "0", "0")
+	if !strings.Contains(r.stdout, "└─ 没有可以回滚的 SSH 修改。") || strings.Contains(r.stdout, text.ConfirmRollback) {
 		t.Errorf("rollback:\n%s", r.stdout)
+	}
+}
+
+func TestRollbackChanges(t *testing.T) {
+	yes, no := true, false
+	cur := state.SSH{Port: 2222, PubkeyAuth: &yes, PasswordAuth: &no, PermitRootLogin: ssh.RootNo}
+	prev := state.SSH{PubkeyAuth: &yes, PasswordAuth: &no, PermitRootLogin: ssh.RootYes}
+	got := strings.Join(rollbackChanges(cur, prev), "\n")
+	want := "  端口: 2222 → 系统原有设置\n  root 登录: " + text.SSHRootNo + " → " + text.SSHRootYes
+	if got != want {
+		t.Errorf("rollbackChanges = %q, want %q", got, want)
 	}
 }
 
@@ -219,8 +241,10 @@ func TestSSHDeleteSudoUser(t *testing.T) {
 	f = accountsSystem()
 	f.Files[ssh.ShadowPath] = []byte("root:!:19000::::::\nalice:$y$a:19000::::::\n")
 	delete(f.Files, "/root/.ssh/authorized_keys")
-	r = runSSH(t, f, "6", "5", "3", "1", "y", "0", "0", "0")
-	if !strings.Contains(r.stdout, "删除后 root 和其他 sudo 用户都无法登录") || strings.Contains(strings.Join(f.Execs(), "\n"), "userdel") {
+	// Refused before the confirmation.
+	r = runSSH(t, f, "6", "5", "3", "1", "0", "0", "0")
+	if !strings.Contains(r.stdout, "删除后 root 和其他 sudo 用户都无法登录") || strings.Contains(r.stdout, "删除用户 alice：") ||
+		strings.Contains(strings.Join(f.Execs(), "\n"), "userdel") {
 		t.Errorf("lockout:\n%s", r.stdout)
 	}
 	// Without sudo users the option is hidden.

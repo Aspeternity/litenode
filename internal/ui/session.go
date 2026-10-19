@@ -327,6 +327,23 @@ func (s *Session) PromptDefault(label, def string) (string, error) {
 	return def, nil
 }
 
+// PromptValue asks for a free-form value (a path, name, address, size…)
+// that can never be "0": "0", or an empty answer when there is no
+// default, means back and returns "". An empty answer returns def.
+func (s *Session) PromptValue(label, def string) (string, error) {
+	var in string
+	var err error
+	if def != "" {
+		in, err = s.PromptDefault(label, def)
+	} else {
+		in, err = s.Prompt(label + ": ")
+	}
+	if err != nil || in == "0" {
+		return "", err
+	}
+	return in, nil
+}
+
 // PromptNumber asks for a number between min and max, asking again after
 // invalid input. An empty answer returns def (when def >= min).
 func (s *Session) PromptNumber(label string, def, min, max int) (int, error) {

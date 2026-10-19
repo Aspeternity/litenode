@@ -140,8 +140,8 @@ func (u *nodeUI) xrayReinstall() error {
 
 func (u *nodeUI) xrayUpdate() error {
 	def, _ := u.svc.Xray.DefaultVersion(u.ctx)
-	in, err := u.s.PromptDefault(text.PromptXrayVersion, def)
-	if err != nil {
+	in, err := u.s.PromptValue(text.PromptXrayVersion, def)
+	if err != nil || in == "" {
 		return err
 	}
 	if v, err := xray.NormalizeVersion(in); err == nil && !xray.SupportsMLKEMTargets(v) {

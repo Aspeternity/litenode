@@ -18,9 +18,20 @@ BIN="${BIN_DIR}/litenode"
 LINK="${BIN_DIR}/lnode"
 README_URL="https://github.com/${REPO}#无法访问-github-的机器"
 
-red() { printf '\033[31m%s\033[0m\n' "$*"; }
-green() { printf '\033[32m%s\033[0m\n' "$*"; }
-yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
+# Colors only when the output (fd 1 of the call, so "red ... >&2" checks
+# stderr) is a terminal and NO_COLOR is unset.
+color() {
+	code=$1
+	shift
+	if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+		printf '\033[%sm%s\033[0m\n' "$code" "$*"
+	else
+		printf '%s\n' "$*"
+	fi
+}
+red() { color 31 "$@"; }
+green() { color 32 "$@"; }
+yellow() { color 33 "$@"; }
 
 die() {
 	red "错误：$*" >&2

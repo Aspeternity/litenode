@@ -14,6 +14,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
+	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/xray"
 )
 
@@ -171,6 +172,33 @@ func TestChooseTargetReturnsToMenu(t *testing.T) {
 	r = runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "0", "0", "0"}, "\n")+"\n")
 	if st, _ := state.NewStore(f).Load(); len(st.Nodes) != 1 {
 		t.Errorf("cancel added a node: %d nodes", len(st.Nodes))
+	}
+}
+
+// TestModifyNodeDone: changes that print the new links close the flow
+// as successful, not as canceled.
+func TestModifyNodeDone(t *testing.T) {
+	f := nodeSystem()
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	// 1 nodes, 2 modify, node 1: 1 port (y, 8443); 5 share port (2053, y).
+	r := runNodes(t, f, "1\n2\n1\n1\ny\n8443\n5\n2053\ny\n0\n0\n0\n")
+	for _, want := range []string{"└─ ✓ " + text.PortSet(8443), "└─ ✓ " + text.SharePortSet, text.NewLinksTitle} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q:\n%s", want, r.stdout)
+		}
+	}
+	if strings.Contains(r.stdout, text.FlowCanceled) {
+		t.Errorf("flow shown as canceled:\n%s", r.stdout)
+	}
+}
+
+func TestXrayUpdateBack(t *testing.T) {
+	f := nodeSystem()
+	runNodes(t, f, strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	// 5 Xray, 6 update: 0 goes back.
+	r := runNodes(t, f, "5\n6\n0\n0\n0\n")
+	if !strings.Contains(r.stdout, "0 返回）") || !strings.Contains(r.stdout, "└─ "+text.FlowCanceled) || strings.Contains(r.stdout, text.XrayUpdating) {
+		t.Errorf("update with 0:\n%s", r.stdout)
 	}
 }
 
