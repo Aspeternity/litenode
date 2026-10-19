@@ -6,7 +6,7 @@
 
 - 远程执行：`scripts/dev/vps.sh`（`VPS_HOST`、`VPS_PORT`、`LN_PASS` 环境变量，密码不落盘）。
 - `VPS_SSH_OPTS=-tt scripts/dev/vps.sh '...'` 以带终端的会话执行（模拟用户，断开时进程收到 SIGHUP）。
-- 驱动真实菜单：`printf '1\n1\n...' | NO_COLOR=1 litenode`（菜单从标准输入逐行读取）。管道输入不会出现"按回车返回菜单"（D-097）；要测试终端行为，在测试机上用 pty 驱动脚本逐步输入（M7-06 用的是一个 Python `pty.fork` 小脚本：每步等输出停止 1.5 秒再输入，只打印"最后一行 => 输入"）。
+- 驱动真实菜单：`printf '1\n1\n...' | NO_COLOR=1 litenode`（菜单从标准输入逐行读取）。管道输入不会出现"按回车返回菜单"（D-097）；要测试终端行为，在测试机上用 pty 驱动脚本逐步输入：`scripts/dev/ptyx.py`（步骤文件每行"正则<Tab>输入[<Tab>超时]"，`@show` 打印到此为止的输出；限时确认可在提示处结束脚本来测试超时恢复，此时注意自己的登录方式会被临时修改）。
 - **使用场景**：LiteNode 主要用作落地机。WSL 到 VPS 的直连经过中国，是用户在软路由上特意配置的模拟环境；直连被干扰不作为取舍依据，以 VPS 本机的协议检测为准（D-059）。
 - 客户端连通性：在 WSL 下载官方 Xray（放在 scratchpad 的独立目录，校验 `.dgst`），`scripts/dev/link2client.py` 把链接转成客户端配置，经 SOCKS 访问 `https://www.cloudflare.com/cdn-cgi/trace`，出口 IP 为 VPS 即连通。
 - **WSL 到 VPS 的直连经过 GFW（中国移动）**：所以"从中国大陆能连"和"协议上可用"要分开测；后者把 `scripts/dev/link2client.py` 和 `scripts/dev/vprobe.sh` 传到 VPS 的 `/tmp`，在 VPS 本机运行（注意测试机重启会清空 `/tmp`）。
