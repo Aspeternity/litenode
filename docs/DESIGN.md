@@ -250,7 +250,7 @@ docs/
 - `ssh`：LiteNode 管理的 sshd 设置（D-061，见第 13 节）。每个字段不写表示不管理，交给系统原有配置；全部不写时不生成 `00-litenode.conf`。
 - 节点的 `share_port`：分享链接使用的端口，不写（或 0）表示与 `port` 相同（NAT 机，D-043）。
 - 转发的 `resolved_ipv4` / `resolved_ipv6`：目标为域名时分别解析的 A / AAAA 记录（D-046，见第 11 节）。
-- `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。
+- `nodes` 为空时写为 `[]`。节点中各组件的参数为可选字段（如 `reality`），不使用的组件不写。VLESS Encryption 节点（第 9.7 节）的 `security` 为 `none`，参数写在 `vless_encryption`（`private_key`、`public_key`），没有 `reality`。
 - **备注**（D-039）：节点备注在所有节点之间唯一；客户端备注即 Xray 的 `email`，在所有节点的所有客户端之间唯一；节点备注和客户端备注互不影响，可以相同。格式：去掉首尾空白后 1～32 个字符（中文算一个字符），不含控制字符；比较时不区分大小写（`LA` 与 `la` 视为重复）。
 - 每个节点、客户端、转发规则、防火墙规则有内部稳定 ID：全局一个递增计数器 `next_id`，所有类型共用，只增不减，删除后不复用；菜单显示的是连续的序号。
 
@@ -640,7 +640,8 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 
 VLESS + TCP + VLESS Encryption（后量子密钥交换，有前向保密），用于经中转连接的落地机：不需要证书和目标网站。Xray 官方的定位是"用在中转、链式代理或 CDN 后面，不直接面对审查"。
 
-- **组合**：协议 VLESS（带 encryption）、传输 TCP、安全层 none；流控 `xtls-rprx-vision`（与 encryption 一起使用，native 模式 + TCP 时 Xray 仍可 splice）。
+- **组合**：协议 VLESS（带 encryption）、传输 TCP、安全层 none；流控 `xtls-rprx-vision`（与 encryption 一起使用，native 模式 + TCP 时 Xray 仍可 splice）。安全层 none 只允许用于带 VLESS Encryption 的 VLESS 节点（`Registry.CheckNode` 检查），不会生成明文节点。
+- **入站**：`settings.decryption` 为下面的服务端参数，`streamSettings` 只有 `"network": "tcp", "security": "none"`；其他与第 9.6 节相同。节点列表"协议"列显示 `VLESS-TCP-Encryption`。
 - **密钥**：X25519 认证（与 Reality 相同的 `security.NewX25519`）。服务端保存私钥，客户端使用公钥（`xray x25519` 的 Password）。否决 ML-KEM-768 认证：客户端密钥 1184 字节，链接约 1700 个字符，终端二维码远超 65 列；密钥交换本身已经是后量子的（X25519 + ML-KEM-768 混合）。
 - **参数**：服务端 `decryption` 为 `mlkem768x25519plus.native.600s.<私钥>`，客户端 `encryption` 为 `mlkem768x25519plus.native.0rtt.<公钥>`，与 `xray vlessenc` 的默认输出一致：native 外观（不做 xor 混淆，性能最好、可 splice）、服务端 0-RTT 票据有效 600 秒、客户端使用 0-RTT。不提供 xorpub / random 和填充等选项。
 - **添加节点**：选择类型后提示一行"适合经中转连接的落地机；需要客户端支持 VLESS Encryption"。端口默认随机 10000～60000 的空闲端口（没有伪装成 HTTPS 的需要，不默认 443），可以输入；不询问目标网站。备注默认 `Enc-<端口>`。
@@ -652,7 +653,7 @@ vless://<uuid>@<地址>:<端口>?encryption=mlkem768x25519plus.native.0rtt.<公�
 ```
 
   参数顺序和编码规则与第 9.5 节相同。链接下方的固定提示增加一行"需要客户端支持 VLESS Encryption"，具体支持的客户端和最低版本在 M8-03 实测后写入 README。
-- **Xray 版本**：VLESS Encryption 需要较新的 Xray（暂定不低于 v25.9.5，M8-01 用真实 Xray 确认）。LiteNode 默认安装的版本满足；用户在"更新 Xray"中输入的版本低于最低版本且存在这种节点时警告。
+- **Xray 版本**：VLESS Encryption 需要 Xray **v25.9.5** 或更高版本（M8-01 实测：v25.8.3 拒绝该配置；v25.8.29、v25.8.31 是预发布版，能运行但不作为下限；v25.9.5 是第一个包含该功能的正式版，与 v26.10.17 互通）。LiteNode 默认安装的版本满足；用户在"更新 Xray"中输入的版本低于最低版本且存在这种节点时警告。
 
 ## 10. Reality 目标网站
 

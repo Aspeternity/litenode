@@ -496,11 +496,11 @@
 
 用户 2026-10-19 决定：只加入 VLESS + TCP + VLESS Encryption，其他类型暂不开发（D-106）。设计见 DESIGN 第 9.7 节、D-107。
 
-### M8-01 VLESS Encryption 节点模型与配置生成 `未开始`
+### M8-01 VLESS Encryption 节点模型与配置生成 `已完成`
 - 逻辑层：节点保存 VLESS Encryption 的私钥 / 公钥；注册组合 VLESS + TCP + none（带 encryption，流控 Vision）；生成服务端 `decryption` 和客户端 `encryption` 字符串；Xray 入站配置。
 - 验收：
-  - [ ] 单元测试：密钥用真实 `xray vlessenc` / `xray x25519` 输出作测试向量；入站配置与 DESIGN 9.7 一致；已有 Reality 节点的配置不变。
-  - [ ] [VPS] 生成的配置通过 `xray run -test`；确认 VLESS Encryption 需要的最低 Xray 版本并写入 DESIGN。
+  - [x] 单元测试：密钥用真实 `xray vlessenc` / `xray x25519` 输出作测试向量；入站配置与 DESIGN 9.7 一致；已有 Reality 节点的配置不变。
+  - [x] [VPS] 生成的配置通过 `xray run -test`；确认 VLESS Encryption 需要的最低 Xray 版本并写入 DESIGN（v25.9.5，D-108）。
 
 ### M8-02 添加 / 修改节点菜单 `未开始`
 - 选择节点类型新增"VLESS + TCP + Encryption (Vision)"；添加流程（提示、随机端口、不问目标网站、备注 `Enc-<端口>`）；修改节点显示端口、重新生成密钥、分享端口、备注；"更新 Xray"输入低于最低版本时警告。依赖 M8-01。

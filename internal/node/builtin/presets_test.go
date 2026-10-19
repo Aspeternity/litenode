@@ -60,3 +60,32 @@ func TestBuildVLESSRealityVision(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildVLESSEncVision(t *testing.T) {
+	r, _ := Registry()
+	p, _ := r.Preset(PresetVLESSEncVision)
+	if p.Label != "VLESS + TCP + Encryption (Vision)" || r.PresetFlow("vless", "tcp", "none") != node.FlowVision {
+		t.Errorf("preset = %+v", p)
+	}
+	n, err := p.Build(node.BuildInput{NodeID: 7, ClientID: 8, Port: 23456, Remark: "Enc-23456", Rand: rand.Reader})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CheckNode(n); err != nil {
+		t.Fatalf("built node is not valid: %v", err)
+	}
+	if n.ID != 7 || n.Port != 23456 || !n.Enabled || n.Remark != "Enc-23456" || n.Security != "none" || n.Reality != nil {
+		t.Errorf("node = %+v", n)
+	}
+	e := n.VLESSEncryption
+	if e == nil {
+		t.Fatal("vless encryption settings missing")
+	}
+	if pub, err := security.PublicKey(e.PrivateKey); err != nil || pub != e.PublicKey {
+		t.Errorf("key pair mismatch (%v)", err)
+	}
+	c := n.Clients[0]
+	if len(n.Clients) != 1 || c.ID != 8 || c.Remark != "Enc-23456" || c.Flow != node.FlowVision || !c.Enabled || !node.ValidUUID(c.UUID) {
+		t.Errorf("client = %+v", c)
+	}
+}

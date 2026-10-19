@@ -14,6 +14,8 @@ import (
 // Preset IDs.
 const (
 	PresetVLESSRealityVision = "vless-tcp-reality-vision"
+	// PresetVLESSEncVision is VLESS + TCP + VLESS Encryption (D-106).
+	PresetVLESSEncVision = "vless-tcp-encryption-vision"
 )
 
 // Registry returns the registry of all compiled-in components.
@@ -23,10 +25,16 @@ func Registry() (*node.Registry, error) {
 		func() error { return r.AddProtocol(protocol.VLESS{}) },
 		func() error { return r.AddTransport(transport.TCP{}) },
 		func() error { return r.AddSecurity(security.Reality{}) },
+		func() error { return r.AddSecurity(security.None{}) },
 
 		// Vision requires VLESS over raw TCP with REALITY or TLS.
 		func() error {
 			return r.AddCompat(node.Compat{Protocol: "vless", Transport: "tcp", Security: "reality",
+				Flows: []string{node.FlowVision, ""}})
+		},
+		// Security "none" requires VLESS Encryption (Registry.CheckNode).
+		func() error {
+			return r.AddCompat(node.Compat{Protocol: "vless", Transport: "tcp", Security: "none",
 				Flows: []string{node.FlowVision, ""}})
 		},
 
@@ -36,6 +44,14 @@ func Registry() (*node.Registry, error) {
 				Label: "VLESS + TCP + Reality (Vision)",
 				Combo: node.Combo{Protocol: "vless", Transport: "tcp", Security: "reality", Flow: node.FlowVision},
 				Build: buildVLESSRealityVision,
+			})
+		},
+		func() error {
+			return r.AddPreset(node.Preset{
+				ID:    PresetVLESSEncVision,
+				Label: "VLESS + TCP + Encryption (Vision)",
+				Combo: node.Combo{Protocol: "vless", Transport: "tcp", Security: "none", Flow: node.FlowVision},
+				Build: buildVLESSEncVision,
 			})
 		},
 	}

@@ -9,11 +9,17 @@ import (
 	"github.com/Aspeternity/litenode/internal/node"
 )
 
-// ShareLink builds a VLESS link (DESIGN section 9.5):
+// ShareLink builds a VLESS link (DESIGN sections 9.5 and 9.7):
 //
 //	vless://<uuid>@<host>:<port>?encryption=none&flow=...&<params>#<remark>
-func (VLESS) ShareLink(_ node.Node, c node.Client, host string, port int, params []node.Param) (string, error) {
-	q := []node.Param{{Key: "encryption", Value: "none"}}
+//
+// With VLESS Encryption, encryption is the client's encryption value.
+func (VLESS) ShareLink(n node.Node, c node.Client, host string, port int, params []node.Param) (string, error) {
+	enc, err := Encryption(n)
+	if err != nil {
+		return "", err
+	}
+	q := []node.Param{{Key: "encryption", Value: enc}}
 	if c.Flow != "" {
 		q = append(q, node.Param{Key: "flow", Value: c.Flow})
 	}

@@ -22,9 +22,14 @@ type vlessSettings struct {
 }
 
 // InboundSettings lists the enabled clients. The client remark is the
-// Xray email (unique across all nodes, D-039).
+// Xray email (unique across all nodes, D-039). Decryption is "none" unless
+// the node uses VLESS Encryption.
 func (VLESS) InboundSettings(n node.Node) (any, error) {
-	s := vlessSettings{Clients: []vlessClient{}, Decryption: "none"}
+	dec, err := Decryption(n)
+	if err != nil {
+		return nil, err
+	}
+	s := vlessSettings{Clients: []vlessClient{}, Decryption: dec}
 	for _, c := range n.Clients {
 		if c.Enabled {
 			s.Clients = append(s.Clients, vlessClient{ID: c.UUID, Flow: c.Flow, Email: c.Remark})
