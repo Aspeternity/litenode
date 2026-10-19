@@ -3,7 +3,7 @@
 LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web 界面的 3x-ui。
 
 - 单个 Go 程序，没有其他依赖，通过数字菜单操作，适合小内存、低配 CPU 的 VPS。
-- 功能：Xray 节点（VLESS + TCP + Reality）和客户端管理、分享链接和二维码、nftables 端口转发、nftables 防火墙、SSH 安全配置、系统优化（BBR、swap、DNS 等）、备份与更新。
+- 功能：Xray 节点（VLESS + TCP + Reality、VLESS + TCP + VLESS Encryption）和客户端管理、分享链接和二维码、nftables 端口转发、nftables 防火墙、SSH 安全配置、系统优化（BBR、swap、DNS 等）、备份与更新。
 - 支持系统：Debian 11 / 12 / 13，Ubuntu 22.04 / 24.04 及之后的 LTS；架构 amd64、arm64。需要 systemd 和 root 权限。
 - Debian 11 已于 2026-08-31 停止安全更新，建议使用 Debian 12 或 13。在 Debian 11 上 apt 从 `bullseye-security` 下载时如果返回 404（该源的软件包已下架），可以暂时注释掉 `/etc/apt/sources.list` 中 `bullseye-security` 那一行再安装。
 
@@ -56,6 +56,16 @@ lnode
 2. 按提示选择端口（默认 443）和 Reality 目标网站。可以从常用网站中选，也可以自己输入。程序会检测目标网站是否可用。
 3. 添加完成后会显示第一个客户端的分享链接和二维码。以后在主菜单"分享节点"中可以随时再取。
 4. 连不上时，先检查云厂商的安全组（防火墙）有没有放行节点端口。这在 VPS 外部，LiteNode 看不到也改不了。
+
+### VLESS Encryption 节点
+
+"VLESS + TCP + Encryption (Vision)"是后量子加密（ML-KEM-768 + X25519）的 VLESS 节点，不需要证书和目标网站，适合**经中转连接的落地机**：线路机用端口转发（或其他中转）把流量转到落地机的这个节点。它不伪装成网站，不建议让客户端直接连接。
+
+- 添加时端口默认随机，备注默认 `Enc-<端口>`。需要 Xray v25.9.5 或更高版本（LiteNode 默认安装的版本满足）。
+- 客户端必须支持 VLESS Encryption。实测（2026-10）：
+  - Xray v25.9.5 及以上：可以直接使用分享链接（链接中的 `encryption` 参数就是客户端配置中的 `encryption`）。v2rayN、v2rayNG 等以 Xray 为内核的客户端需要内核不低于 v25.9.5，并且客户端本身能识别链接中的 `encryption` 参数。
+  - mihomo（Clash Meta 内核）v1.19.13 及以上：在代理配置中写 `encryption: "<链接中 encryption 的值>"`，`tls: false`、`flow: xtls-rprx-vision`。v1.19.12 及以下连不上。
+  - sing-box（v1.14.3）：不支持。
 
 ### 改 SSH 和防火墙时的保护
 

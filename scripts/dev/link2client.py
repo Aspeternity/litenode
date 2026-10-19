@@ -1,4 +1,5 @@
-# Development helper (not installed): turn a vless:// REALITY share link into
+# Development helper (not installed): turn a vless:// share link (REALITY or
+# VLESS Encryption with security=none) into
 # a minimal Xray client config with a local SOCKS inbound, to test links
 # with the official Xray client:
 #   python3 -I scripts/dev/link2client.py "<link>" 10808 > client.json
@@ -12,6 +13,8 @@ cfg = {
   "outbounds": [{"protocol": "vless",
     "settings": {"vnext": [{"address": u.hostname, "port": u.port,
       "users": [{"id": u.username, "encryption": q.get("encryption", "none"), "flow": q.get("flow", "")}]}]},
-    "streamSettings": {"network": q.get("type", "tcp"), "security": q["security"],
-      "realitySettings": {"serverName": q["sni"], "fingerprint": q["fp"], "publicKey": q["pbk"], "shortId": q["sid"]}}}]}
+    "streamSettings": {"network": q.get("type", "tcp"), "security": q["security"]}}]}
+if q["security"] == "reality":
+  cfg["outbounds"][0]["streamSettings"]["realitySettings"] = {
+    "serverName": q["sni"], "fingerprint": q["fp"], "publicKey": q["pbk"], "shortId": q["sid"]}
 print(json.dumps(cfg))

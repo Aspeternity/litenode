@@ -390,7 +390,7 @@ func TestAddVLESSEncNodeFlow(t *testing.T) {
 		"?encryption=mlkem768x25519plus.native.0rtt.", "&flow=xtls-rprx-vision&security=none&type=tcp#Enc-",
 		"VLESS-TCP-Encryption",
 		" 1. 端口", " 2. 重新生成密钥", " 3. 分享端口", " 4. 备注",
-		"└─ ✓ " + text.KeysRegenerated, text.NewLinksTitle,
+		"└─ ✓ " + text.KeysRegenerated, text.NewLinksTitle, text.VLESSEncClientHint,
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
