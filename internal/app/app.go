@@ -17,6 +17,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/forwardmgr"
 	"github.com/Aspeternity/litenode/internal/maint"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
+	"github.com/Aspeternity/litenode/internal/nodecheck"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/reality"
 	"github.com/Aspeternity/litenode/internal/share"
@@ -192,6 +193,8 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	if _, code := loadState(store, env.Stderr); code != 0 {
 		return code
 	}
+	// A probe table left by a check that was killed (DESIGN 9.9).
+	nodecheck.RemoveLeftover(ctx, r)
 	if env.Session == nil {
 		return 0
 	}

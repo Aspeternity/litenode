@@ -117,6 +117,7 @@ func (u *nodeUI) menu() ui.Menu {
 			{Label: text.NodeAdd, Action: u.add},
 			{Label: text.NodeModify, Hidden: none, Page: true, Action: u.modify},
 			{Label: text.NodeToggle, Hidden: none, Action: u.toggle},
+			{Label: text.NodeCheck, Hidden: none, Action: u.check},
 			{Label: text.NodeDelete, Hidden: none, Action: u.delete},
 		},
 	}

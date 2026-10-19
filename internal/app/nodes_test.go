@@ -81,7 +81,7 @@ func TestAddNodeFlow(t *testing.T) {
 		// DESIGN section 9.1 node list after adding.
 		" ID  备注         协议               端口  客户端  状态",
 		" 1   Reality-443  VLESS-TCP-Reality  443   1       ● 启用",
-		" 1. 添加节点", " 2. 修改节点", " 3. 启用 / 禁用节点", " 4. 删除节点",
+		" 1. 添加节点", " 2. 修改节点", " 3. 启用 / 禁用节点", " 4. 检测节点连通性", " 5. 删除节点",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
@@ -107,8 +107,8 @@ func TestDeleteNodeFlow(t *testing.T) {
 	f := nodeSystem()
 	add := strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n") + "\n"
 	runNodes(t, f, add)
-	// nodes > delete (4) > node 1 > confirm y
-	r := runNodes(t, f, "1\n4\n1\ny\n0\n0\n")
+	// nodes > delete (5) > node 1 > confirm y
+	r := runNodes(t, f, "1\n5\n1\ny\n0\n0\n")
 	if !strings.Contains(r.stdout, "删除节点 Reality-443 及其 1 个客户端？ [y/N]") || !strings.Contains(r.stdout, "节点已删除。") {
 		t.Errorf("delete flow:\n%s", r.stdout)
 	}
@@ -352,7 +352,7 @@ func TestXrayProgramMissing(t *testing.T) {
 	runNodes(t, f, strings.Join([]string{"1", "1", "1", "8443", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
 	f.Respond(systemtest.Response{Err: errors.New("no such file")}, xray.BinPath, "version")
 	// Delete node 1 while node 2 needs Xray; then the Xray menu.
-	r := runNodes(t, f, "1\n4\n1\ny\n0\n5\n0\n0\n")
+	r := runNodes(t, f, "1\n5\n1\ny\n0\n5\n0\n0\n")
 	for _, want := range []string{
 		"Xray 程序不存在，无法应用需要运行的节点。请先在\"Xray 服务\"中选择\"安装 Xray\"。",
 		"Xray 程序不存在（可能被手动删除），节点当前无法运行。", " 1. 安装 Xray",
