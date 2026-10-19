@@ -502,11 +502,11 @@
   - [x] 单元测试：密钥用真实 `xray vlessenc` / `xray x25519` 输出作测试向量；入站配置与 DESIGN 9.7 一致；已有 Reality 节点的配置不变。
   - [x] [VPS] 生成的配置通过 `xray run -test`；确认 VLESS Encryption 需要的最低 Xray 版本并写入 DESIGN（v25.9.5，D-108）。
 
-### M8-02 添加 / 修改节点菜单 `未开始`
+### M8-02 添加 / 修改节点菜单 `已完成`
 - 选择节点类型新增"VLESS + TCP + Encryption (Vision)"；添加流程（提示、随机端口、不问目标网站、备注 `Enc-<端口>`）；修改节点显示端口、重新生成密钥、分享端口、备注；"更新 Xray"输入低于最低版本时警告。依赖 M8-01。
 - 验收：
-  - [ ] 菜单和提示与 DESIGN 9.7 一致，界面文字在 `internal/text`。
-  - [ ] [VPS] 添加、修改端口、重新生成密钥、启用 / 禁用、删除都正常，防火墙 / ufw 同步。
+  - [x] 菜单和提示与 DESIGN 9.7 一致，界面文字在 `internal/text`。
+  - [x] [VPS] 添加、修改端口、重新生成密钥、启用 / 禁用、删除都正常，防火墙 / ufw 同步（Debian 12 LiteNode 防火墙，Debian 11 ufw）。
 
 ### M8-03 分享链接与客户端实测 `未开始`
 - 生成 VLESS Encryption 链接和二维码，链接下方加客户端支持提示；实测支持的客户端和最低版本，写入 README。依赖 M8-01。

@@ -28,18 +28,24 @@ func (u *nodeUI) modify() error {
 		if n.Reality != nil {
 			target, limit = n.Reality.Target, n.Reality.FallbackLimit
 		}
+		items := []ui.Item{{Label: text.ModPort, Hint: text.Current(n.Port), Action: func() error { return u.modPort(id) }}}
+		// Target and fallback limit exist only for REALITY (DESIGN
+		// section 9.7).
+		if n.Reality != nil {
+			items = append(items,
+				ui.Item{Label: text.ModTarget, Hint: text.Current(target), Action: func() error { return u.modTarget(id, target) }},
+				ui.Item{Label: text.ModFallback, Hint: text.Current(text.FallbackDescribe(limit.AfterBytes, limit.BytesPerSec)),
+					Action: func() error { return u.modFallback(id, target) }})
+		}
+		items = append(items,
+			ui.Item{Label: text.ModRegenKeys, Action: func() error { return u.modRegenKeys(id) }},
+			ui.Item{Label: text.ModSharePort, Hint: text.SharePortCurrent(n.SharePort), Action: func() error { return u.modSharePort(id, n.SharePort) }},
+			ui.Item{Label: text.ModRemark, Hint: text.Current(n.Remark), Action: func() error { return u.modRemark(id, n.Remark) }},
+		)
 		return ui.Menu{
 			Heading: text.NodeModify,
 			Status:  []string{text.ModifyTitle(seq, n.Remark, u.protocolLabel(n))},
-			Items: []ui.Item{
-				{Label: text.ModPort, Hint: text.Current(n.Port), Action: func() error { return u.modPort(id) }},
-				{Label: text.ModTarget, Hint: text.Current(target), Action: func() error { return u.modTarget(id, target) }},
-				{Label: text.ModFallback, Hint: text.Current(text.FallbackDescribe(limit.AfterBytes, limit.BytesPerSec)),
-					Action: func() error { return u.modFallback(id, target) }},
-				{Label: text.ModRegenKeys, Action: func() error { return u.modRegenKeys(id) }},
-				{Label: text.ModSharePort, Hint: text.SharePortCurrent(n.SharePort), Action: func() error { return u.modSharePort(id, n.SharePort) }},
-				{Label: text.ModRemark, Hint: text.Current(n.Remark), Action: func() error { return u.modRemark(id, n.Remark) }},
-			},
+			Items:   items,
 		}
 	})
 }
@@ -54,10 +60,10 @@ func (u *nodeUI) modPort(id int64) error {
 	if err != nil || !ok {
 		return err
 	}
-	cur := 0
+	cur, reality := 0, false
 	for _, n := range u.state().Nodes {
 		if n.ID == id {
-			cur = n.Port
+			cur, reality = n.Port, n.Reality != nil
 		}
 	}
 	for {
@@ -77,7 +83,7 @@ func (u *nodeUI) modPort(id int64) error {
 		if err != nil {
 			return err
 		}
-		if port != 443 {
+		if reality && port != 443 {
 			u.s.Println(u.s.Colors.Warn(text.Non443Hint))
 		}
 		u.s.Done(text.PortSet(port))

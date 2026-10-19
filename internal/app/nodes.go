@@ -12,6 +12,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/node"
+	"github.com/Aspeternity/litenode/internal/node/builtin"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/ports"
 	"github.com/Aspeternity/litenode/internal/reality"
@@ -68,7 +69,9 @@ func (u *nodeUI) state() *state.State {
 	return st
 }
 
-// protocolLabel is e.g. "VLESS-TCP-Reality".
+// protocolLabel is e.g. "VLESS-TCP-Reality". A VLESS Encryption node
+// shows "Encryption" in place of its empty security layer (DESIGN
+// section 9.7).
 func (u *nodeUI) protocolLabel(n node.Node) string {
 	label := func(c node.Component, ok bool, name string) string {
 		if ok {
@@ -79,7 +82,11 @@ func (u *nodeUI) protocolLabel(n node.Node) string {
 	p, pok := u.svc.Registry.Protocol(n.Protocol)
 	t, tok := u.svc.Registry.Transport(n.Transport)
 	s, sok := u.svc.Registry.Security(n.Security)
-	return label(p, pok, n.Protocol) + "-" + label(t, tok, n.Transport) + "-" + label(s, sok, n.Security)
+	sec := label(s, sok, n.Security)
+	if n.VLESSEncryption != nil {
+		sec = "Encryption"
+	}
+	return label(p, pok, n.Protocol) + "-" + label(t, tok, n.Transport) + "-" + sec
 }
 
 // menu is the node list menu (DESIGN section 9.1).
@@ -126,10 +133,12 @@ func (u *nodeUI) chooseNode() (*node.Node, error) {
 	return &n, nil
 }
 
-// add runs the add-node flow (DESIGN section 9.2).
+// add runs the add-node flow (DESIGN sections 9.2 and 9.7). Only REALITY
+// nodes ask for a target website, so the type step is unnumbered and the
+// steps after it are numbered once the type is known (D-109).
 func (u *nodeUI) add() error {
 	presets := u.svc.Registry.Presets()
-	u.s.Step(1, 4, text.ChoosePreset)
+	u.s.Step(0, 0, text.ChoosePreset)
 	m := ui.Menu{Heading: text.ChoosePreset}
 	for _, p := range presets {
 		m.Items = append(m.Items, ui.Item{Label: p.Label})
@@ -139,22 +148,37 @@ func (u *nodeUI) add() error {
 		return err
 	}
 	preset := presets[choice-1]
+	reality := preset.Combo.Security == "reality"
+	steps := 3
+	if !reality {
+		steps = 2
+	}
+	if preset.ID == builtin.PresetVLESSEncVision {
+		u.s.Println(text.VLESSEncHint)
+		if v, ok := u.svc.Xray.Installed(u.ctx); ok && !xray.SupportsVLESSEnc(v) {
+			u.s.EndWarn(text.XrayTooOldForVLESSEnc(v, xray.MinVLESSEncVersion))
+			return nil
+		}
+	}
 
 	addr, err := u.ensureShareAddresses()
 	if err != nil || addr == "" {
 		return err // "" : the user went back
 	}
-	u.s.Step(2, 4, text.PromptPort)
-	port, err := u.askNewPort(addr)
+	u.s.Step(1, steps, text.PromptPort)
+	port, err := u.askNewPort(addr, reality)
 	if err != nil {
 		return err
 	}
-	target, err := u.chooseTarget(3, 4)
-	if err != nil || target == "" {
-		return err
+	target := ""
+	if reality {
+		target, err = u.chooseTarget(2, steps)
+		if err != nil || target == "" {
+			return err
+		}
 	}
-	u.s.Step(4, 4, text.PromptRemark)
-	remark, err := u.askRemark(u.defaultRemark(port), 0, true)
+	u.s.Step(steps, steps, text.PromptRemark)
+	remark, err := u.askRemark(u.defaultRemark(preset, port), 0, true)
 	if err != nil {
 		return err
 	}
@@ -227,16 +251,17 @@ func (u *nodeUI) printLinks(id int64) {
 	}
 }
 
-// askNewPort asks for a free port for a new node: 443 if free, else a
-// random free port (DESIGN section 9.2 step 2).
-func (u *nodeUI) askNewPort(addr string) (int, error) {
+// askNewPort asks for a free port for a new node. REALITY nodes default
+// to 443 if free (DESIGN section 9.2 step 2), other nodes to a random free
+// port (section 9.7).
+func (u *nodeUI) askNewPort(addr string, reality bool) (int, error) {
 	st := u.state()
 	pc, err := u.svc.PortChecker(st)
 	if err != nil {
 		return 0, err
 	}
 	def := 443
-	if len(pc.Check([]ports.Key{{Proto: ports.TCP, Port: def}}, "", nil)) > 0 {
+	if !reality || len(pc.Check([]ports.Key{{Proto: ports.TCP, Port: def}}, "", nil)) > 0 {
 		def = pc.RandomFree(nil)
 	}
 	if ip := net.ParseIP(addr); ip != nil && !u.detector.OnInterface(addr) {
@@ -253,16 +278,22 @@ func (u *nodeUI) askNewPort(addr string) (int, error) {
 			}
 			continue
 		}
-		if port != 443 {
+		if reality && port != 443 {
 			u.s.Println(u.s.Colors.Warn(text.Non443Hint))
 		}
 		return port, nil
 	}
 }
 
-func (u *nodeUI) defaultRemark(port int) string {
+// defaultRemark is "Reality-<port>" or, for VLESS Encryption,
+// "Enc-<port>", made unique with "-2", "-3", ...
+func (u *nodeUI) defaultRemark(p node.Preset, port int) string {
 	st := u.state()
-	base := "Reality-" + strconv.Itoa(port)
+	prefix := "Reality-"
+	if p.ID == builtin.PresetVLESSEncVision {
+		prefix = "Enc-"
+	}
+	base := prefix + strconv.Itoa(port)
 	r := base
 	for i := 2; node.CheckNodeRemark(st.Nodes, r, 0) != nil || node.CheckClientRemark(st.Nodes, r, 0) != nil; i++ {
 		r = base + "-" + strconv.Itoa(i)

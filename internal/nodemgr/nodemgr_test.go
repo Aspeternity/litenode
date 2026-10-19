@@ -319,3 +319,26 @@ func TestFirewallFollowsNodes(t *testing.T) {
 		t.Errorf("after uninstalling Xray:\n%s", r)
 	}
 }
+
+func TestVLESSEncNode(t *testing.T) {
+	fx := newFixture(t)
+	ctx := context.Background()
+	n, err := fx.svc.Add(ctx, AddInput{PresetID: builtin.PresetVLESSEncVision, Port: 23456, Remark: "Enc-23456"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fx.inbounds(t); !slices.Equal(got, []int{23456}) {
+		t.Errorf("inbounds = %v", got)
+	}
+	old := *fx.state(t).Nodes[0].VLESSEncryption
+	if err := fx.svc.RegenerateKeys(ctx, n.ID); err != nil {
+		t.Fatal(err)
+	}
+	cur := fx.state(t).Nodes[0].VLESSEncryption
+	if cur.PrivateKey == old.PrivateKey || cur.PublicKey == old.PublicKey {
+		t.Error("keys not regenerated")
+	}
+	if err := fx.svc.SetTarget(ctx, n.ID, "www.apple.com:443"); err == nil {
+		t.Error("target set on a VLESS Encryption node")
+	}
+}
