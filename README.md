@@ -3,7 +3,7 @@
 LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web 界面的 3x-ui。
 
 - 单个 Go 程序，没有其他依赖，通过数字菜单操作，适合小内存、低配 CPU 的 VPS。
-- 功能：Xray 节点（VLESS + TCP + Reality、VLESS + TCP + VLESS Encryption、Shadowsocks 2022）和客户端管理、分享链接和二维码、nftables 端口转发、nftables 防火墙、SSH 安全配置、系统优化（BBR、swap、DNS 等）、备份与更新。
+- 功能：Xray 节点（VLESS + TCP + Reality、VLESS + TCP + VLESS Encryption、Shadowsocks 2022、Hysteria2）和客户端管理、分享链接和二维码、nftables 端口转发、nftables 防火墙、SSH 安全配置、系统优化（BBR、swap、DNS 等）、备份与更新。
 - 支持系统：Debian 11 / 12 / 13，Ubuntu 22.04 / 24.04 及之后的 LTS；架构 amd64、arm64。需要 systemd 和 root 权限。
 - Debian 11 已于 2026-08-31 停止安全更新，建议使用 Debian 12 或 13。在 Debian 11 上 apt 从 `bullseye-security` 下载时如果返回 404（该源的软件包已下架），可以暂时注释掉 `/etc/apt/sources.list` 中 `bullseye-security` 那一行再安装。
 
@@ -75,6 +75,19 @@ lnode
 - 每个客户端有自己的密钥。"重新生成密钥"会让所有客户端的链接失效；只换一个客户端用"客户端管理 → 修改客户端 → 重置密钥"。
 - 分享链接为 SIP002 格式，2022 方法的用户信息不做 base64：`ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口>#<备注>`。手动填写客户端时，密码为 `<服务端密钥>:<用户密钥>`（两段用英文冒号连接）。
 - 实测（2026-10，直连和经 LiteNode 端口转发，TCP 和 UDP 都通）：Xray v26.10.17、mihomo v1.19.32（直接导入分享链接）、sing-box v1.14.3。
+
+### Hysteria2 节点
+
+"Hysteria2"用于**线路机出站连接落地机**：线路机上的代理软件（3x-ui / Xray、mihomo、sing-box）把 Hysteria2 作为出站，连到 LiteNode 落地机。使用 Xray 内置的 Hysteria2，需要 Xray v26.3.27 或更高版本（LiteNode 默认安装的版本满足）。
+
+- 添加时端口默认随机，备注默认 `Hy2-<端口>`。节点**只使用 UDP**：LiteNode 防火墙和 ufw 只放行 UDP，云厂商的安全组要放行这个 UDP 端口。
+- 证书由 LiteNode 自动生成（自签，有效期 10 年，不需要域名），线路机用**证书指纹**固定证书，不要开启"跳过证书验证"。分享链接下方列出线路机出站参数：地址、端口、密码、SNI、证书 SHA-256 和公钥 SHA-256。"修改节点 → 重新生成证书"会更换指纹，之后要更新线路机的配置。
+- 每个客户端（即每台线路机）有自己的密码，"客户端管理 → 修改客户端 → 重置密码"只影响一个。
+- 实测（2026-10，TCP 和 UDP 都通，指纹错误时连不上）：
+  - 3x-ui v3.10.2：出站中直接导入分享链接（`pinSHA256` 会填入 `pinnedPeerCertSha256`）。Xray 作出站时需要 v26.2.6 或更高版本，`tlsSettings` 写 `"serverName": "www.bing.com", "pinnedPeerCertSha256": "<证书 SHA-256>"`。
+  - mihomo v1.19.32：`type: hysteria2`，`sni: www.bing.com`，`fingerprint: <证书 SHA-256>`。
+  - sing-box v1.14.3：`tls` 中 `"server_name": "www.bing.com", "certificate_public_key_sha256": ["<公钥 SHA-256>"]`。
+- 第一版不支持 Salamander 混淆和端口跳跃。
 
 ### 改 SSH 和防火墙时的保护
 

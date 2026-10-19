@@ -540,8 +540,13 @@ func TestAddHysteria2NodeFlow(t *testing.T) {
 		"hysteria2://", "/?sni=www.bing.com&pinSHA256=", "放行了 UDP 端口", "Hysteria2",
 		" 1. 端口", " 2. " + text.ModRegenCert, " 3. 分享端口", " 4. 备注",
 		text.ConfirmRegenCert, "└─ ✓ " + text.CertRegenerated, text.NewLinksTitle,
-		// The links after regenerating pin the new certificate.
-		"pinSHA256=" + fp.CertHex(),
+		// The links after regenerating pin the new certificate, and the
+		// new fingerprints follow them.
+		"pinSHA256=" + fp.CertHex(), text.NewFingerprintsTitle,
+		"  证书 SHA-256：" + fp.CertHex() + "\n", "  公钥 SHA-256：" + fp.PublicKeyBase64() + "\n",
+		// The relay's outbound settings below the first link.
+		"线路机出站参数", "  端口：" + strconv.Itoa(n.Port) + "\n", "  密码：" + n.Clients[0].Key + "\n",
+		"  SNI：www.bing.com\n", "certificate_public_key_sha256", "skip-cert-verify",
 	} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q", want)
