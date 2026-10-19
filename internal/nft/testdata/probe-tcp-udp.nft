@@ -1,0 +1,47 @@
+table inet litenode-probe
+delete table inet litenode-probe
+
+table inet litenode-probe {
+	counter arrive_tcp {
+	}
+	counter pass_tcp {
+	}
+	set src_tcp4 {
+		type ipv4_addr
+		size 5
+		flags dynamic
+	}
+	set src_tcp6 {
+		type ipv6_addr
+		size 5
+		flags dynamic
+	}
+	counter arrive_udp {
+	}
+	counter pass_udp {
+	}
+	set src_udp4 {
+		type ipv4_addr
+		size 5
+		flags dynamic
+	}
+	set src_udp6 {
+		type ipv6_addr
+		size 5
+		flags dynamic
+	}
+	chain arrive {
+		type filter hook prerouting priority -300; policy accept;
+		tcp dport 42001 counter name "arrive_tcp"
+		meta nfproto ipv4 tcp dport 42001 add @src_tcp4 { ip saddr }
+		meta nfproto ipv6 tcp dport 42001 add @src_tcp6 { ip6 saddr }
+		udp dport 42001 counter name "arrive_udp"
+		meta nfproto ipv4 udp dport 42001 add @src_udp4 { ip saddr }
+		meta nfproto ipv6 udp dport 42001 add @src_udp6 { ip6 saddr }
+	}
+	chain pass {
+		type filter hook input priority 100; policy accept;
+		tcp dport 42001 counter name "pass_tcp"
+		udp dport 42001 counter name "pass_udp"
+	}
+}
