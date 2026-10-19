@@ -265,15 +265,20 @@ func (s *Service) SetFallbackLimit(ctx context.Context, id int64, l node.Fallbac
 	})
 }
 
-// RegenerateKeys replaces the key pair and shortId (links change).
+// RegenerateKeys replaces the key pair, and the shortId of a REALITY node
+// (links change).
 func (s *Service) RegenerateKeys(ctx context.Context, id int64) error {
 	return s.modify(ctx, id, func(_ *state.State, n *node.Node) error {
-		if n.Reality == nil {
-			return errors.New("node has no reality settings")
+		if n.Reality == nil && n.VLESSEncryption == nil {
+			return errors.New("node has no keys")
 		}
 		priv, pub, err := security.NewX25519(s.Rand)
 		if err != nil {
 			return err
+		}
+		if n.VLESSEncryption != nil {
+			n.VLESSEncryption.PrivateKey, n.VLESSEncryption.PublicKey = priv, pub
+			return nil
 		}
 		sid, err := security.NewShortID(s.Rand)
 		if err != nil {

@@ -39,6 +39,16 @@ func versionParts(v string) [3]int {
 	return out
 }
 
+// MinVLESSEncVersion is the first stable Xray with VLESS Encryption
+// (D-108).
+const MinVLESSEncVersion = "v25.9.5"
+
+// SupportsVLESSEnc reports whether Xray version v supports VLESS
+// Encryption nodes.
+func SupportsVLESSEnc(v string) bool {
+	return v != "" && CompareVersions(v, MinVLESSEncVersion) >= 0
+}
+
 // SupportsMLKEMTargets reports whether Xray version v can use REALITY
 // targets that pick X25519MLKEM768.
 func SupportsMLKEMTargets(v string) bool {

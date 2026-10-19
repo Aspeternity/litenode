@@ -907,3 +907,8 @@
 - **安全层 `none` + 节点字段 `vless_encryption`**：VLESS Encryption 属于 VLESS 协议的参数（Xray 中是 `settings.decryption`），安全层用新注册的 `none`；`Registry.CheckNode` 要求 `none` 必须带 VLESS Encryption，且只用于 VLESS。否决把它做成一个"安全层"（与 Xray 的配置结构不符，以后加 `security: tls` + encryption 时会冲突）和新协议名 `vless-enc`（分享链接和 Xray 中仍是 VLESS）。
 - **最低 Xray 版本 v25.9.5**：在测试机上逐版本实测（`xray run -test` + 新旧版本服务端 / 客户端互通）：v25.8.3 拒绝配置；v25.8.29、v25.8.31 能用但是预发布版；v25.9.5 是第一个正式版，发布说明首次列出 VLESS Encryption。
 
+### D-109 添加 VLESS Encryption 节点的流程细节（由 Claude 决定（用户授权），2026-10-19，M8-02）
+
+- **步骤编号**：两种类型步骤数不同（Reality 有目标网站，VLESS Encryption 没有），"节点类型"显示时还不知道总数，所以这一步不编号，之后的步骤按所选类型编号（Reality 1/3～3/3，VLESS Encryption 1/2～2/2）。否决：继续显示"1/4"再接"2/3"（前后矛盾）；为 VLESS Encryption 也凑出 4 步（多一个无意义的问题）。
+- **已安装的 Xray 过旧时不添加**：选择 VLESS Encryption 后，若已安装的 Xray 低于 v25.9.5（D-108），提示先在"Xray 服务"中更新并结束流程。否决：问完所有问题后靠 `xray run -test` 失败回滚（用户白答问题，错误信息是 Xray 的英文）。未安装 Xray 时照常添加，自动安装的默认版本满足要求。
+

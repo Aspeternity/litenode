@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/nodemgr"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
@@ -144,8 +145,13 @@ func (u *nodeUI) xrayUpdate() error {
 	if err != nil || in == "" {
 		return err
 	}
-	if v, err := xray.NormalizeVersion(in); err == nil && !xray.SupportsMLKEMTargets(v) {
-		u.s.Println(u.s.Colors.Warn(text.XrayOldVersion(v, xray.MinMLKEMVersion)))
+	if v, err := xray.NormalizeVersion(in); err == nil {
+		if !xray.SupportsMLKEMTargets(v) {
+			u.s.Println(u.s.Colors.Warn(text.XrayOldVersion(v, xray.MinMLKEMVersion)))
+		}
+		if !xray.SupportsVLESSEnc(v) && slices.ContainsFunc(u.state().Nodes, func(n node.Node) bool { return n.VLESSEncryption != nil }) {
+			u.s.Println(u.s.Colors.Warn(text.XrayOldVersionVLESSEnc(v, xray.MinVLESSEncVersion)))
+		}
 	}
 	u.s.Println(text.XrayUpdating)
 	v, err := u.svc.UpdateXray(u.ctx, in)
