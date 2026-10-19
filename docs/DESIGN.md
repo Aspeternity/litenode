@@ -487,12 +487,13 @@ Xray 状态为"● 运行中 / ○ 已停止 / ○ 已停止（手动） / ○ �
 
 ### 9.2 添加节点
 
-1. 选择预设（第一版只有 VLESS + TCP + Reality，见 ROADMAP"未排期"的后续预设）：
+1. 选择预设（VLESS Encryption 见第 9.7 节，其他后续预设见 ROADMAP"未排期"）：
 
 ```
 ════════════════ 选择节点类型 ════════════════
 ──────────────────────────────────────────────
  1. VLESS + TCP + Reality (Vision)
+ 2. VLESS + TCP + Encryption (Vision)
 ──────────────────────────────────────────────
  0. 返回
 ```
@@ -623,6 +624,7 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 - 出站只有 freedom（直连）和 blackhole（阻断）。
 - 路由只做一件事：阻止访问内网和保留地址，用明确的 IP 段编写（如 `10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`、`127.0.0.0/8`、`169.254.0.0/16`、`fc00::/7`、`fe80::/10` 等），不使用 `geoip:private`。
 - Reality 节点默认带回落限速（见第 10.4 节），这是"配置最小化"原则的例外。
+- VLESS Encryption 节点的 `decryption` 按第 9.7 节生成，其他节点为 `none`。
 
 **实现细节**（`internal/xray/config.go`，M1-03）：
 
@@ -633,6 +635,24 @@ vless://<uuid>@<地址>:<端口>?encryption=none&flow=xtls-rprx-vision&security=
 - `streamSettings.network` 写 `tcp`（Xray v24.9 起改名为 `raw`，`tcp` 仍被接受，指定旧版本时也能用）。
 - REALITY 服务端只写 `show`、`target`、`serverNames`、`privateKey`、`shortIds` 和回落限速；指纹和公钥是客户端参数，只出现在分享链接中。回落限速为 0 时不写。
 - 生成前用注册表检查每个节点的组合和流控（`Registry.CheckNode`）。
+
+### 9.7 VLESS Encryption 节点（D-106、D-107）
+
+VLESS + TCP + VLESS Encryption（后量子密钥交换，有前向保密），用于经中转连接的落地机：不需要证书和目标网站。Xray 官方的定位是"用在中转、链式代理或 CDN 后面，不直接面对审查"。
+
+- **组合**：协议 VLESS（带 encryption）、传输 TCP、安全层 none；流控 `xtls-rprx-vision`（与 encryption 一起使用，native 模式 + TCP 时 Xray 仍可 splice）。
+- **密钥**：X25519 认证（与 Reality 相同的 `security.NewX25519`）。服务端保存私钥，客户端使用公钥（`xray x25519` 的 Password）。否决 ML-KEM-768 认证：客户端密钥 1184 字节，链接约 1700 个字符，终端二维码远超 65 列；密钥交换本身已经是后量子的（X25519 + ML-KEM-768 混合）。
+- **参数**：服务端 `decryption` 为 `mlkem768x25519plus.native.600s.<私钥>`，客户端 `encryption` 为 `mlkem768x25519plus.native.0rtt.<公钥>`，与 `xray vlessenc` 的默认输出一致：native 外观（不做 xor 混淆，性能最好、可 splice）、服务端 0-RTT 票据有效 600 秒、客户端使用 0-RTT。不提供 xorpub / random 和填充等选项。
+- **添加节点**：选择类型后提示一行"适合经中转连接的落地机；需要客户端支持 VLESS Encryption"。端口默认随机 10000～60000 的空闲端口（没有伪装成 HTTPS 的需要，不默认 443），可以输入；不询问目标网站。备注默认 `Enc-<端口>`。
+- **修改节点**：端口、重新生成密钥、分享端口、备注（没有目标网站和回落限速）。
+- **链接**：
+
+```
+vless://<uuid>@<地址>:<端口>?encryption=mlkem768x25519plus.native.0rtt.<公钥>&flow=xtls-rprx-vision&security=none&type=tcp#<备注>
+```
+
+  参数顺序和编码规则与第 9.5 节相同。链接下方的固定提示增加一行"需要客户端支持 VLESS Encryption"，具体支持的客户端和最低版本在 M8-03 实测后写入 README。
+- **Xray 版本**：VLESS Encryption 需要较新的 Xray（暂定不低于 v25.9.5，M8-01 用真实 Xray 确认）。LiteNode 默认安装的版本满足；用户在"更新 Xray"中输入的版本低于最低版本且存在这种节点时警告。
 
 ## 10. Reality 目标网站
 
