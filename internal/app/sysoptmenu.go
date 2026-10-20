@@ -91,8 +91,13 @@ func (u *sysoptUI) bbr(b sysopt.BBR) error {
 		if err != nil || !ok {
 			return err
 		}
-		if err := u.svc.SetBBR(u.ctx, false); err != nil {
+		keptBy, err := u.svc.SetBBR(u.ctx, false)
+		if err != nil {
 			return err
+		}
+		if keptBy != "" {
+			u.s.Done(text.BBRKeptBy(keptBy))
+			return nil
 		}
 		u.s.Done(text.BBRDisabledDone)
 		return nil
@@ -101,7 +106,7 @@ func (u *sysoptUI) bbr(b sysopt.BBR) error {
 	if err != nil || !ok {
 		return err
 	}
-	if err := u.svc.SetBBR(u.ctx, true); err != nil {
+	if _, err := u.svc.SetBBR(u.ctx, true); err != nil {
 		return err
 	}
 	u.s.Done(text.BBREnabledDone)

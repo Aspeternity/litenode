@@ -3,6 +3,7 @@ package sysopt
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -11,8 +12,13 @@ import (
 )
 
 // FallbackCongestion is the congestion control set when BBR is turned
-// off: the Linux default.
+// off and no other sysctl file sets one: the Linux default.
 const FallbackCongestion = "cubic"
+
+const (
+	congestionKey  = "net.ipv4.tcp_congestion_control"
+	congestionPath = "/proc/sys/net/ipv4/tcp_congestion_control"
+)
 
 // BBR is the BBR state shown in the menu.
 type BBR struct {
@@ -34,24 +40,39 @@ func (s *Service) BBRStatus() (BBR, error) {
 // SetBBR turns BBR and fq on or off in /etc/sysctl.d/99-litenode.conf
 // and loads the file. The new default qdisc applies to interfaces set up
 // later, which BBR does not need (it paces by itself since Linux 4.13).
-// Turning it off removes the lines and switches back to cubic, as the
-// removed lines no longer apply until reboot.
-func (s *Service) SetBBR(ctx context.Context, on bool) error {
+// Turning it off removes the lines, which no longer apply until reboot,
+// so the congestion control is set to what the other sysctl files give
+// at boot, or cubic when none sets it. keptBy is the file that keeps BBR
+// on after turning it off.
+func (s *Service) SetBBR(ctx context.Context, on bool) (keptBy string, err error) {
 	st, err := s.Store.Load()
 	if err != nil {
-		return err
+		return "", err
 	}
 	st.Sysopt.BBR = on
 	if err := s.applySysctl(ctx, st); err != nil {
-		return err
+		return "", err
 	}
-	if !on && system.BBREnabled(s.Runner) {
-		key := "net.ipv4.tcp_congestion_control=" + FallbackCongestion
+	if on {
+		return "", nil
+	}
+	want, file, ok, err := sysctl.BootValue(s.Runner, congestionKey)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		want, file = FallbackCongestion, ""
+	}
+	if data, err := s.Runner.ReadFile(congestionPath); err != nil || strings.TrimSpace(string(data)) != want {
+		key := congestionKey + "=" + want
 		if _, err := s.Runner.Exec(ctx, "sysctl", "-w", key); err != nil {
-			return fmt.Errorf("set %s: %w", key, err)
+			return "", fmt.Errorf("set %s: %w", key, err)
 		}
 	}
-	return nil
+	if want == "bbr" {
+		return file, nil
+	}
+	return "", nil
 }
 
 // applySysctl writes the sysctl file for st and loads it, saving st.
