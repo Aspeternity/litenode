@@ -82,3 +82,39 @@ func TestConfigFileAndKind(t *testing.T) {
 		t.Errorf("Apply: %v %v", err, f.Execs())
 	}
 }
+
+func TestMoveLegacy(t *testing.T) {
+	f := systemtest.New()
+	if err := MoveLegacy(f); err != nil || len(f.Files) != 0 {
+		t.Fatalf("no file: err = %v, files = %v", err, f.Files)
+	}
+	f.Files[LegacyPath] = []byte("net.ipv4.ip_forward = 1\n")
+	if err := MoveLegacy(f); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.Files[LegacyPath]; ok || string(f.Files[ConfigPath]) != "net.ipv4.ip_forward = 1\n" {
+		t.Errorf("files = %q", f.Files)
+	}
+	if len(f.Execs()) != 0 {
+		t.Errorf("execs = %q", f.Execs())
+	}
+
+	// An interrupted move: the new file wins.
+	f.Files[LegacyPath] = []byte("old\n")
+	if err := MoveLegacy(f); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.Files[LegacyPath]; ok || string(f.Files[ConfigPath]) != "net.ipv4.ip_forward = 1\n" {
+		t.Errorf("both: files = %q", f.Files)
+	}
+}
+
+// LiteNode's file is read after /etc/sysctl.conf at boot.
+func TestConfigPathSortsLast(t *testing.T) {
+	f := systemtest.New()
+	f.Files["/etc/sysctl.d/99-sysctl.conf"] = []byte("net.ipv4.ip_forward = 0\n")
+	f.Files[ConfigPath] = []byte("net.ipv4.ip_forward = 1\n")
+	if v, file, _, _ := BootValue(f, "net.ipv4.ip_forward"); v != "1" || file != ConfigPath {
+		t.Errorf("got %q from %s", v, file)
+	}
+}

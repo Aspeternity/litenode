@@ -96,7 +96,7 @@ func TestImport(t *testing.T) {
 	if !strings.Contains(string(f.Files["/etc/litenode/nftables.nft"]), "30002") {
 		t.Error("forward not in the nftables table")
 	}
-	if !strings.Contains(string(f.Files["/etc/sysctl.d/99-litenode.conf"]), "ip_forward") {
+	if !strings.Contains(string(f.Files["/etc/sysctl.d/99-zz-litenode.conf"]), "ip_forward") {
 		t.Error("kernel forwarding not enabled")
 	}
 }

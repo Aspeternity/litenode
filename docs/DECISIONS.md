@@ -1008,3 +1008,10 @@
 - **内容**：关闭 BBR 时，删除 `99-litenode.conf` 中的两行后，按 systemd-sysctl 启动时的规则算出其他 sysctl 文件给 `net.ipv4.tcp_congestion_control` 的值（`sysctl.BootValue`）：读取 `/etc/sysctl.d`、`/run/sysctl.d`、`/usr/local/lib/sysctl.d`、`/usr/lib/sysctl.d`、`/lib/sysctl.d` 中的 `*.conf`，同名文件以前面的目录为准，按文件名排序，最后一次设置生效。`/etc/sysctl.conf` 经 Debian / Ubuntu 自带的 `/etc/sysctl.d/99-sysctl.conf` 链接读到。只在运行值不同时执行 `sysctl -w` 设为该值，没有文件设置时设为 cubic。结果为 bbr 时提示 BBR 由哪个文件保持开启、如需关闭请修改该文件。`default_qdisc` 仍不改回（D-078）。
 - **原因**：关闭后运行值与重启后的值一致，不会出现"菜单显示已关闭、重启后又开启"或强制覆盖用户自己的配置；只改这一项，影响范围与原来相同。
 - **否决**：`sysctl --system`（D-078 已否决：重新应用所有 sysctl 文件，影响范围过大）；继续强制改为 cubic 只加提示（运行值与重启后不一致）；把 `/etc/sysctl.conf` 单独作为最后读取的文件（procps 的 `sysctl --system` 这样做，但启动时由 systemd-sysctl 应用，以启动结果为准）。
+
+### D-123 sysctl 文件改名为 99-zz-litenode.conf（用户 2026-10-20 同意，FIX-02）
+
+- **内容**：LiteNode 的 sysctl 文件从 `/etc/sysctl.d/99-litenode.conf` 改为 `99-zz-litenode.conf`。开机时 systemd-sysctl 按文件名顺序读取、最后的值生效，旧名排在 `99-sysctl.conf`（Debian / Ubuntu 指向 `/etc/sysctl.conf` 的链接）之前，`/etc/sysctl.conf` 中的同名设置（如加固脚本写的 `ip_forward = 0`）会在重启后覆盖 LiteNode 的设置，转发静默失效。改名后 LiteNode 的设置开机时最后生效，与运行时一致。
+- **迁移**：每次启动（取得锁、读取状态后）若旧文件存在，原子改名为新文件；内容不变，不需要重新加载。两个文件都存在（改名中断）时以新文件为准，删除旧文件。改名失败只显示警告，不影响使用。
+- **原因**：用户在 LiteNode 中明确开启转发或 BBR，应以 LiteNode 的设置为准；改名能自动解决，成本低。
+- **否决**：不改名只在写入后检查并提示被哪个文件覆盖（只能提醒，用户仍需手动修改）；只在下次修改 sysctl 设置时迁移（不修改设置的已有安装一直保留问题）；`zz-litenode.conf` 等不以数字开头的名字（与 sysctl.d 惯例不一致）。名字更靠后的文件（如 `zz-*.conf`）仍可能覆盖，很少见，不处理。

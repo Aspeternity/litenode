@@ -9,6 +9,7 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
+	"github.com/Aspeternity/litenode/internal/sysctl"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 	"github.com/Aspeternity/litenode/internal/text"
@@ -94,10 +95,23 @@ func TestRunShowsMainMenu(t *testing.T) {
 	}
 }
 
+// The sysctl file of an earlier version is renamed at startup (D-123).
+func TestRunMovesLegacySysctl(t *testing.T) {
+	f := supported()
+	f.Files[sysctl.LegacyPath] = []byte("net.ipv4.ip_forward = 1\n")
+	if r := run(t, f, 0, "0\n"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if _, ok := f.Files[sysctl.LegacyPath]; ok || string(f.Files[sysctl.ConfigPath]) != "net.ipv4.ip_forward = 1\n" {
+		t.Errorf("files: legacy kept or new missing")
+	}
+}
+
 func TestRunDryRun(t *testing.T) {
 	f := supported()
+	f.Files[sysctl.LegacyPath] = []byte("net.ipv4.ip_forward = 1\n")
 	r := run(t, f, 0, "0\n", "--dry-run")
-	if r.code != 0 || !strings.Contains(r.stdout, text.DryRunBanner) {
+	if r.code != 0 || !strings.Contains(r.stdout, text.DryRunBanner) || !strings.Contains(r.stdout, text.DryRunRename(sysctl.LegacyPath, sysctl.ConfigPath)) {
 		t.Errorf("%+v", r)
 	}
 	if m := f.Mutations(); len(m) != 0 {

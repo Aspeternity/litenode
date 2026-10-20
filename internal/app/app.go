@@ -242,6 +242,10 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	maintMenu := &maintUI{ctx: ctx, s: s, reg: reg, svc: &maint.Service{Runner: r, Store: store, Nodes: svc, Forwards: env.forwards(r, store),
 		Confirmer: sshSvc.Confirmer, Version: env.Version},
 		upd: &maint.Updater{Runner: r, Fetcher: env.fetcher(), Arch: runtime.GOARCH}, version: env.Version}
+	if err := sysctl.MoveLegacy(r); err != nil {
+		s.Println(s.Colors.Warn(text.ActionFailed(err)))
+		pause = true
+	}
 	// The user may have enabled ufw since the last change (D-038).
 	if err := svc.SyncUFW(ctx); err != nil {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))

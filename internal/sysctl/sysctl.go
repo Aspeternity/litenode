@@ -1,4 +1,4 @@
-// Package sysctl manages /etc/sysctl.d/99-litenode.conf, the kernel
+// Package sysctl manages /etc/sysctl.d/99-zz-litenode.conf, the kernel
 // settings LiteNode needs: IP forwarding for port forwarding (DESIGN
 // section 11), and the system optimizations of M5.
 package sysctl
@@ -16,8 +16,36 @@ import (
 	"github.com/Aspeternity/litenode/internal/system"
 )
 
-// ConfigPath is LiteNode's sysctl file, read last at boot.
-const ConfigPath = "/etc/sysctl.d/99-litenode.conf"
+// ConfigPath is LiteNode's sysctl file. Files are read in name order at
+// boot and the last value wins, so the name sorts after
+// 99-sysctl.conf, the link to /etc/sysctl.conf (D-123).
+const ConfigPath = "/etc/sysctl.d/99-zz-litenode.conf"
+
+// LegacyPath is the file's name before FIX-02, which /etc/sysctl.conf
+// overrode at boot.
+const LegacyPath = "/etc/sysctl.d/99-litenode.conf"
+
+// MoveLegacy renames the file of an earlier version to ConfigPath. The
+// content is unchanged, so nothing needs loading.
+func MoveLegacy(r system.Runner) error {
+	if _, err := r.ReadFile(LegacyPath); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("read %s: %w", LegacyPath, err)
+	}
+	if _, err := r.ReadFile(ConfigPath); err == nil {
+		// Both exist only if a move was interrupted after writing: the
+		// new file is current.
+		if err := r.Remove(LegacyPath); err != nil {
+			return fmt.Errorf("remove %s: %w", LegacyPath, err)
+		}
+		return nil
+	}
+	if err := r.Rename(LegacyPath, ConfigPath); err != nil {
+		return fmt.Errorf("rename %s: %w", LegacyPath, err)
+	}
+	return nil
+}
 
 // Setting is one "key = value" line.
 type Setting struct{ Key, Value string }
