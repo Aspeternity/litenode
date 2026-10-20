@@ -40,7 +40,7 @@ func TestVPSQRDecodes(t *testing.T) {
 		if mod != nil {
 			mod(&nn)
 		}
-		for _, addr := range []string{"216.23.88.252", "2001:db8:1234:5678:9abc:def0:1234:5678"} {
+		for _, addr := range []string{"198.51.100.252", "2001:db8:1234:5678:9abc:def0:1234:5678"} {
 			link, err := Link(reg, nn, nn.Clients[0], addr)
 			if err != nil {
 				t.Fatal(err)

@@ -994,3 +994,11 @@
 - **链接**：`hysteria2://<密码>@<地址>:<端口>/?sni=www.bing.com&pinSHA256=<证书 SHA-256 十六进制>#<备注>`（Hysteria 官方 URI 格式），二维码不超过 65 列。
 - **线路机出站参数**：添加节点、导出单个链接、添加客户端 / 重置密码后显示链接时，在链接下方列出地址、端口、密码、SNI、证书 SHA-256（注明 Xray / 3x-ui `pinnedPeerCertSha256`、mihomo `fingerprint`）、公钥 SHA-256（base64，注明 sing-box `certificate_public_key_sha256`），并提示不要开启跳过证书验证。"导出全部链接"只列链接（与其他类型一致）。重新生成证书后，在新链接下方列出新的两个指纹。否决：为每种软件输出完整的出站配置片段（三种格式、随软件版本变化，界面过长；README 给出字段名即可）。
 - **实测**（落地机 Debian 11 用 LiteNode 添加的节点，线路机 Debian 13）：Xray v26.10.17 按 3x-ui v3.10.2 导入链接生成的出站（源码 `parseHysteria2Link`）、mihomo v1.19.32（`fingerprint`）、sing-box v1.14.3（`certificate_public_key_sha256`）都连通，TCP 和 UDP 都可用；把指纹改错后三者都连不上（mihomo 报 certificate fingerprint 错误）。Xray v26.2.6 作为客户端也能连通。没有在真实的 3x-ui 面板中操作，而是用 3x-ui 源码中的导入逻辑生成同样的配置。
+
+### D-121 项目收尾（用户 2026-10-20 同意）
+
+- **测试 IP**：测试代码、testdata、文档中的测试机真实 IP 换成文档专用地址（RFC 5737 / RFC 3849）。以后测试数据只用文档专用地址，测试机的 IP 和密码不写入仓库。
+- **旧历史**：旧提交中仍有这些 IP。是否改写历史由用户处理，不属于日常流程；"不强制推送 main、不改写已推送历史"的约定不变。
+- **仓库维护**：新增 Dependabot（github-actions、gomod，每月）、Issue 模板（问题报告、功能建议，禁止空白 Issue，安全问题引导到私密报告）、`SECURITY.md`、CI 中的 `govulncheck`（固定版本 v1.8.0，只在 amd64 任务运行）、README 徽章（CI、版本、协议）。
+- **GitHub 设置**：添加 Topics，关闭未使用的 Wiki 和 Projects，开启 Dependabot 安全更新和私密漏洞报告。
+- 这些改动不影响程序，不发布新版本。

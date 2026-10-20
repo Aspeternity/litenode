@@ -1,5 +1,7 @@
 # LiteNode
 
+[![CI](https://github.com/Aspeternity/litenode/actions/workflows/ci.yml/badge.svg)](https://github.com/Aspeternity/litenode/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/Aspeternity/litenode)](https://github.com/Aspeternity/litenode/releases/latest) [![License](https://img.shields.io/github/license/Aspeternity/litenode)](LICENSE)
+
 LiteNode 是一个轻量的 VPS 节点部署与管理工具，类似没有 Web 界面的 3x-ui。
 
 - 单个 Go 程序，没有其他依赖，通过数字菜单操作，适合小内存、低配 CPU 的 VPS。

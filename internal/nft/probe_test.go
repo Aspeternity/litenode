@@ -44,7 +44,7 @@ func TestParseProbe(t *testing.T) {
 	}{
 		{"probe-0.9.8.json", ProbeCount{}},
 		{"probe-1.1.3.json", ProbeCount{Arrived: 10, Passed: 10, Sources: []netip.Addr{
-			netip.MustParseAddr("62.84.164.181"), netip.MustParseAddr("2401:1da0:22:d3::a")}}},
+			netip.MustParseAddr("203.0.113.181"), netip.MustParseAddr("2001:db8:22:d3::a")}}},
 	} {
 		data, err := os.ReadFile("testdata/" + tc.file)
 		if err != nil {
