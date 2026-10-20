@@ -586,7 +586,7 @@ v0.3.0 之后的小修复，不属于任何阶段，按编号单独提交。
 ### FIX-02 sysctl 文件改名，开机时最后生效 `已完成`
 - `99-litenode.conf` 排在 `99-sysctl.conf` 之前，`/etc/sysctl.conf` 的同名设置会在重启后覆盖 LiteNode 的设置（FIX-01 时发现）。改名为 `99-zz-litenode.conf`，见 D-123。
 - 验收：[x] 新文件名在 `99-sysctl.conf` 之后生效；启动时旧文件改名为新文件、内容不变、不执行命令；两个文件都存在时删除旧文件；`--dry-run` 只显示改名（单元测试）。
-- 验收：[ ] [VPS] Debian 12 上用 v0.3.0 开启 BBR 和一条转发，更新到本版本后启动，旧文件改名且运行值不变；在 `/etc/sysctl.conf` 写 `net.ipv4.ip_forward = 0` 后重启，转发仍为 1。
+- 验收：[x] [VPS]（用户 2026-10-20 实机验收通过）Debian 12 上用 v0.3.0 开启 BBR 和一条转发，更新到本版本后启动，旧文件改名且运行值不变；在 `/etc/sysctl.conf` 写 `net.ipv4.ip_forward = 0` 后重启，转发仍为 1。
 
 ## 未排期
 
