@@ -1,0 +1,34 @@
+name: 问题报告
+description: 程序出错或行为不符合预期
+body:
+  - type: markdown
+    attributes:
+      value: 请删掉日志和截图中的 IP、密码、UUID、密钥等敏感信息。
+  - type: input
+    id: version
+    attributes:
+      label: LiteNode 版本
+      description: 运行 `litenode version` 的输出
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: 系统和架构
+      description: 例如 Debian 12、Ubuntu 24.04
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 操作步骤
+      description: 依次进入了哪些菜单、输入了什么
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 实际结果和期望结果
+      description: 包括屏幕上的错误信息
+    validations:
+      required: true
