@@ -86,7 +86,7 @@ type SSH struct {
 // the state. Settings changed by system commands (swap, DNS, time zone)
 // are read from the system instead.
 type Sysopt struct {
-	// BBR writes BBR and fq to /etc/sysctl.d/99-litenode.conf.
+	// BBR writes BBR and fq to /etc/sysctl.d/99-zz-litenode.conf.
 	BBR bool `json:"bbr,omitempty"`
 }
 

@@ -37,7 +37,7 @@ func (s *Service) BBRStatus() (BBR, error) {
 	return BBR{Active: system.BBREnabled(s.Runner), Managed: st.Sysopt.BBR}, nil
 }
 
-// SetBBR turns BBR and fq on or off in /etc/sysctl.d/99-litenode.conf
+// SetBBR turns BBR and fq on or off in /etc/sysctl.d/99-zz-litenode.conf
 // and loads the file. The new default qdisc applies to interfaces set up
 // later, which BBR does not need (it paces by itself since Linux 4.13).
 // Turning it off removes the lines, which no longer apply until reboot,

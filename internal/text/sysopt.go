@@ -6,7 +6,7 @@ import "strconv"
 const (
 	SysoptBBR         = "BBR + fq"
 	SysoptBBRByOther  = "BBR 已由系统的其他配置开启，无需操作。"
-	ConfirmBBREnable  = "将开启 BBR 拥塞控制和 fq 队列（写入 /etc/sysctl.d/99-litenode.conf，重启后保持）。确定开启？"
+	ConfirmBBREnable  = "将开启 BBR 拥塞控制和 fq 队列（写入 /etc/sysctl.d/99-zz-litenode.conf，重启后保持）。确定开启？"
 	ConfirmBBRDisable = "将关闭 BBR，恢复为系统其他 sysctl 配置中的设置（没有时为默认的 cubic）。确定关闭？"
 	BBREnabledDone    = "BBR 已开启。"
 	BBRDisabledDone   = "BBR 已关闭。"
