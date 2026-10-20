@@ -32,12 +32,19 @@ func TestSysoptMenuBBR(t *testing.T) {
 	f.Files["/proc/sys/net/ipv4/tcp_available_congestion_control"] = []byte("reno cubic bbr\n")
 	f.Files[ccPath] = []byte("cubic\n")
 	f.OnCommand("sysctl -p "+sysctl.ConfigPath, func() { f.Files[ccPath] = []byte("bbr\n") })
+	f.OnCommand("sysctl -w net.ipv4.tcp_congestion_control=cubic", func() { f.Files[ccPath] = []byte("cubic\n") })
 	// main: 8 system optimization; 1 BBR, yes; 1 BBR again, yes (off); back; quit.
 	r := runSysopt(t, f, "8", "1", "y", "1", "y", "0", "0")
 	wantOutput(t, r.stdout, "BBR: ✗", text.BBREnabledDone, "BBR: ✓", text.BBRDisabledDone)
 	if _, ok := f.Files[sysctl.ConfigPath]; ok {
 		t.Error("sysctl file kept after turning BBR off")
 	}
+
+	// Another sysctl file turns BBR on: turning LiteNode's off keeps it.
+	const other = "/etc/sysctl.d/99-bbr.conf"
+	f.Files[other] = []byte("net.ipv4.tcp_congestion_control = bbr\n")
+	r = runSysopt(t, f, "8", "1", "y", "1", "y", "0", "0")
+	wantOutput(t, r.stdout, text.BBREnabledDone, text.BBRKeptBy(other))
 }
 
 func TestSysoptMenuHidesUnavailable(t *testing.T) {

@@ -671,7 +671,7 @@
 - **内容**：
   - **状态**：新增 `sysopt.bbr`。`99-litenode.conf` 由状态整体生成（`sysctl.Desired`，BBR 两行在内核转发之前），端口转发变更时也会保留 BBR。
   - **状态显示**以运行中的 `tcp_congestion_control` 为准；菜单项按情况开启、关闭（只在由 LiteNode 开启时），或提示"已由系统的其他配置开启"。
-  - **关闭**：从文件删除两行后执行 `sysctl -w net.ipv4.tcp_congestion_control=cubic`；`default_qdisc` 不改回（只影响之后创建的网卡队列，重启后由系统默认值决定）。
+  - **关闭**：从文件删除两行后执行 `sysctl -w net.ipv4.tcp_congestion_control=cubic`（D-122 改为系统配置中的值）；`default_qdisc` 不改回（只影响之后创建的网卡队列，重启后由系统默认值决定）。
   - **立即生效**只执行 `sysctl -p`，不对已有网卡执行 `tc qdisc replace`：BBR 从 Linux 4.13 起自带 pacing，不依赖 fq；重启后网卡使用 fq。
   - 内核在设置 `bbr` 时自动加载 `tcp_bbr` 模块，不写 `/etc/modules-load.d/`（实测 Ubuntu 24.04 重启后保持，模块此前由其他配置加载的情况已排除）。
 - **原因**：sysctl 文件由多个功能共用，只有从状态生成才能保证转发和 BBR 互不覆盖；以运行值显示能反映服务商镜像自带的设置（两台测试机都由镜像开启了 BBR）。
@@ -1002,3 +1002,9 @@
 - **仓库维护**：新增 Dependabot（github-actions、gomod，每月）、Issue 模板（问题报告、功能建议，禁止空白 Issue，安全问题引导到私密报告）、`SECURITY.md`、CI 中的 `govulncheck`（固定版本 v1.8.0，只在 amd64 任务运行）、README 徽章（CI、版本、协议）。
 - **GitHub 设置**：添加 Topics，关闭未使用的 Wiki 和 Projects，开启 Dependabot 安全更新和私密漏洞报告。
 - 这些改动不影响程序，不发布新版本。
+
+### D-122 关闭 BBR 时恢复系统配置中的拥塞控制（由 Claude 决定（用户授权），2026-10-20，FIX-01）
+
+- **内容**：关闭 BBR 时，删除 `99-litenode.conf` 中的两行后，按 systemd-sysctl 启动时的规则算出其他 sysctl 文件给 `net.ipv4.tcp_congestion_control` 的值（`sysctl.BootValue`）：读取 `/etc/sysctl.d`、`/run/sysctl.d`、`/usr/local/lib/sysctl.d`、`/usr/lib/sysctl.d`、`/lib/sysctl.d` 中的 `*.conf`，同名文件以前面的目录为准，按文件名排序，最后一次设置生效。`/etc/sysctl.conf` 经 Debian / Ubuntu 自带的 `/etc/sysctl.d/99-sysctl.conf` 链接读到。只在运行值不同时执行 `sysctl -w` 设为该值，没有文件设置时设为 cubic。结果为 bbr 时提示 BBR 由哪个文件保持开启、如需关闭请修改该文件。`default_qdisc` 仍不改回（D-078）。
+- **原因**：关闭后运行值与重启后的值一致，不会出现"菜单显示已关闭、重启后又开启"或强制覆盖用户自己的配置；只改这一项，影响范围与原来相同。
+- **否决**：`sysctl --system`（D-078 已否决：重新应用所有 sysctl 文件，影响范围过大）；继续强制改为 cubic 只加提示（运行值与重启后不一致）；把 `/etc/sysctl.conf` 单独作为最后读取的文件（procps 的 `sysctl --system` 这样做，但启动时由 systemd-sysctl 应用，以启动结果为准）。
