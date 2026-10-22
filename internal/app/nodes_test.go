@@ -236,10 +236,10 @@ func TestXrayMenu(t *testing.T) {
 	if !strings.Contains(r.stdout, "⚠ Xray 已手动停止") {
 		t.Errorf("no manual-stop warning:\n%s", r.stdout)
 	}
-	// Not installed: only the note.
+	// Not installed: the note and "install" only (FIX-03).
 	g := supported()
 	r = runNodes(t, g, "5\n0\n0\n")
-	if !strings.Contains(r.stdout, "Xray 未安装，首次添加节点时会自动安装。") || strings.Contains(r.stdout, " 1. 启动") {
+	if !strings.Contains(r.stdout, "Xray 未安装（首次添加节点时也会自动安装）。") || !strings.Contains(r.stdout, " 1. 安装 Xray\n") || strings.Contains(r.stdout, " 1. 启动") {
 		t.Errorf("not-installed menu:\n%s", r.stdout)
 	}
 }
