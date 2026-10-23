@@ -6,7 +6,11 @@
 #   input "@show" prints output since last send (no send); "@show:N" last N lines
 #   input "^C" sends Ctrl+C; "@none" sends nothing (just wait for regex)
 #   input "@sleep:N" sleeps N seconds (regex ignored)
-import os, pty, re, select, sys, time
+#   input "@raw:TEXT" sends TEXT with Python escapes decoded (\x1b, \r),
+#     no newline added: e.g. a bracketed paste
+#   input "@has:TEXT" prints whether the raw output since the last send
+#     contains TEXT (escapes decoded), e.g. \x1b[?2004h; sends nothing
+import codecs, os, pty, re, select, sys, time
 
 ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][A-Z0-9]')
 
@@ -79,9 +83,16 @@ for pat, inp, tmo in steps:
         print('-----')
         buf = b''
         continue
+    if inp.startswith('@has:'):
+        want = codecs.decode(inp[5:], 'unicode_escape').encode('latin-1')
+        print('[has] %r: %s' % (want, 'yes' if want in buf else 'no'))
+        continue
     print('[ok] %s => %s' % (pat, inp))
     buf = b''
     if inp == '@none':
+        continue
+    if inp.startswith('@raw:'):
+        os.write(fd, codecs.decode(inp[5:], 'unicode_escape').encode('latin-1'))
         continue
     if inp == '^C':
         os.write(fd, b'\x03')

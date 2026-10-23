@@ -311,18 +311,27 @@ func (u *sshUI) addKey() error {
 	return nil
 }
 
-// pasteKey asks until a valid key is pasted; nil means back.
+// pasteKey asks until a valid key is pasted; nil means back. A key the
+// terminal did not mark as pasted (no bracketed paste, piped input, or
+// typed) is shown for confirmation first, default no (FIX-04).
 func (u *sshUI) pasteKey() (*ssh.Key, error) {
 	for {
-		in, err := u.s.PromptValue(text.PromptPublicKey, "")
+		in, pasted, err := u.s.PromptPaste(text.PromptPublicKey)
 		if err != nil || in == "" {
 			return nil, err
 		}
-		k, err := ssh.ParseKey(in)
-		if err == nil {
-			return &k, nil
+		k, err := ssh.ParsePastedKey(in)
+		if err != nil {
+			u.s.Println(u.s.Colors.Warn(describe(err)))
+			continue
 		}
-		u.s.Println(u.s.Colors.Warn(describe(err)))
+		if !pasted {
+			u.s.Println(text.PastedKey(k.ShortType(), k.Fingerprint(), k.Comment))
+			if ok, err := u.s.Confirm(text.ConfirmAddKey); err != nil || !ok {
+				return nil, err
+			}
+		}
+		return &k, nil
 	}
 }
 
@@ -436,11 +445,74 @@ func (u *sshUI) loginMethod() error {
 	if x.pubkey == e.PubkeyAuth && x.password == e.PasswordAuth {
 		return nil
 	}
-	if err := u.svc.SetLoginMethod(u.ctx, x.pubkey, x.password); err != nil {
+	var name, password string
+	if x.password {
+		var ok bool
+		if name, password, ok, err = u.loginPassword(e.PermitRootLogin); err != nil || !ok {
+			return err
+		}
+	}
+	if err := u.svc.SetLoginMethodPassword(u.ctx, x.pubkey, x.password, name, password); err != nil {
 		return err
 	}
 	_, err = u.confirmed(text.ChangeKept)
 	return err
+}
+
+// loginPassword asks, for a method with password login, whose password to
+// set and how (FIX-04, D-126). Only admins that could log in with a
+// password under root policy are offered; with one, it does not ask which.
+// name "" means no password is set (nobody to offer, or the current one
+// kept); ok is false when the user went back. A generated password is
+// shown here, before the change is tested.
+func (u *sshUI) loginPassword(root string) (name, password string, ok bool, err error) {
+	admins, err := u.svc.Admins(u.ctx)
+	if err != nil {
+		return "", "", false, err
+	}
+	policy := ssh.Policy{Password: true, Root: root}
+	var users []ssh.Admin
+	for _, a := range admins {
+		if (ssh.Admin{Root: a.Root, Password: true}).CanLogIn(policy) {
+			users = append(users, a)
+		}
+	}
+	if len(users) == 0 {
+		return "", "", true, nil
+	}
+	a := users[0]
+	if len(users) > 1 {
+		m := ui.Menu{Heading: text.ChooseLoginUser}
+		for _, a := range users {
+			m.Items = append(m.Items, ui.Item{Label: a.Name})
+		}
+		choice, err := u.s.Choose(m)
+		if err != nil || choice == 0 {
+			return "", "", false, err
+		}
+		a = users[choice-1]
+	}
+	m := ui.Menu{Heading: text.ChooseLoginPassword(a.Name), Items: []ui.Item{
+		{Label: text.SudoPasswordGen}, {Label: text.SudoPasswordInput}, {Label: text.PasswordKeep, Hidden: !a.Password}}}
+	choice, err := u.s.Choose(m)
+	if err != nil || choice == 0 {
+		return "", "", false, err
+	}
+	switch choice {
+	case 1:
+		if password, err = ssh.GeneratePassword(u.svc.Rand); err != nil {
+			return "", "", false, err
+		}
+		u.s.Hold()
+		u.s.Println(u.s.Colors.Warn(text.GeneratedPassword(a.Name, password)))
+	case 2:
+		if password, err = u.askPassword(); err != nil || password == "" {
+			return "", "", false, err
+		}
+	default:
+		return "", "", true, nil
+	}
+	return a.Name, password, true, nil
 }
 
 func (u *sshUI) rootPolicy() error {
@@ -672,7 +744,7 @@ func describeSSH(err error) (string, bool) {
 		ssh.ErrNeedKeyLogin: text.ErrNeedKeyLogin, ssh.ErrNeedKey: text.ErrNeedKey,
 		ssh.ErrNeedSudoUser: text.ErrNeedSudoUser, ssh.ErrLockout: text.ErrSSHLockout,
 		ssh.ErrLastKey: text.ErrLastKey, ssh.ErrKeyFormat: text.ErrKeyFormat, ssh.ErrKeyType: text.ErrKeyType,
-		ssh.ErrKeyWeak: text.ErrKeyWeak, ssh.ErrGitHubUser: text.ErrGitHubUser, ssh.ErrGitHubNone: text.ErrGitHubNone,
+		ssh.ErrKeyWeak: text.ErrKeyWeak, ssh.ErrPrivateKey: text.ErrPrivateKey, ssh.ErrGitHubUser: text.ErrGitHubUser, ssh.ErrGitHubNone: text.ErrGitHubNone,
 		ssh.ErrPortRange: text.ErrSSHPortRange, ssh.ErrPortSame: text.ErrSSHPortSame, ssh.ErrUserName: text.ErrUserName,
 		ssh.ErrUserExists: text.ErrUserExists, ssh.ErrPasswordShort: text.ErrPasswordShort,
 		ssh.ErrPasswordChars: text.ErrPasswordChars, ssh.ErrNothingToRollBack: text.ErrNothingToRollBack,

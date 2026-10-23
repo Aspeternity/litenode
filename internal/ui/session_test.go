@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -372,5 +374,61 @@ func TestHoldAll(t *testing.T) {
 	}
 	if n := strings.Count(out.String(), text.PressEnter); n != 1 {
 		t.Errorf("pauses = %d, want 1\n%s", n, out.String())
+	}
+}
+
+// TestPromptPaste: a marked paste is read to its end, line breaks and
+// all, and the line it ends on is the user's Enter (FIX-04); paste mode
+// is on only during the prompt.
+func TestPromptPaste(t *testing.T) {
+	in := "\x1b[200~ssh-ed25519 AAAA\nBBBB me\n\x1b[201~\nnext\n"
+	s, _, _ := newTestSession(strings.NewReader(in))
+	var modes []bool
+	s.Paste = func(on bool) { modes = append(modes, on) }
+	got, pasted, err := s.PromptPaste("key")
+	if err != nil || !pasted || got != "ssh-ed25519 AAAA\nBBBB me" {
+		t.Fatalf("PromptPaste = %q, %v, %v", got, pasted, err)
+	}
+	if !slices.Equal(modes, []bool{true, false}) {
+		t.Errorf("paste modes = %v", modes)
+	}
+	if next, _ := s.Prompt("x"); next != "next" {
+		t.Errorf("next line = %q", next)
+	}
+	// Paste and end marker on one line; typed text, back and pipes.
+	for _, c := range []struct {
+		in, want string
+		pasted   bool
+	}{
+		{"\x1b[200~ssh-ed25519 AAAA me\x1b[201~\n", "ssh-ed25519 AAAA me", true},
+		{"ssh-ed25519 AAAA me\nnext\n", "ssh-ed25519 AAAA me", false},
+		{"0\n", "", false},
+		{"\n", "", false},
+	} {
+		s, _, _ := newTestSession(strings.NewReader(c.in))
+		got, pasted, err := s.PromptPaste("key")
+		if err != nil || got != c.want || pasted != c.pasted {
+			t.Errorf("%q: %q, %v, %v", c.in, got, pasted, err)
+		}
+	}
+}
+
+// TestPromptPasteUnmarked: on a terminal without bracketed paste, lines
+// arriving together are one paste; a line typed later is not part of it.
+func TestPromptPasteUnmarked(t *testing.T) {
+	pr, pw := io.Pipe()
+	s := NewSession(pr, &bytes.Buffer{}, make(chan os.Signal), Colors{})
+	s.Interactive = true
+	go func() {
+		io.WriteString(pw, "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----\n")
+		time.Sleep(3 * PasteGap)
+		io.WriteString(pw, "later\n")
+	}()
+	got, pasted, err := s.PromptPaste("key")
+	if err != nil || pasted || got != "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----" {
+		t.Fatalf("PromptPaste = %q, %v, %v", got, pasted, err)
+	}
+	if next, _ := s.Prompt("x"); next != "later" {
+		t.Errorf("next line = %q", next)
 	}
 }

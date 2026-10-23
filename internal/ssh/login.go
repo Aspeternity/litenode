@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"slices"
 
@@ -51,6 +52,14 @@ func (s *Service) Admins(ctx context.Context) ([]Admin, error) {
 // changePolicy checks the interlocks for the policy fn produces from the
 // one in effect, then applies the change under confirm-or-rollback.
 func (s *Service) changePolicy(ctx context.Context, fnPolicy func(*Policy), fnState func(*state.SSH)) error {
+	return s.changePolicyPassword(ctx, fnPolicy, fnState, "", "")
+}
+
+// changePolicyPassword is changePolicy that first sets the password of
+// admin name (none when name is ""). The interlocks count the new
+// password; it is set outside the rollback, so rejecting the change
+// restores only the SSH settings (FIX-04).
+func (s *Service) changePolicyPassword(ctx context.Context, fnPolicy func(*Policy), fnState func(*state.SSH), name, password string) error {
 	e, err := ReadEffective(ctx, s.runner())
 	if err != nil {
 		return err
@@ -62,8 +71,23 @@ func (s *Service) changePolicy(ctx context.Context, fnPolicy func(*Policy), fnSt
 	if err != nil {
 		return err
 	}
+	if name != "" {
+		if err := CheckPassword(password); err != nil {
+			return err
+		}
+		i := slices.IndexFunc(admins, func(a Admin) bool { return a.Name == name })
+		if i < 0 {
+			return fmt.Errorf("%w: %s", ErrNotAdmin, name)
+		}
+		admins[i].Password = true
+	}
 	if err := CheckLockout(old, new, admins); err != nil {
 		return err
+	}
+	if name != "" {
+		if _, err := s.runner().ExecInput(ctx, []byte(name+":"+password+"\n"), "chpasswd"); err != nil {
+			return fmt.Errorf("chpasswd %s: %w", name, err)
+		}
 	}
 	return s.Change(ctx, fnState)
 }
@@ -81,8 +105,15 @@ func (s *Service) SetPasswordAuth(ctx context.Context, on bool) error {
 // SetLoginMethod sets key and password login together, as one change
 // (D-090: key only, password only, or both).
 func (s *Service) SetLoginMethod(ctx context.Context, pubkey, password bool) error {
-	return s.changePolicy(ctx, func(p *Policy) { p.Pubkey, p.Password = pubkey, password },
-		func(c *state.SSH) { c.PubkeyAuth, c.PasswordAuth = &pubkey, &password })
+	return s.SetLoginMethodPassword(ctx, pubkey, password, "", "")
+}
+
+// SetLoginMethodPassword is SetLoginMethod that first sets the password of
+// admin name, for a method with password login (FIX-04, D-126); name ""
+// keeps the passwords as they are.
+func (s *Service) SetLoginMethodPassword(ctx context.Context, pubkey, password bool, name, newPassword string) error {
+	return s.changePolicyPassword(ctx, func(p *Policy) { p.Pubkey, p.Password = pubkey, password },
+		func(c *state.SSH) { c.PubkeyAuth, c.PasswordAuth = &pubkey, &password }, name, newPassword)
 }
 
 // ErrRootPolicy means an unknown root login policy.
