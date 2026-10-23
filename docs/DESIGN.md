@@ -877,7 +877,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 - **查看日志**（子菜单，D-090）：
   - **最近日志**：输入行数（默认 50，最多 1000，0 返回），显示 `journalctl -u litenode-xray -n <行数>`。
   - **实时日志**：`journalctl -u litenode-xray -f -n 20`，按 Ctrl+C 回到日志菜单，不退出 LiteNode。实现：journalctl 在自己的进程组中运行（终端的 Ctrl+C 只发给 LiteNode），LiteNode 收到 SIGINT 时取消这个命令而不是退出；SIGHUP / SIGTERM 仍然退出（D-092）。
-- **状态行**：版本、运行状态（运行中 / 已停止 / 已停止（手动））、已运行时间（`ActiveEnterTimestampMonotonic` 与 `/proc/uptime` 计算）、内存（`MemoryCurrent`）。Xray 未安装时状态区显示"Xray 未安装（首次添加节点时也会自动安装）"，唯一选项"安装 Xray"：安装默认版本并应用当前状态（没有节点时 Xray 不运行），完成后提示"没有启用的节点时不运行，添加节点后自动启动"（D-124）。
+- **状态行**：版本、运行状态（运行中 / 已停止 / 已停止（手动））、已运行时间（`ActiveEnterTimestampMonotonic` 与 `/proc/uptime` 计算）、内存（`MemoryCurrent`）。Xray 未安装时状态区显示"Xray 未安装"，唯一选项"安装 Xray"：安装默认版本并应用当前状态（没有节点时 Xray 不运行），完成后提示"没有启用的节点时不运行，添加节点后自动启动"（D-124）。
 - **更新**时可输入版本（回车为默认版本，D-054）；输入的版本低于 v26.9.8 时警告 ML-KEM 目标将无法使用。
 - **更新**：默认最新版，可以输入指定版本。更新后用当前配置执行 `xray run -test` 校验，失败则回退旧版本。
   - 旧程序先改名为 `xray.bak`，新程序写入后依次检查：`xray version` 报告的版本正确、接受当前配置、服务原本在运行时重启后 2 秒仍在运行。任一项失败就把 `xray.bak` 改回并重启旧程序（重启前先 `systemctl reset-failed`，因为崩溃的新程序会被 systemd 反复拉起而触发启动频率限制）。成功后删除 `xray.bak`。

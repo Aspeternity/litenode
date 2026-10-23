@@ -400,7 +400,7 @@ const (
 	XrayLogs             = "查看日志"
 	XrayUpdate           = "更新 Xray"
 	XrayUninstall        = "卸载 Xray"
-	XrayNotInstalledNote = "Xray 未安装（首次添加节点时也会自动安装）。"
+	XrayNotInstalledNote = "Xray 未安装。"
 	XrayMissingNote      = "Xray 程序不存在（可能被手动删除），节点当前无法运行。"
 	XrayInstall          = "安装 Xray"
 	XrayInstallingNow    = "正在安装 Xray……"
