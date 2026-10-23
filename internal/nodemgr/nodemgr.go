@@ -201,8 +201,9 @@ func (s *Service) EnsureXray(ctx context.Context, st *state.State) error {
 	return nil
 }
 
-// ReinstallXray installs Xray again when the program is missing but the
-// state still has nodes, and applies the nodes (D-095).
+// ReinstallXray installs Xray when the program is missing, either before
+// the first node (FIX-03) or after it was deleted by hand while nodes
+// remain (D-095), and applies the nodes.
 func (s *Service) ReinstallXray(ctx context.Context) error {
 	st, err := s.Store.Load()
 	if err != nil {
