@@ -46,7 +46,7 @@
 - 界面（D-069）：页面中的选项默认作为操作流程运行，打开其他页面的选项要标 `Page: true`；操作成功时调用 `s.Done(text.X)` 结束流程（之后输出的链接等不加前缀），多步操作用 `s.Step(n, total, 名称)` 标步骤；没有调用 `Done` 就返回 nil 显示为"已取消"。显示了需要阅读的内容（链接、日志、密钥、测试结果）的操作调用 `s.Hold()`；以警告结束用 `s.EndWarn(text.X)`（自动停住）；返回错误自动停住（D-097）。
 
 - 每个 Go 包用 `doc.go` 写包注释作为占位；尚无文件的目录（`scripts/`、`.github/workflows/`）用 `.gitkeep`，有真实文件后删除。
-- `go.mod` 使用 `go 1.27.2`（开发环境的 Go 版本）。
+- `go.mod` 使用 `go 1.27.3`（开发环境的 Go 版本）。
 - `internal/text` 已创建（M0-02，dry-run 输出文字），`TestNoChineseOutsideText` 扫描其他包的非测试 Go 文件（含注释），发现中文即失败。
 - 执行层用法：只读用 `Query` / `ReadFile`，修改用 `Exec` / `WriteFile` / `Remove` / `MkdirAll`；systemd 操作用 `system.Systemctl`、`DaemonReload`、`ServiceActive`、`ServiceEnabled`。命令执行时设置 `LC_ALL=C`，便于解析输出。
 - 其他包的测试用 `systemtest.New()`：`Respond` 设定命令输出，`Files` 模拟文件，`WriteErr` 模拟写入失败，`Execs()` / `Mutations()` 断言。
