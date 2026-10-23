@@ -32,7 +32,8 @@ const (
 
 	SSHPasteKey      = "粘贴公钥"
 	SSHGitHubImport  = "从 GitHub 导入"
-	PromptPublicKey  = "粘贴公钥（一行，0 返回）"
+	PromptPublicKey  = "粘贴公钥（粘贴后按回车，0 返回）"
+	ConfirmAddKey    = "添加这个公钥？"
 	PromptGitHubUser = "GitHub 用户名（0 返回）"
 	PromptKeyChoice  = "导入哪些？输入序号（如 1,3），直接回车导入全部，0 返回"
 	PromptKeyNumber  = "请输入公钥序号（0 返回）"
@@ -49,6 +50,8 @@ const (
 	SudoPasswordGen   = "自动生成强密码（推荐，只显示一次）"
 	SudoPasswordInput = "手动输入密码"
 	ChoosePassword    = "设置密码（sudo 时需要输入）"
+	ChooseLoginUser   = "选择用密码登录的用户"
+	PasswordKeep      = "保留现有密码"
 	PromptPassword    = "输入密码（不显示）"
 	PromptPassword2   = "再次输入密码"
 	PasswordMismatch  = "两次输入的密码不一致。"
@@ -110,6 +113,12 @@ func SSHKeyLine(n int, user, typ, fingerprint, comment string) string {
 		comment = string(r[:23]) + "…"
 	}
 	return strings.TrimRight(fmt.Sprintf("  [%d] %s%s %s  %s", n, user, typ, fingerprint, comment), " ")
+}
+
+// PastedKey shows a key that was typed or pasted unmarked, before the
+// user confirms it (FIX-04).
+func PastedKey(typ, fingerprint, comment string) string {
+	return strings.TrimRight(fmt.Sprintf("公钥: %s %s  %s", typ, fingerprint, comment), " ")
 }
 
 // GitHubKeysFound lists the keys found for a GitHub user.
@@ -207,6 +216,11 @@ func SudoUserCreated(name string) string {
 	return fmt.Sprintf("用户 %s 已创建并加入 sudo 组，使用 sudo 时需要输入密码。", name)
 }
 
+// ChooseLoginPassword heads the choice of a user's SSH login password.
+func ChooseLoginPassword(name string) string {
+	return fmt.Sprintf("%s 的登录密码", name)
+}
+
 // GeneratedPassword shows the generated password once.
 func GeneratedPassword(name, password string) string {
 	return fmt.Sprintf("%s 的密码（只显示这一次，请保存）：%s", name, password)
@@ -236,6 +250,7 @@ const (
 	ErrKeyFormat         = "不是有效的 OpenSSH 公钥（应为 \"ssh-ed25519 AAAA... 注释\" 这样的一行）。"
 	ErrKeyType           = "不支持的公钥类型（支持 ed25519、ecdsa、rsa）。"
 	ErrKeyWeak           = "RSA 公钥太短，至少需要 2048 位。"
+	ErrPrivateKey        = "这是私钥，已丢弃。请粘贴公钥（.pub 文件的内容，以 ssh-ed25519 等开头）；私钥只保存在自己的电脑上，不要发给任何人。"
 	ErrGitHubUser        = "GitHub 用户名格式不正确。"
 	ErrGitHubNone        = "这个 GitHub 用户没有可用的公钥。"
 	ErrSSHPortRange      = "端口必须在 1 到 65535 之间。"

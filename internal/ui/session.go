@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/text"
 )
@@ -42,6 +43,10 @@ type Session struct {
 	// the menu comes back, and a page clear the screen (D-096); piped
 	// input runs straight through.
 	Interactive bool
+	// Paste turns the terminal's bracketed paste mode on or off around
+	// PromptPaste (optional; the program sets it to SetPaste when input
+	// and output are a terminal).
+	Paste func(on bool)
 	// HoldAll makes every operation wait for Enter (dry-run mode, where
 	// each operation prints the commands it would run).
 	HoldAll bool
@@ -131,31 +136,123 @@ func (s *Session) Follow(ctx context.Context, fn func(context.Context) error) er
 
 // Prompt prints label and returns the trimmed input line.
 func (s *Session) Prompt(label string) (string, error) {
+	if err := s.startPrompt(); err != nil {
+		return "", err
+	}
+	defer s.endPrompt()
+	fmt.Fprint(s.Out, s.promptLabel(label))
+	line, _, err := s.readLine(0)
+	return strings.TrimSpace(line), err
+}
+
+// startPrompt marks the session as waiting for input, so an interrupt
+// quits at once; endPrompt ends that.
+func (s *Session) startPrompt() error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.quit {
-		s.mu.Unlock()
-		return "", ErrQuit
+		return ErrQuit
 	}
 	s.prompting = true
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		s.prompting = false
-		s.mu.Unlock()
-	}()
+	return nil
+}
 
-	fmt.Fprint(s.Out, s.promptLabel(label))
+func (s *Session) endPrompt() {
+	s.mu.Lock()
+	s.prompting = false
+	s.mu.Unlock()
+}
+
+// readLine reads the next input line. With wait > 0 it gives up after
+// that long and reports ok false.
+func (s *Session) readLine(wait time.Duration) (line string, ok bool, err error) {
+	var timeout <-chan time.Time
+	if wait > 0 {
+		t := time.NewTimer(wait)
+		defer t.Stop()
+		timeout = t.C
+	}
 	select {
 	case line, ok := <-s.lines:
 		if !ok {
 			fmt.Fprintln(s.Out)
-			return "", ErrQuit
+			return "", false, ErrQuit
 		}
-		return strings.TrimSpace(line), nil
+		return line, true, nil
 	case <-s.wake:
 		fmt.Fprintln(s.Out)
-		return "", ErrQuit
+		return "", false, ErrQuit
+	case <-timeout:
+		return "", false, nil
 	}
+}
+
+// Bracketed paste markers: the terminal sends the pasted text between
+// them while paste mode is on.
+const (
+	pasteStart = "\x1b[200~"
+	pasteEnd   = "\x1b[201~"
+)
+
+// PasteGap: on a terminal without bracketed paste, lines arriving within
+// this time of the previous one are taken as the rest of a multi-line
+// paste. Typing a line and pressing Enter takes far longer.
+var PasteGap = 300 * time.Millisecond
+
+// PromptPaste asks for text that may be pasted over several lines, such
+// as a public key (FIX-04). With Paste set, the terminal marks pasted
+// text, so its line breaks do not end the input: lines are read until
+// the paste is over and the user presses Enter, and pasted is true.
+// Otherwise, on a terminal, lines that arrive right after the first (an
+// unmarked multi-line paste) are taken with it. The lines are joined
+// with "\n" and the text trimmed; "0" or nothing means back and returns
+// "".
+func (s *Session) PromptPaste(label string) (text string, pasted bool, err error) {
+	if err := s.startPrompt(); err != nil {
+		return "", false, err
+	}
+	defer s.endPrompt()
+	if s.Paste != nil {
+		s.Paste(true)
+		defer s.Paste(false)
+	}
+	fmt.Fprint(s.Out, s.promptLabel(label+": "))
+	line, _, err := s.readLine(0)
+	if err != nil {
+		return "", false, err
+	}
+	lines := []string{line}
+	open := func() bool {
+		all := strings.Join(lines, "\n")
+		return strings.LastIndex(all, pasteStart) > strings.LastIndex(all, pasteEnd)
+	}
+	switch {
+	case strings.Contains(line, pasteStart):
+		pasted = true
+		for open() {
+			if line, _, err = s.readLine(0); err != nil {
+				return "", false, err
+			}
+			lines = append(lines, line)
+		}
+	case s.Interactive:
+		for {
+			line, ok, err := s.readLine(PasteGap)
+			if err != nil {
+				return "", false, err
+			}
+			if !ok {
+				break
+			}
+			lines = append(lines, line)
+		}
+	}
+	text = strings.Join(lines, "\n")
+	text = strings.TrimSpace(strings.NewReplacer(pasteStart, "", pasteEnd, "").Replace(text))
+	if text == "0" {
+		return "", pasted, nil
+	}
+	return text, pasted, nil
 }
 
 // PromptSecret is Prompt without showing what is typed.

@@ -69,9 +69,20 @@ func TestSSHMenuInterlockAndKeys(t *testing.T) {
 	if m := f.Mutations()[before:]; len(m) > 1 {
 		t.Errorf("current method changed the system: %+v", m)
 	}
-	// Paste a bad key, then a good one; it appears in the list.
-	r = runSSH(t, f, "6", "4", "2", "1", "not a key", testPub, "0", "0", "0")
-	for _, want := range []string{"不是有效的 OpenSSH 公钥", "已添加 1 个公钥。", " 公钥:\n   [1] ed25519 SHA256:o/KaoigHu9ddvclgoQvWem5m+GbW7ahqewdkStS+qZw  laptop", " 3. 删除公钥", "公钥: 1 个"} {
+	// A key typed or piped in (not marked as pasted) is shown and needs
+	// a yes (FIX-04).
+	before = len(f.Mutations())
+	r = runSSH(t, f, "6", "4", "2", "1", testPub, "", "0", "0", "0")
+	if !strings.Contains(r.stdout, "公钥: ed25519 SHA256:o/KaoigHu9ddvclgoQvWem5m+GbW7ahqewdkStS+qZw  laptop\n") || !strings.Contains(r.stdout, "添加这个公钥？ [y/N]") {
+		t.Errorf("confirm key:\n%s", r.stdout)
+	}
+	if m := f.Mutations()[before:]; len(m) > 0 {
+		t.Errorf("unconfirmed key changed the system: %+v", m)
+	}
+	// Paste a bad key and a private key, then a good one; it appears in
+	// the list.
+	r = runSSH(t, f, "6", "4", "2", "1", "not a key", "-----BEGIN OPENSSH PRIVATE KEY-----", testPub, "y", "0", "0", "0")
+	for _, want := range []string{"不是有效的 OpenSSH 公钥", "这是私钥，已丢弃。", "已添加 1 个公钥。", " 公钥:\n   [1] ed25519 SHA256:o/KaoigHu9ddvclgoQvWem5m+GbW7ahqewdkStS+qZw  laptop", " 3. 删除公钥", "公钥: 1 个"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("output missing %q\n%s", want, r.stdout)
 		}
@@ -224,6 +235,85 @@ func TestSSHChangePassword(t *testing.T) {
 	}
 	if input != "alice:"+shown+"\n" {
 		t.Errorf("chpasswd input %q, shown %q", input, shown)
+	}
+}
+
+// keysOnly22 is effective22 with password login off.
+const keysOnly22 = "port 22\nlistenaddress 0.0.0.0:22\npubkeyauthentication yes\npasswordauthentication no\nkbdinteractiveauthentication no\npermitrootlogin yes\n"
+
+// reportAfterReload makes the fake sshd report effective once reloaded.
+func reportAfterReload(f *systemtest.Fake, effective string) {
+	f.OnCommand("systemctl reload "+ssh.Unit, func() {
+		f.Respond(systemtest.Response{Result: system.Result{Stdout: effective}}, ssh.SshdPath, "-T")
+	})
+}
+
+// chpasswdInput is what the last chpasswd read ("" if none ran).
+func chpasswdInput(f *systemtest.Fake) string {
+	var input string
+	for _, c := range f.Calls() {
+		if c.Command == "chpasswd" {
+			input = string(c.Data)
+		}
+	}
+	return input
+}
+
+// TestSSHLoginMethodPassword: switching to password only asks whose
+// password and how; the password is set before the timed confirmation
+// (FIX-04, D-126).
+func TestSSHLoginMethodPassword(t *testing.T) {
+	f := accountsSystem()
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: keysOnly22}}, ssh.SshdPath, "-T")
+	reportAfterReload(f, strings.Replace(keysOnly22, "pubkeyauthentication yes\npasswordauthentication no", "pubkeyauthentication no\npasswordauthentication yes", 1))
+	// 1 login method, 2 password only; user alice; generated; keep (y).
+	r := runSSH(t, f, "6", "1", "2", "2", "1", "y", "0", "0")
+	for _, want := range []string{
+		"选择用密码登录的用户", "1. root\n", "2. alice\n",
+		"alice 的登录密码", "1. 自动生成强密码（推荐，只显示一次）\n", "2. 手动输入密码\n",
+		"alice 的密码（只显示这一次，请保存）：", "请新开一个终端测试能否登录",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("output missing %q\n%s", want, r.stdout)
+		}
+	}
+	shown := r.stdout[strings.Index(r.stdout, "请保存）：")+len("请保存）："):]
+	shown = shown[:strings.IndexByte(shown, '\n')]
+	if got := chpasswdInput(f); got != "alice:"+shown+"\n" {
+		t.Errorf("chpasswd input %q, shown %q", got, shown)
+	}
+	if strings.Contains(r.stdout, "保留现有密码") {
+		t.Error("keep offered for alice, who has no password")
+	}
+}
+
+// TestSSHLoginMethodPasswordChoices: root keys only leaves alice alone,
+// without asking whose; root alone with a password may keep it; going
+// back changes nothing.
+func TestSSHLoginMethodPasswordChoices(t *testing.T) {
+	f := accountsSystem()
+	rootKeys := strings.Replace(effective22, "permitrootlogin yes", "permitrootlogin prohibit-password", 1)
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: rootKeys}}, ssh.SshdPath, "-T")
+	r := runSSH(t, f, "6", "1", "2", "0", "0", "0")
+	if strings.Contains(r.stdout, "选择用密码登录的用户") || !strings.Contains(r.stdout, "alice 的登录密码") {
+		t.Errorf("root keys only:\n%s", r.stdout)
+	}
+	if st, _ := state.NewStore(f).Load(); chpasswdInput(f) != "" || st.SSH.PasswordAuth != nil {
+		t.Errorf("going back changed the system: %+v", st.SSH)
+	}
+
+	f = sshSystem(effective22)
+	reportAfterReload(f, strings.Replace(effective22, "pubkeyauthentication yes", "pubkeyauthentication no", 1))
+	// Password only; root's password menu: 3 keep; keep the change (y).
+	r = runSSH(t, f, "6", "1", "2", "3", "y", "0", "0")
+	if !strings.Contains(r.stdout, "root 的登录密码") || !strings.Contains(r.stdout, "3. 保留现有密码\n") || strings.Contains(r.stdout, "选择用密码登录的用户") {
+		t.Errorf("root alone:\n%s", r.stdout)
+	}
+	if got := chpasswdInput(f); got != "" {
+		t.Errorf("kept password, but chpasswd read %q", got)
+	}
+	if st, _ := state.NewStore(f).Load(); st.SSH.PubkeyAuth == nil || *st.SSH.PubkeyAuth {
+		t.Errorf("state = %+v", st.SSH)
 	}
 }
 

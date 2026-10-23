@@ -163,3 +163,90 @@ func TestGenerateKeyPair(t *testing.T) {
 		t.Error("private key does not match public key")
 	}
 }
+
+// wireKey builds key data from wire-format strings.
+func wireKey(fields ...string) string {
+	var b []byte
+	for _, f := range fields {
+		b = binary.BigEndian.AppendUint32(b, uint32(len(f)))
+		b = append(b, f...)
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// TestParseKeyStrict: key data must hold exactly its type's fields
+// (FIX-04), including the security key types.
+func TestParseKeyStrict(t *testing.T) {
+	pk := strings.Repeat("k", 32)
+	for _, c := range []struct {
+		line string
+		ok   bool
+	}{
+		{"ssh-ed25519 " + wireKey("ssh-ed25519", pk), true},
+		{"ssh-ed25519 " + wireKey("ssh-ed25519", pk, "extra"), false},
+		{"ssh-ed25519 " + wireKey("ssh-ed25519"), false},
+		{"sk-ssh-ed25519@openssh.com " + wireKey("sk-ssh-ed25519@openssh.com", pk, "ssh:") + " yubikey", true},
+		{"sk-ecdsa-sha2-nistp256@openssh.com " + wireKey("sk-ecdsa-sha2-nistp256@openssh.com", "nistp256", pk, "ssh:"), true},
+		{"sk-ecdsa-sha2-nistp256@openssh.com " + wireKey("sk-ecdsa-sha2-nistp256@openssh.com", "nistp256", pk), false},
+	} {
+		if _, err := ParseKey(c.line); (err == nil) != c.ok {
+			t.Errorf("ParseKey(%.40q...) = %v, want ok %v", c.line, err, c.ok)
+		}
+	}
+}
+
+// TestParsePastedKey: a key wrapped over several lines is rejoined
+// whatever the breaks; a private key is refused (FIX-04).
+func TestParsePastedKey(t *testing.T) {
+	ed := readPub(t, "ed25519") // "ssh-ed25519 <data> <comment>"
+	want, err := ParseKey(ed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := strings.Fields(ed)
+	data := f[1]
+	rsa := readPub(t, "rsa")
+	rsaWant, _ := ParseKey(rsa)
+	rf := strings.Fields(rsa)
+	var rsaWrapped []string // wrapped at 64 columns, as some editors do
+	for s := rsa; s != ""; {
+		n := min(64, len(s))
+		rsaWrapped = append(rsaWrapped, s[:n])
+		s = s[n:]
+	}
+	for _, c := range []struct {
+		name, in string
+		want     Key
+	}{
+		{"one line", ed + "\n", want},
+		{"data wrapped", f[0] + " " + data[:20] + "\n" + data[20:50] + "\n" + data[50:] + " " + f[2], want},
+		{"break at both spaces", f[0] + "\n" + data + "\n" + f[2] + "\n", want},
+		{"break at a space and in the data", f[0] + "\n" + data[:30] + "\n" + data[30:] + "\n" + f[2], want},
+		{"comment wrapped", f[0] + " " + data + " " + f[2][:3] + "\n" + f[2][3:], want},
+		{"blank lines and indents", "\n  " + f[0] + " " + data[:10] + "  \n\n" + data[10:] + " " + f[2] + "\n", want},
+		{"rsa wrapped", strings.Join(rsaWrapped, "\n"), rsaWant},
+		{"rsa data per line", rf[0] + "\n" + rf[1][:100] + "\n" + rf[1][100:300] + "\n" + rf[1][300:] + "\n" + strings.Join(rf[2:], " "), rsaWant},
+	} {
+		got, err := ParsePastedKey(c.in)
+		if err != nil || got.Line() != c.want.Line() {
+			t.Errorf("%s: %q, %v; want %q", c.name, got.Line(), err, c.want.Line())
+		}
+	}
+	short := readPub(t, "rsa1024")
+	sf := strings.Fields(short)
+	if _, err := ParsePastedKey(sf[0] + "\n" + sf[1]); !errors.Is(err, ErrKeyWeak) {
+		t.Errorf("wrapped short RSA key: %v, want ErrKeyWeak", err)
+	}
+	if _, err := ParsePastedKey("ssh-ed25519\n" + data[:20]); !errors.Is(err, ErrKeyFormat) {
+		t.Errorf("cut key: %v", err)
+	}
+	for _, priv := range []string{
+		"-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----\n",
+		"-----BEGIN RSA PRIVATE KEY-----",
+		"PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\n",
+	} {
+		if _, err := ParsePastedKey(priv); !errors.Is(err, ErrPrivateKey) {
+			t.Errorf("%.30q: %v, want ErrPrivateKey", priv, err)
+		}
+	}
+}

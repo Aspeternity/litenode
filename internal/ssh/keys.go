@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 )
 
@@ -19,6 +20,18 @@ var keyTypes = []string{
 	"ssh-rsa",
 }
 
+// keyFields is the number of wire-format strings after the type in each
+// type's key data.
+var keyFields = map[string]int{
+	"ssh-ed25519":                        1, // key
+	"ecdsa-sha2-nistp256":                2, // curve, point
+	"ecdsa-sha2-nistp384":                2,
+	"ecdsa-sha2-nistp521":                2,
+	"sk-ssh-ed25519@openssh.com":         2, // key, application
+	"sk-ecdsa-sha2-nistp256@openssh.com": 3, // curve, point, application
+	"ssh-rsa":                            2, // e, n
+}
+
 // MinRSABits is the smallest RSA key accepted (D-063).
 const MinRSABits = 2048
 
@@ -27,6 +40,9 @@ var (
 	ErrKeyFormat = errors.New("not an OpenSSH public key")
 	ErrKeyType   = errors.New("unsupported key type")
 	ErrKeyWeak   = errors.New("RSA key too short")
+	// ErrPrivateKey: a private key was pasted where a public key was
+	// asked for; it is discarded (FIX-04).
+	ErrPrivateKey = errors.New("private key pasted")
 )
 
 // Key is one public key.
@@ -82,19 +98,83 @@ func ParseKey(line string) (Key, error) {
 	if err != nil || string(name) != fields[0] {
 		return Key{}, fmt.Errorf("%w: key data does not match type %s", ErrKeyFormat, fields[0])
 	}
+	// The key data must be exactly the type's fields, as sshd requires:
+	// otherwise a comment run into the data by a broken paste could pass
+	// as part of it (FIX-04).
+	parts := make([][]byte, keyFields[fields[0]])
+	for i := range parts {
+		if parts[i], err = readString(r); err != nil {
+			return Key{}, fmt.Errorf("%w: %v", ErrKeyFormat, err)
+		}
+	}
+	if r.Len() != 0 {
+		return Key{}, fmt.Errorf("%w: trailing key data", ErrKeyFormat)
+	}
 	if fields[0] == "ssh-rsa" {
-		if _, err := readString(r); err != nil { // e
-			return Key{}, fmt.Errorf("%w: %v", ErrKeyFormat, err)
-		}
-		n, err := readString(r)
-		if err != nil {
-			return Key{}, fmt.Errorf("%w: %v", ErrKeyFormat, err)
-		}
-		if bits := new(big.Int).SetBytes(n).BitLen(); bits < MinRSABits {
+		if bits := new(big.Int).SetBytes(parts[1]).BitLen(); bits < MinRSABits {
 			return Key{}, fmt.Errorf("%w: %d bits", ErrKeyWeak, bits)
 		}
 	}
 	return Key{Type: fields[0], Blob: blob, Comment: strings.Join(fields[2:], " ")}, nil
+}
+
+// Pasted text with more lines than this is not rejoined (a public key is
+// at most a dozen lines when wrapped).
+const maxPasteLines = 64
+
+// ParsePastedKey parses a public key pasted as one or more lines (a key
+// wrapped by the terminal or editor it was copied from, FIX-04). The
+// lines are rejoined without spaces, or else with a space at one or two
+// of the breaks (where the type, data and comment meet), whichever
+// parses first; the strict key data check makes the join unambiguous.
+// A private key is refused with ErrPrivateKey.
+func ParsePastedKey(text string) (Key, error) {
+	if strings.Contains(text, "PRIVATE KEY") || strings.Contains(text, "PuTTY-User-Key-File") {
+		return Key{}, ErrPrivateKey
+	}
+	var lines []string
+	for _, l := range strings.Split(text, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	k, firstErr := ParseKey(strings.Join(lines, ""))
+	if firstErr == nil || len(lines) < 2 || len(lines) > maxPasteLines {
+		return k, firstErr
+	}
+	join := func(spaces ...int) string {
+		var b strings.Builder
+		for i, l := range lines {
+			if i > 0 && slices.Contains(spaces, i) {
+				b.WriteByte(' ')
+			}
+			b.WriteString(l)
+		}
+		return b.String()
+	}
+	// A join that gets past the format check (e.g. a short RSA key) gives
+	// the more useful error.
+	best := firstErr
+	try := func(spaces ...int) (Key, bool) {
+		k, err := ParseKey(join(spaces...))
+		if err != nil && !errors.Is(err, ErrKeyFormat) && errors.Is(best, ErrKeyFormat) {
+			best = err
+		}
+		return k, err == nil
+	}
+	for i := 1; i < len(lines); i++ {
+		if k, ok := try(i); ok {
+			return k, nil
+		}
+	}
+	for i := 1; i < len(lines); i++ {
+		for j := i + 1; j < len(lines); j++ {
+			if k, ok := try(i, j); ok {
+				return k, nil
+			}
+		}
+	}
+	return Key{}, best
 }
 
 func isKeyType(t string) bool {

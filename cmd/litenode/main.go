@@ -30,6 +30,9 @@ func main() {
 	session := ui.NewSession(os.Stdin, os.Stdout, sigs, ui.NewColors(os.Getenv("NO_COLOR")))
 	session.Echo = func(on bool) { ui.SetEcho(int(os.Stdin.Fd()), on) }
 	session.Interactive = ui.IsTerminal(int(os.Stdin.Fd())) && ui.IsTerminal(int(os.Stdout.Fd()))
+	if session.Interactive {
+		session.Paste = func(on bool) { ui.SetPaste(int(os.Stdin.Fd()), os.Stdout, on) }
+	}
 
 	os.Exit(app.Run(context.Background(), app.Env{
 		Runner:     system.NewReal(system.NewOpLog(system.DefaultLogPath)),

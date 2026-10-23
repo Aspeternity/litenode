@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"errors"
+	"github.com/Aspeternity/litenode/internal/change"
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/system"
@@ -153,5 +154,57 @@ func TestSetLoginMethod(t *testing.T) {
 	st, _ := svc.Store.Load()
 	if st.SSH.PubkeyAuth == nil || *st.SSH.PubkeyAuth || st.SSH.PasswordAuth == nil || !*st.SSH.PasswordAuth {
 		t.Errorf("state = %+v", st.SSH)
+	}
+}
+
+// TestSetLoginMethodPassword: the password is set before the SSH change
+// and stays when the change is rolled back; the interlocks count it
+// (FIX-04, D-126).
+func TestSetLoginMethodPassword(t *testing.T) {
+	ctx := context.Background()
+	keysOnly := "port 22\npubkeyauthentication yes\npasswordauthentication no\nkbdinteractiveauthentication no\npermitrootlogin yes\n"
+	f, svc := loginService(t, keysOnly)
+	fakeChpasswd(f)
+	f.Files[ShadowPath] = []byte("root:!:19000:0:99999:7:::\nalice:!:19000::::::\n")
+	// Without a password nobody could log in by password only.
+	if err := svc.SetLoginMethod(ctx, false, true); !errors.Is(err, ErrLockout) {
+		t.Fatalf("password only without a password = %v, want ErrLockout", err)
+	}
+	if err := svc.SetLoginMethodPassword(ctx, false, true, "root", "short"); !errors.Is(err, ErrPasswordShort) {
+		t.Errorf("short password = %v", err)
+	}
+	if err := svc.SetLoginMethodPassword(ctx, false, true, "svc", newPassword); !errors.Is(err, ErrNotAdmin) {
+		t.Errorf("not an admin = %v", err)
+	}
+	if got := shadowOf(f, "root"); got != "!" {
+		t.Fatalf("refused change set the password: %q", got)
+	}
+	// The fake sshd reports the result from now on; root still has no
+	// usable password, so only the new one makes the change pass.
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "port 22\npubkeyauthentication no\npasswordauthentication yes\npermitrootlogin yes\n"}}, SshdPath, "-T")
+	if err := svc.SetLoginMethodPassword(ctx, false, true, "root", newPassword); err != nil {
+		t.Fatal(err)
+	}
+	if got := shadowOf(f, "root"); got != "$fake$"+newPassword {
+		t.Fatalf("root hash = %q", got)
+	}
+	st, _ := svc.Store.Load()
+	if st.SSH.PubkeyAuth == nil || *st.SSH.PubkeyAuth || st.SSH.PasswordAuth == nil || !*st.SSH.PasswordAuth {
+		t.Errorf("state = %+v", st.SSH)
+	}
+	// Rejecting the change restores the SSH settings, not the password.
+	reg := change.Registry{}
+	for _, k := range svc.Kinds() {
+		reg.Register(k)
+	}
+	if done, err := svc.Confirmer.Rollback(ctx, reg); err != nil || !done {
+		t.Fatalf("rollback: %v %v", done, err)
+	}
+	st, _ = svc.Store.Load()
+	if st.SSH.PasswordAuth != nil {
+		t.Errorf("state after rollback = %+v", st.SSH)
+	}
+	if got := shadowOf(f, "root"); got != "$fake$"+newPassword {
+		t.Errorf("rollback changed the password: %q", got)
 	}
 }
