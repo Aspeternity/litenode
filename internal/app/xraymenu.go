@@ -118,14 +118,12 @@ func (u *nodeUI) xrayRecentLogs() error {
 		return err
 	}
 	u.s.End(text.XrayLogsTitle(n))
-	u.s.Hold()
 	u.s.Println(strings.TrimRight(logs, "\n"))
 	return nil
 }
 
 func (u *nodeUI) xrayLiveLogs() error {
 	u.s.End(text.XrayLiveLogsTitle)
-	u.s.Hold()
 	return u.s.Follow(u.ctx, func(ctx context.Context) error {
 		return u.svc.FollowXrayLogs(ctx, u.s.Out)
 	})

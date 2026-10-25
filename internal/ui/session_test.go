@@ -242,13 +242,17 @@ func TestFollowHangupQuits(t *testing.T) {
 }
 
 // holdMenu has an operation that shows something to read, one with a
-// one-line result, and one that fails.
+// one-line result, one that fails, one with nothing to do, one that asks
+// and is canceled, and one that returns without a result.
 func holdMenu(s *Session) func() Menu {
 	return func() Menu {
 		return Menu{Items: []Item{
 			{Label: "show", Action: func() error { s.Done("ok"); s.Hold(); s.Println("link"); return nil }},
 			{Label: "toggle", Action: func() error { s.Done("enabled"); return nil }},
 			{Label: "fail", Action: func() error { return errors.New("boom") }},
+			{Label: "noop", Action: func() error { s.End("already"); return nil }},
+			{Label: "ask", Action: func() error { _, err := s.Confirm("sure?"); return err }},
+			{Label: "silent", Action: func() error { return nil }},
 		}}
 	}
 }
@@ -263,6 +267,11 @@ func TestRunHoldsAfterContentAndErrors(t *testing.T) {
 		{"content", "1\n1\n0\n", 1},
 		{"one line", "2\n2\n0\n", 0},
 		{"error", "3\n\n0\n", 1},
+		// D-128: nothing to do, or no result without a question, holds; a
+		// cancel after a question does not.
+		{"nothing to do", "4\n\n0\n", 1},
+		{"canceled", "5\nn\n0\n", 0},
+		{"silent", "6\n\n0\n", 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -349,12 +358,16 @@ func TestRunPagePathAndClear(t *testing.T) {
 		t.Errorf("piped session printed escape sequences:\n%q", got)
 	}
 
-	s, out, _ = newTestSession(strings.NewReader(in))
+	// The operation shows a line and asks nothing: it holds (D-128).
+	s, out, _ = newTestSession(strings.NewReader("1\n1\n0\n2\n\n0\n0\n"))
 	s.Interactive = true
 	if err := s.Run(nestedMenus(s)); err != nil {
 		t.Fatal(err)
 	}
 	got = out.String()
+	if n := strings.Count(got, text.PressEnter); n != 1 {
+		t.Errorf("pauses = %d, want 1\n%s", n, got)
+	}
 	// Main, A, B, back to A, A after the operation, back to main.
 	if n := strings.Count(got, clearScreen); n != 6 {
 		t.Errorf("clears = %d, want 6\n%q", n, got)

@@ -85,9 +85,7 @@ func (u *sysoptUI) menu() ui.Menu {
 func (u *sysoptUI) bbr(b sysopt.BBR) error {
 	switch {
 	case b.Active && !b.Managed:
-		// The menu would otherwise come straight back unchanged (D-127).
 		u.s.End(text.SysoptBBRByOther)
-		u.s.Hold()
 		return nil
 	case b.Active:
 		ok, err := u.s.Confirm(text.ConfirmBBRDisable)

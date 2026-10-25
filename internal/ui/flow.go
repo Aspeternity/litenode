@@ -89,14 +89,27 @@ func (s *Session) flushStep() {
 }
 
 // Done closes the current flow as successful with msg. Outside a flow it
-// prints msg.
+// prints msg. The menu comes back at once: the result shows in the page.
 func (s *Session) Done(msg string) {
-	s.End(s.Colors.Good("✓ " + msg))
+	s.end(s.Colors.Good("✓ " + msg))
 }
 
 // End closes the current flow with msg, neither success nor cancel (e.g.
-// a change undone at the user's request).
+// nothing to do, or a change undone at the user's request). The page
+// looks the same afterwards, so the menu comes back only after Enter
+// (D-128).
 func (s *Session) End(msg string) {
+	s.end(msg)
+	s.Hold()
+}
+
+// EndWarn closes the current flow with a warning msg, a problem the user
+// has to read: the menu comes back only after Enter (D-096).
+func (s *Session) EndWarn(msg string) {
+	s.End(s.Colors.Warn(msg))
+}
+
+func (s *Session) end(msg string) {
 	if s.flow == nil {
 		fmt.Fprintln(s.Out, msg)
 		return
@@ -104,13 +117,6 @@ func (s *Session) End(msg string) {
 	s.flushStep()
 	s.flow = nil
 	fmt.Fprintln(s.Out, "│\n"+flowClose+msg)
-}
-
-// EndWarn closes the current flow with a warning msg, a problem the user
-// has to read: the menu comes back only after Enter (D-096).
-func (s *Session) EndWarn(msg string) {
-	s.End(s.Colors.Warn(msg))
-	s.Hold()
 }
 
 // gutter prefixes every line of text in a flow.

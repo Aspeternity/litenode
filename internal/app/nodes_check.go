@@ -102,7 +102,6 @@ func (u *nodeUI) check() error {
 		u.s.Println(text.NodeCheckScanners)
 	}
 	u.s.End(text.NodeCheckFinished)
-	u.s.Hold()
 	return nil
 }
 
