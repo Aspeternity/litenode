@@ -37,3 +37,32 @@ func TestOperationsHold(t *testing.T) {
 		t.Errorf("export did not run:\n%s", out.String())
 	}
 }
+
+// TestSysoptBBRHold: choosing BBR when another sysctl file turns it on,
+// and turning LiteNode's BBR off while another file keeps it, wait for
+// Enter (D-127).
+func TestSysoptBBRHold(t *testing.T) {
+	f := supported()
+	f.Files["/proc/sys/net/ipv4/tcp_available_congestion_control"] = []byte("reno cubic bbr\n")
+	f.Files[ccPath] = []byte("bbr\n")
+	f.Files["/etc/sysctl.d/99-bbr.conf"] = []byte("net.ipv4.tcp_congestion_control = bbr\n")
+	// main: 8; 1 BBR (on by another file), Enter; 0 back; 0 quit.
+	input := strings.Join([]string{"8", "1", "", "0", "0"}, "\n") + "\n"
+	var out strings.Builder
+	s := ui.NewSession(strings.NewReader(input), &out, nil, ui.Colors{})
+	s.Interactive = true
+	code := Run(context.Background(), Env{
+		Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
+		Stdout: &out, Stderr: &out, Version: "dev", Executable: "/usr/local/bin/litenode",
+		Session: s,
+	})
+	if code != 0 {
+		t.Fatalf("code %d:\n%s", code, out.String())
+	}
+	if !strings.Contains(out.String(), text.SysoptBBRByOther) {
+		t.Fatalf("no explanation:\n%s", out.String())
+	}
+	if got := strings.Count(out.String(), text.PressEnter); got != 1 {
+		t.Errorf("pauses = %d, want 1:\n%s", got, out.String())
+	}
+}
