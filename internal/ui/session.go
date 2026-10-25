@@ -55,6 +55,8 @@ type Session struct {
 	flow  *flowState
 	// hold: the running operation showed something to read.
 	hold bool
+	// asked: the running operation read a line from the user.
+	asked bool
 	// pages are the names of the pages being shown, outermost first.
 	pages []string
 
@@ -178,6 +180,7 @@ func (s *Session) readLine(wait time.Duration) (line string, ok bool, err error)
 			fmt.Fprintln(s.Out)
 			return "", false, ErrQuit
 		}
+		s.asked = true
 		return line, true, nil
 	case <-s.wake:
 		fmt.Fprintln(s.Out)
@@ -324,12 +327,15 @@ func (s *Session) Run(build func() Menu) error {
 		if flow {
 			s.openFlow(it.Label)
 		}
-		s.hold = false
+		s.hold, s.asked = false, false
 		err = it.Action()
+		// A flow that ends without a result and without asking anything
+		// would only flash on the screen (D-128).
+		silent := flow && s.flow != nil && err == nil && !s.asked
 		if flow {
 			s.closeFlow(err)
 		}
-		hold := s.hold || (s.HoldAll && !it.Page)
+		hold := s.hold || silent || (s.HoldAll && !it.Page)
 		s.hold = false
 		if errors.Is(err, ErrQuit) {
 			return err
@@ -375,8 +381,8 @@ const clearScreen = "\x1b[H\x1b[2J"
 
 // Hold marks the running operation as having shown something to read
 // (links, logs, keys, results): when it ends, the menu comes back only
-// after Enter (D-096). An operation that ends with a one-line result
-// does not call it; an error always holds.
+// after Enter (D-096). Session.End and errors always hold; an operation
+// that ends with Done does not (D-128).
 func (s *Session) Hold() { s.hold = true }
 
 // Pause waits for Enter when the session is interactive, so that what was
