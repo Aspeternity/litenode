@@ -1111,7 +1111,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 
 排序按常用程度。菜单顶部与其他子菜单一样有标题栏。不可用的项隐藏（BBR：内核不支持；swap：容器或没有 `/proc/swaps`；时区：`timedatectl` 不可用），状态行中对应的字段一并省略，菜单下方提示"部分功能在当前环境（<虚拟化类型>）中不可用，已隐藏。"；容器中时区字段不显示同步标记（D-083）。
 
-- **BBR + fq**：检查内核是否支持 bbr，写入 `/etc/sysctl.d/99-zz-litenode.conf`（`net.core.default_qdisc=fq`、`net.ipv4.tcp_congestion_control=bbr`）并立即生效（D-078）。状态文件 `sysopt.bbr` 记录是否由 LiteNode 开启，sysctl 文件仍由状态整体生成。已由 LiteNode 开启时该项为关闭：删除这两行，并把拥塞控制改为系统其他 sysctl 文件在启动时给出的值（没有时为 `cubic`）；该值为 bbr 时提示由哪个文件保持开启（D-122）；已由系统其他配置开启时只提示无需操作。
+- **BBR + fq**：检查内核是否支持 bbr，写入 `/etc/sysctl.d/99-zz-litenode.conf`（`net.core.default_qdisc=fq`、`net.ipv4.tcp_congestion_control=bbr`）并立即生效（D-078）。状态文件 `sysopt.bbr` 记录是否由 LiteNode 开启，sysctl 文件仍由状态整体生成。已由 LiteNode 开启时该项为关闭：删除这两行，并把拥塞控制改为系统其他 sysctl 文件在启动时给出的值（没有时为 `cubic`）；该值为 bbr 时提示由哪个文件保持开启（D-122）；已由系统其他配置开启时只提示无需操作。这两种提示都停住，按回车返回菜单；状态行的 ✗ 用红色（D-127）。
 - **swap**：创建交换文件 `/litenode.swap`（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小（1G）。只管理自己的文件，系统已有的其他 swap 只显示（D-079）。大小 128M ~ 32G，创建后磁盘至少保留 256M；调整大小时先建新文件再删旧文件，上限不含当前文件，提示中说明需要更大时先删除再创建。停用前检查 swap 中的数据不超过可用内存。容器环境（或没有 `/proc/swaps`）中该项隐藏。
 - **系统 IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6（D-080）。优先 IPv4 时在文件末尾加入带 `# BEGIN LiteNode` / `# END LiteNode` 标记的 `precedence ::ffff:0:0/96  100`；优先 IPv6 即系统默认，删除该段。文件中其他行不修改；其他行已设置优先 IPv4 时提示手动修改。只影响使用 glibc `getaddrinfo` 的程序（curl、apt 等），不影响 Xray；节点出站在 Xray 服务菜单的"节点出站 IP"中单独设置（第 12 节，D-084）。
 - **DNS**：系统使用 systemd-resolved 时写入 `/etc/systemd/resolved.conf.d/` 下的配置文件；否则修改 `/etc/resolv.conf`，并提示该文件可能被 DHCP 或 cloud-init 覆盖。提供常用 DNS 选项和自定义输入（D-081）：Cloudflare、Google、Quad9、自定义（1 ~ 3 个 IP）；systemd-resolved 下由 LiteNode 设置过时另有"恢复系统默认"。应用前直接向每个服务器查询测试，失败时询问是否仍要使用；应用后用系统解析测试一次，失败只提示。

@@ -26,12 +26,13 @@ type sysoptUI struct {
 	syncWait time.Duration
 }
 
-// mark shows a yes / no state.
+// mark shows a yes / no state; the thin ✗ is red, gray is hard to see
+// (D-127).
 func (u *sysoptUI) mark(on bool) string {
 	if on {
 		return u.s.Colors.Good(text.StateOn)
 	}
-	return u.s.Colors.Off(text.StateOff)
+	return u.s.Colors.Bad(text.StateOff)
 }
 
 func (u *sysoptUI) menu() ui.Menu {
@@ -84,7 +85,9 @@ func (u *sysoptUI) menu() ui.Menu {
 func (u *sysoptUI) bbr(b sysopt.BBR) error {
 	switch {
 	case b.Active && !b.Managed:
+		// The menu would otherwise come straight back unchanged (D-127).
 		u.s.End(text.SysoptBBRByOther)
+		u.s.Hold()
 		return nil
 	case b.Active:
 		ok, err := u.s.Confirm(text.ConfirmBBRDisable)
@@ -97,6 +100,7 @@ func (u *sysoptUI) bbr(b sysopt.BBR) error {
 		}
 		if keptBy != "" {
 			u.s.Done(text.BBRKeptBy(keptBy))
+			u.s.Hold()
 			return nil
 		}
 		u.s.Done(text.BBRDisabledDone)
