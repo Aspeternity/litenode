@@ -1,13 +1,10 @@
 package xray
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/node/builtin"
-	"github.com/Aspeternity/litenode/internal/system"
-	"github.com/Aspeternity/litenode/internal/system/systemtest"
 )
 
 func TestGenerateConfigOutboundGolden(t *testing.T) {
@@ -47,39 +44,24 @@ func TestOnlyIPv6(t *testing.T) {
 	}
 }
 
-func TestParseFamilyReady(t *testing.T) {
-	const route4 = "default via 203.0.113.1 dev eth0 proto static\n"
-	const route6 = "default via fe80::1 dev eth0 metric 1024 pref medium\n"
-	const addr4 = "2: eth0    inet 203.0.113.181/24 brd 203.0.113.255 scope global eth0\\       valid_lft forever preferred_lft forever\n"
-	const addr4NAT = "2: eth0    inet 10.0.0.5/24 brd 10.0.0.255 scope global eth0\n"
-	const addr6 = "2: eth0    inet6 2a0e:1234::5/64 scope global \\       valid_lft forever preferred_lft forever\n"
-	const addr6ULA = "2: eth0    inet6 fd00::5/64 scope global \n"
-	for _, c := range []struct {
-		name        string
-		route, addr string
-		ipv6, want  bool
+func TestOutboundCheck(t *testing.T) {
+	cases := []struct {
+		mode            string
+		v4, v6          bool
+		refuse, confirm bool
 	}{
-		{"ipv4", route4, addr4, false, true},
-		{"ipv4 behind NAT", route4, addr4NAT, false, true},
-		{"ipv4 no route", "", addr4, false, false},
-		{"ipv4 no address", route4, "", false, false},
-		{"ipv6", route6, addr6, true, true},
-		{"ipv6 no route", "", addr6, true, false},
-		{"ipv6 unique local only", route6, addr6ULA, true, false},
-		{"ipv6 asked, ipv4 listed", route6, addr4, true, false},
-	} {
-		if got := ParseFamilyReady(c.route, c.addr, c.ipv6); got != c.want {
-			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
-		}
+		{OutboundIPv4Only, false, true, true, false},
+		{OutboundIPv4Only, true, true, false, false},
+		{OutboundPreferIPv4, false, true, false, true},
+		{OutboundIPv6Only, true, false, true, false},
+		{OutboundPreferIPv6, true, false, false, true},
+		{OutboundDefault, false, true, false, false},
+		{OutboundIPv4Only, false, false, false, false},
 	}
-}
-
-func TestFamilyReadyCommands(t *testing.T) {
-	r := systemtest.New()
-	r.Respond(systemtest.Response{Result: system.Result{Stdout: "default via fe80::1 dev eth0\n"}}, "ip", "-6", "route", "show", "default")
-	r.Respond(systemtest.Response{Result: system.Result{Stdout: "2: eth0    inet6 2a0e:1234::5/64 scope global\n"}}, "ip", "-o", "-6", "addr", "show", "scope", "global")
-	ok, err := FamilyReady(context.Background(), r, true)
-	if err != nil || !ok {
-		t.Fatalf("FamilyReady = %v, %v", ok, err)
+	for _, c := range cases {
+		r, cf := OutboundCheck(c.mode, c.v4, c.v6)
+		if r != c.refuse || cf != c.confirm {
+			t.Errorf("OutboundCheck(%q, %v, %v) = %v, %v", c.mode, c.v4, c.v6, r, cf)
+		}
 	}
 }

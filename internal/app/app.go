@@ -266,7 +266,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	sshMenu := &sshUI{ctx: ctx, s: s, svc: sshSvc, reg: reg}
 	fwSvc := &firewall.Service{Store: store, Confirmer: sshSvc.Confirmer}
 	fwMenu := &firewallUI{ctx: ctx, s: s, svc: fwSvc, reg: reg}
-	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store)}
+	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store), egress: eg}
 	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r), probeDNS: env.dnsProber(), syncWait: 30 * time.Second,
 		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)},
 		warp: &warp.Service{Runner: r, Changes: change.NewManager(r, store), Rand: env.rand(), Trace: env.WARPTrace, Client: env.WARPClient,

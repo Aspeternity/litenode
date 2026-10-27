@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/system"
@@ -83,5 +84,28 @@ func TestSetDNSResolvConf(t *testing.T) {
 	}
 	if _, ok := f.Files[ResolvedDropIn]; ok {
 		t.Error("drop-in written")
+	}
+}
+
+func TestPresetsFor(t *testing.T) {
+	cases := []struct {
+		v4, v6 bool
+		want   []string
+	}{
+		{true, false, []string{"1.1.1.1", "1.0.0.1"}},
+		{false, false, []string{"1.1.1.1", "1.0.0.1"}},
+		{false, true, []string{"2606:4700:4700::1111", "2606:4700:4700::1001"}},
+		{true, true, []string{"1.1.1.1", "1.0.0.1", "2606:4700:4700::1111"}},
+	}
+	for _, c := range cases {
+		ps := PresetsFor(c.v4, c.v6)
+		if len(ps) != 3 || ps[0].Name != "Cloudflare" || !slices.Equal(ps[0].Servers, c.want) {
+			t.Errorf("PresetsFor(%v, %v) = %v", c.v4, c.v6, ps)
+		}
+		for _, p := range ps {
+			if _, err := ParseServers(strings.Join(p.Servers, " ")); err != nil {
+				t.Errorf("%s: %v", p.Name, err)
+			}
+		}
 	}
 }

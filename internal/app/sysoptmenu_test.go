@@ -118,10 +118,32 @@ func TestSysoptMenuDNS(t *testing.T) {
 	// 2 DNS, Cloudflare; back; quit.
 	r := runEnv(t, Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), DNSProber: probe}, in)
 	wantOutput(t, r.stdout, "当前 DNS：10.0.0.1（系统配置，/etc/resolv.conf）", "9.9.9.9 无法解析域名：timeout",
-		text.DNSResolvConfNote, text.DNSSet("1.1.1.1 1.0.0.1"))
-	if got := string(f.Files["/etc/resolv.conf"]); !strings.Contains(got, "nameserver 1.1.1.1\nnameserver 1.0.0.1\nsearch example.com\n") {
+		text.DNSResolvConfNote, text.DNSSet("1.1.1.1 1.0.0.1 2606:4700:4700::1111"))
+	if strings.Contains(r.stdout, text.DNSUnreachableHint) {
+		t.Errorf("reachable server marked:\n%s", r.stdout)
+	}
+	if got := string(f.Files["/etc/resolv.conf"]); !strings.Contains(got, "nameserver 1.1.1.1\nnameserver 1.0.0.1\nnameserver 2606:4700:4700::1111\nsearch example.com\n") {
 		t.Errorf("resolv.conf:\n%s", got)
 	}
+}
+
+// Without an IPv4 exit the presets are IPv6 addresses and an IPv4 server
+// that does not answer is marked (D-134).
+func TestSysoptMenuDNSIPv6Only(t *testing.T) {
+	f := supported()
+	f.Files["/etc/resolv.conf"] = []byte("nameserver 10.0.0.1\nnameserver 2001:db8::53\n")
+	f.Respond(systemtest.Response{Err: errors.New("not found")}, "modinfo", "-n", "tcp_bbr")
+	probe := func(_ context.Context, server string) error {
+		if server == "10.0.0.1" {
+			return errors.New("timeout")
+		}
+		return nil
+	}
+	eg := fakeEgress{IPv6: egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}}
+	// main: 8; 2 DNS, back; back; quit.
+	r := runEnv(t, Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), DNSProber: probe, Egress: eg}, "8\n2\n0\n0\n0\n")
+	wantOutput(t, r.stdout, "当前 DNS：10.0.0.1（不可达） 2001:db8::53（", text.DNSUnreachableHint,
+		text.DNSPresetLabel("Cloudflare", "2606:4700:4700::1111 2606:4700:4700::1001"))
 }
 
 func TestSysoptMenuDNSCustomEmptyGoesBack(t *testing.T) {

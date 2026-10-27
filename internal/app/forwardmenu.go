@@ -23,9 +23,10 @@ const forwardSteps = 5
 // forwardUI holds the port forwarding menu (DESIGN section 11). It only
 // displays and reads input; forwardmgr.Service does the work.
 type forwardUI struct {
-	ctx context.Context
-	s   *ui.Session
-	svc *forwardmgr.Service
+	ctx    context.Context
+	s      *ui.Session
+	svc    *forwardmgr.Service
+	egress Egress
 }
 
 func (u *forwardUI) state() (*state.State, error) { return u.svc.Store.Load() }
@@ -230,9 +231,29 @@ func (u *forwardUI) finish(err error, done string) error {
 	return nil
 }
 
+// confirmTarget asks before saving a rule whose target is only reachable
+// over a family the machine has no network of its own for (D-134). WARP
+// does not count: connections stay within their family (D-046) and WARP
+// brings no incoming connections. A target that does not resolve is
+// reported by the change itself.
+func (u *forwardUI) confirmTarget(in forwardmgr.Input) (bool, error) {
+	v4, v6, err := u.svc.TargetFamilies(u.ctx, in)
+	if err != nil {
+		return true, nil
+	}
+	eg := u.egress.Status(u.ctx)
+	if ipv6, bad := forward.Unreachable(v4, v6, eg.IPv4.Native(), eg.IPv6.Native()); bad {
+		return u.s.Confirm(text.ConfirmForwardNoExit(ipv6))
+	}
+	return true, nil
+}
+
 func (u *forwardUI) add() error {
 	in, ok, err := u.ask(forward.Forward{})
 	if err != nil || !ok {
+		return err
+	}
+	if ok, err := u.confirmTarget(in); err != nil || !ok {
 		return err
 	}
 	u.s.Println(text.ApplyingChange)
@@ -253,6 +274,9 @@ func (u *forwardUI) modify() error {
 		TargetHost: f.TargetHost, TargetPort: f.TargetPort}) {
 		u.s.End(text.ForwardNoChange)
 		return nil
+	}
+	if ok, err := u.confirmTarget(in); err != nil || !ok {
+		return err
 	}
 	u.s.Println(text.ApplyingChange)
 	return u.finish(u.svc.Update(u.ctx, f.ID, in), text.ForwardUpdated)

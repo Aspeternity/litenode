@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -20,6 +21,13 @@ import (
 // would get normal visitors throttled, which reveals that the VPS is not
 // the real site (D-051).
 const LargeHomepage = 5 << 20
+
+// SlowResolve is the resolving time above which a check suggests another
+// DNS server (D-134).
+const SlowResolve = 2 * time.Second
+
+// resolveTimeout bounds resolving the target, separately from connecting.
+const resolveTimeout = 5 * time.Second
 
 // maxHomepage bounds how much of a homepage is read.
 const maxHomepage = 20 << 20
@@ -44,6 +52,8 @@ type Result struct {
 	CertErr        error
 	// Latency is the TCP connect plus TLS handshake time.
 	Latency time.Duration
+	// Resolve is the time taken to resolve the host.
+	Resolve time.Duration
 	// HomepageSize is the size of the homepage body in bytes, -1 if it
 	// could not be fetched.
 	HomepageSize int64
@@ -60,6 +70,10 @@ func (r Result) Usable() bool {
 	return r.Err == nil && r.TLS13 && r.H2 && r.X25519 && r.CertOK && (!r.MLKEM || r.MLKEMSupported) && r.HomepageSize >= 0
 }
 
+// SlowDNS reports whether resolving the host was slow enough to suggest
+// another DNS server.
+func (r Result) SlowDNS() bool { return r.Resolve > SlowResolve }
+
 // LargeHomepage reports whether the homepage is large enough to warn.
 func (r Result) LargeHomepage() bool {
 	return r.HomepageSize > LargeHomepage
@@ -72,8 +86,10 @@ type Checker struct {
 	Timeout time.Duration
 	// Roots overrides the system root certificates (tests).
 	Roots *x509.CertPool
-	// Dial overrides how "host:port" is dialed (tests).
+	// Dial overrides how "ip:port" is dialed (tests).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Resolve overrides how the host is resolved (tests).
+	Resolve func(ctx context.Context, host string) ([]netip.Addr, error)
 	// MLKEMSupported tells whether the Xray in use handles targets that
 	// pick X25519MLKEM768 (xray.SupportsMLKEMTargets).
 	MLKEMSupported bool
@@ -90,22 +106,60 @@ func (c *Checker) timeout() time.Duration {
 	return 5 * time.Second
 }
 
-func (c *Checker) dial(ctx context.Context, addr string) (net.Conn, error) {
-	if c.Dial != nil {
-		return c.Dial(ctx, "tcp", addr)
+// resolve looks the host up with its own time limit, so a slow DNS server
+// is told apart from a slow site (D-134).
+func (c *Checker) resolve(ctx context.Context, host string) ([]netip.Addr, time.Duration, error) {
+	ctx, cancel := context.WithTimeout(ctx, resolveTimeout)
+	defer cancel()
+	start := time.Now()
+	var addrs []netip.Addr
+	var err error
+	if c.Resolve != nil {
+		addrs, err = c.Resolve(ctx, host)
+	} else {
+		addrs, err = net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 	}
-	d := net.Dialer{Timeout: c.timeout()}
-	return d.DialContext(ctx, "tcp", addr)
+	if err == nil && len(addrs) == 0 {
+		err = fmt.Errorf("no address for %s", host)
+	}
+	return addrs, time.Since(start), err
+}
+
+// dial connects to the resolved addresses in order and returns the first
+// connection; on failure it returns the error of the first address.
+func (c *Checker) dial(ctx context.Context, addrs []netip.Addr, port string) (net.Conn, error) {
+	var first error
+	for _, a := range addrs {
+		addr := net.JoinHostPort(a.Unmap().String(), port)
+		var conn net.Conn
+		var err error
+		if c.Dial != nil {
+			conn, err = c.Dial(ctx, "tcp", addr)
+		} else {
+			d := net.Dialer{Timeout: c.timeout()}
+			conn, err = d.DialContext(ctx, "tcp", addr)
+		}
+		if err == nil {
+			return conn, nil
+		}
+		if first == nil {
+			first = err
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return nil, first
 }
 
 // handshake connects and performs a TLS handshake offering only the given
 // curves. Certificate problems do not fail the handshake; they are
 // returned separately so the other properties can still be reported.
-func (c *Checker) handshake(ctx context.Context, target, host string, curves []tls.CurveID) (tls.ConnectionState, time.Duration, error, error) {
+func (c *Checker) handshake(ctx context.Context, addrs []netip.Addr, host, port string, curves []tls.CurveID) (tls.ConnectionState, time.Duration, error, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout())
 	defer cancel()
 	start := time.Now()
-	raw, err := c.dial(ctx, target)
+	raw, err := c.dial(ctx, addrs, port)
 	if err != nil {
 		return tls.ConnectionState{}, 0, nil, err
 	}
@@ -150,12 +204,19 @@ func (c *Checker) Check(ctx context.Context, target string) Result {
 		return res
 	}
 
+	addrs, took, err := c.resolve(ctx, host)
+	res.Resolve = took
+	if err != nil {
+		res.Err = err
+		return res
+	}
+
 	// Offer what a browser offers, ML-KEM hybrid first: the choice tells
 	// whether the target negotiates X25519MLKEM768 (D-054).
-	cs, latency, certErr, err := c.handshake(ctx, res.Target, host, []tls.CurveID{tls.X25519MLKEM768, tls.X25519})
+	cs, latency, certErr, err := c.handshake(ctx, addrs, host, port, []tls.CurveID{tls.X25519MLKEM768, tls.X25519})
 	if err != nil {
 		// Retry with the default curves to report the other properties.
-		cs, latency, certErr, err = c.handshake(ctx, res.Target, host, nil)
+		cs, latency, certErr, err = c.handshake(ctx, addrs, host, port, nil)
 		if err != nil {
 			res.Err = err
 			return res
@@ -166,7 +227,7 @@ func (c *Checker) Check(ctx context.Context, target string) Result {
 		res.X25519 = true
 	} else {
 		// Offer only X25519: success proves the server supports it.
-		_, _, _, err := c.handshake(ctx, res.Target, host, []tls.CurveID{tls.X25519})
+		_, _, _, err := c.handshake(ctx, addrs, host, port, []tls.CurveID{tls.X25519})
 		res.X25519 = err == nil
 	}
 	res.TLS13 = cs.Version == tls.VersionTLS13
@@ -174,18 +235,18 @@ func (c *Checker) Check(ctx context.Context, target string) Result {
 	res.CertOK = certErr == nil
 	res.CertErr = certErr
 	res.Latency = latency
-	res.HomepageSize = c.homepageSize(ctx, res.Target, host)
+	res.HomepageSize = c.homepageSize(ctx, addrs, host, port)
 	return res
 }
 
 // homepageSize requests "/" once, without following redirects, and
 // returns the body size, or -1 on failure.
-func (c *Checker) homepageSize(ctx context.Context, target, host string) int64 {
+func (c *Checker) homepageSize(ctx context.Context, addrs []netip.Addr, host, port string) int64 {
 	ctx, cancel := context.WithTimeout(ctx, 2*c.timeout())
 	defer cancel()
 	tr := &http.Transport{
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			return c.dial(ctx, target)
+			return c.dial(ctx, addrs, port)
 		},
 		TLSClientConfig:   &tls.Config{ServerName: host, RootCAs: c.Roots, InsecureSkipVerify: true},
 		ForceAttemptHTTP2: true,

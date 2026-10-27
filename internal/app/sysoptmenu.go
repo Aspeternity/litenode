@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Aspeternity/litenode/internal/sysopt"
@@ -273,15 +275,28 @@ func (u *sysoptUI) dns() error {
 		return err
 	}
 	cur, source := text.DNSNone, text.DNSBySystem
+	down := u.unreachableDNS(d.Servers)
 	if len(d.Servers) > 0 {
-		cur = strings.Join(d.Servers, " ")
+		shown := make([]string, len(d.Servers))
+		for i, srv := range d.Servers {
+			shown[i] = srv
+			if down[i] {
+				shown[i] = u.s.Colors.Bad(text.DNSUnreachable(srv))
+			}
+		}
+		cur = strings.Join(shown, " ")
 	}
 	if d.Managed {
 		source = text.DNSByLiteNode
 	}
 	u.s.Println(text.DNSCurrent(cur, source, d.Resolved))
+	if slices.Contains(down, true) {
+		u.s.Println(u.s.Colors.Warn(text.DNSUnreachableHint))
+	}
+	eg := u.egress.Status(u.ctx)
+	presets := sysopt.PresetsFor(eg.IPv4.OK, eg.IPv6.OK)
 	m := ui.Menu{}
-	for _, p := range sysopt.DNSPresets {
+	for _, p := range presets {
 		m.Items = append(m.Items, ui.Item{Label: text.DNSPresetLabel(p.Name, strings.Join(p.Servers, " "))})
 	}
 	m.Items = append(m.Items, ui.Item{Label: text.DNSCustom}, ui.Item{Label: text.DNSReset, Hidden: !d.Resolved || !d.Managed})
@@ -289,7 +304,7 @@ func (u *sysoptUI) dns() error {
 	switch {
 	case err != nil || c == 0:
 		return err
-	case c == len(sysopt.DNSPresets)+2:
+	case c == len(presets)+2:
 		if err := u.svc.ResetDNS(u.ctx); err != nil {
 			return err
 		}
@@ -297,8 +312,8 @@ func (u *sysoptUI) dns() error {
 		return nil
 	}
 	var servers []string
-	if c <= len(sysopt.DNSPresets) {
-		servers = sysopt.DNSPresets[c-1].Servers
+	if c <= len(presets) {
+		servers = presets[c-1].Servers
 	} else {
 		for {
 			in, err := u.s.PromptValue(text.PromptDNSServers, "")
@@ -335,6 +350,20 @@ func (u *sysoptUI) dns() error {
 		u.s.Println(u.s.Colors.Warn(text.DNSVerifyFailed))
 	}
 	return nil
+}
+
+// unreachableDNS probes the servers in parallel, 2 seconds each, and
+// reports which did not answer (D-134).
+func (u *sysoptUI) unreachableDNS(servers []string) []bool {
+	down := make([]bool, len(servers))
+	ctx, cancel := context.WithTimeout(u.ctx, 2*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	for i, srv := range servers {
+		wg.Go(func() { down[i] = u.probeDNS(ctx, srv) != nil })
+	}
+	wg.Wait()
+	return down
 }
 
 func (u *sysoptUI) clock() error {

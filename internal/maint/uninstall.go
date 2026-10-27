@@ -18,6 +18,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/sysopt"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/ufw"
+	"github.com/Aspeternity/litenode/internal/warp"
 )
 
 // Kept names a setting both uninstalls leave in place (DESIGN section 16),
@@ -38,6 +39,7 @@ const (
 	KeptDNS      = "dns"
 	KeptGai      = "gai"
 	KeptLog      = "log"
+	KeptWARP     = "warp"
 )
 
 // UninstallProgram removes the program and the lnode link only (DESIGN
@@ -61,7 +63,7 @@ func (s *Service) UninstallProgram(ctx context.Context) ([]Kept, error) {
 // UninstallAll removes Xray, all nodes and clients, forwards, LiteNode's
 // units and program, and everything under /etc/litenode except the
 // firewall rules while the firewall is on (DESIGN section 16, P-007). SSH,
-// firewall, sysctl, swap, DNS and gai.conf settings stay; the returned
+// firewall, sysctl, swap, DNS, gai.conf and WARP settings stay; the returned
 // list says where they are.
 func (s *Service) UninstallAll(ctx context.Context) ([]Kept, error) {
 	st, err := s.Store.Load()
@@ -109,6 +111,8 @@ func (s *Service) UninstallAll(ctx context.Context) ([]Kept, error) {
 			errs = append(errs, fmt.Errorf("remove %s: %w", bootUnit, err))
 		}
 	}
+	// The WARP tunnel stays; its check needs the program.
+	warp.RemoveCheck(ctx, r)
 	if err := system.DaemonReload(ctx, r); err != nil {
 		errs = append(errs, err)
 	}
@@ -227,9 +231,14 @@ func (s *Service) keptSettings(st *state.State) []Kept {
 	}
 	if exists(sysopt.ResolvedDropIn) {
 		out = append(out, Kept{KeptDNS, sysopt.ResolvedDropIn})
+	} else if data, err := r.ReadFile(sysopt.ResolvConfPath); err == nil && sysopt.ResolvConfManaged(data) {
+		out = append(out, Kept{KeptDNS, sysopt.ResolvConfPath})
 	}
 	if data, err := r.ReadFile(sysopt.GaiPath); err == nil && sysopt.ParseGai(data).Managed {
 		out = append(out, Kept{KeptGai, sysopt.GaiPath})
+	}
+	if exists(warp.ConfPath) {
+		out = append(out, Kept{KeptWARP, warp.ConfPath})
 	}
 	// The log may be large: look for it rather than read it.
 	if names, err := r.ReadDir(filepath.Dir(system.DefaultLogPath)); err == nil && slices.Contains(names, filepath.Base(system.DefaultLogPath)) {

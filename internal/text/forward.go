@@ -100,3 +100,13 @@ func ConfirmDeleteForward(index int, rule string) string {
 func ForwardTimerFailed(err error) string {
 	return fmt.Sprintf("⚠ 转发规则已生效，但设置定时重新解析（litenode-resolve.timer）失败：%v。域名目标的 IP 变化后不会自动更新；可以稍后修改或启用 / 禁用一次规则重试。", err)
 }
+
+// ConfirmForwardNoExit asks before saving a rule whose target only has
+// addresses of a family without an exit (D-134).
+func ConfirmForwardNoExit(ipv6 bool) string {
+	fam := "IPv4"
+	if ipv6 {
+		fam = "IPv6"
+	}
+	return "本机没有自己的 " + fam + " 网络（WARP 只用于出站，不能转发），而目标只有 " + fam + " 地址，转发将无法连通。仍要保存？"
+}

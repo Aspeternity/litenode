@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -35,10 +36,16 @@ func checkerFor(srv *httptest.Server, roots *x509.CertPool) *Checker {
 	addr := srv.Listener.Addr().String()
 	// Go's test server negotiates ML-KEM, like most sites: model an Xray
 	// that supports it unless a test says otherwise.
-	return &Checker{Timeout: 3 * time.Second, Roots: roots, MLKEMSupported: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+	return &Checker{Timeout: 3 * time.Second, Roots: roots, MLKEMSupported: true, Resolve: testResolve, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, network, addr)
 	}}
+}
+
+// testResolve answers every host with a documentation address; the test
+// dialers ignore it.
+func testResolve(context.Context, string) ([]netip.Addr, error) {
+	return []netip.Addr{netip.MustParseAddr("192.0.2.1")}, nil
 }
 
 func small(w http.ResponseWriter) { w.Write([]byte(strings.Repeat("x", 1234))) }
@@ -89,7 +96,7 @@ func TestCheckFailures(t *testing.T) {
 }
 
 func TestCheckUnreachable(t *testing.T) {
-	c := &Checker{Dial: func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("refused") }}
+	c := &Checker{Resolve: testResolve, Dial: func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("refused") }}
 	r := c.Check(context.Background(), "example.com:8443")
 	if r.Err == nil || r.Usable() || r.Target != "example.com:8443" {
 		t.Errorf("result = %+v", r)
@@ -168,7 +175,7 @@ func TestCheckAllOrder(t *testing.T) {
 	pool.AddCert(noH2.Certificate())
 	// All targets are example.com; the port picks the server.
 	addrs := map[string]string{"1": good.Listener.Addr().String(), "2": noH2.Listener.Addr().String()}
-	c := &Checker{Timeout: 3 * time.Second, Roots: pool, MLKEMSupported: true, Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+	c := &Checker{Timeout: 3 * time.Second, Roots: pool, MLKEMSupported: true, Resolve: testResolve, Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
 		_, port, _ := net.SplitHostPort(addr)
 		a, ok := addrs[port]
 		if !ok {
@@ -224,5 +231,48 @@ func TestCheckNoHTTPResponse(t *testing.T) {
 	r := checkerFor(srv, roots).Check(context.Background(), "example.com")
 	if r.HomepageSize != -1 || r.Usable() {
 		t.Errorf("result = %+v, want unusable without an HTTP response", r)
+	}
+}
+
+func TestCheckResolveSeparately(t *testing.T) {
+	srv, pool := server(t, true, nil, small)
+	c := checkerFor(srv, pool)
+	// Slow but successful resolving: the site is checked, with a hint.
+	c.Resolve = func(context.Context, string) ([]netip.Addr, error) {
+		time.Sleep(SlowResolve + 100*time.Millisecond)
+		return testResolve(nil, "")
+	}
+	r := c.Check(context.Background(), "example.com")
+	if !r.Usable() || !r.SlowDNS() {
+		t.Errorf("slow resolve: usable %v slow %v err %v", r.Usable(), r.SlowDNS(), r.Err)
+	}
+	// Resolving fails: nothing is dialed.
+	dialed := false
+	c.Resolve = func(context.Context, string) ([]netip.Addr, error) { return nil, errors.New("no such host") }
+	c.Dial = func(context.Context, string, string) (net.Conn, error) { dialed = true; return nil, errors.New("x") }
+	r = c.Check(context.Background(), "example.com")
+	if r.Err == nil || dialed || r.SlowDNS() {
+		t.Errorf("failed resolve: err %v dialed %v slow %v", r.Err, dialed, r.SlowDNS())
+	}
+}
+
+func TestCheckTriesNextAddress(t *testing.T) {
+	srv, pool := server(t, true, nil, small)
+	c := checkerFor(srv, pool)
+	c.Resolve = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("2001:db8::1"), netip.MustParseAddr("192.0.2.1")}, nil
+	}
+	var tried []string
+	c.Dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		tried = append(tried, addr)
+		if strings.HasPrefix(addr, "[2001:db8::1]") {
+			return nil, errors.New("network is unreachable")
+		}
+		var d net.Dialer
+		return d.DialContext(ctx, network, srv.Listener.Addr().String())
+	}
+	r := c.Check(context.Background(), "example.com:8443")
+	if !r.Usable() || len(tried) < 2 || tried[0] != "[2001:db8::1]:8443" || tried[1] != "192.0.2.1:8443" {
+		t.Errorf("usable %v tried %v err %v", r.Usable(), tried, r.Err)
 	}
 }

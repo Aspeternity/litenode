@@ -76,6 +76,7 @@ const (
 	TargetCommon     = "从常用列表选择"
 	TargetManual     = "手动输入"
 	TargetNoneUsable = "常用列表中没有通过检测的网站，请选择其他方式。"
+	SlowDNS          = "域名解析慢，建议在 系统优化 → DNS 中更换。"
 	CommonHeading    = "常用目标网站"
 	ScanHeading      = "附近的网站"
 	CommonListHint   = "提示：常用列表中的大型网站被很多节点使用，且与本机 IP 不在同一网段，扫描附近网站得到的目标更不容易被识别。"
@@ -83,6 +84,7 @@ const (
 	TargetScanHint   = "（推荐，约 1 分钟）"
 	ScanWarning      = "扫描会连接本机所在 /24 网段其他服务器的 443 端口。部分 VPS 商家禁止端口扫描，可能导致滥用投诉。是否继续？"
 	ScanNoAddress    = "无法确定本机的公网 IPv4 地址，不能扫描。"
+	ScanIPv6Only     = "纯 IPv6 机器不能扫描附近网站，请从常用列表选择或手动输入。"
 	ScanNoResult     = "附近没有找到可用的网站，请选择其他方式。"
 	ScanFound        = "找到以下可用网站（按延迟排序）："
 	TargetNotUsable  = "该网站未通过检测，不能使用。"
@@ -462,7 +464,16 @@ func OutboundIPUnavailable(ipv6 bool) string {
 	if ipv6 {
 		fam = "IPv6"
 	}
-	return fmt.Sprintf("本机没有可用的 %s 公网地址或默认路由，不能设置为仅 %s。", fam, fam)
+	return fmt.Sprintf("本机没有 %s 出口，不能设置为仅 %s。可在 系统优化 → WARP 补上缺少的出口。", fam, fam)
+}
+
+// ConfirmOutboundNoExit asks before preferring a family without an exit.
+func ConfirmOutboundNoExit(ipv6 bool) string {
+	fam := "IPv4"
+	if ipv6 {
+		fam = "IPv6"
+	}
+	return fmt.Sprintf("本机没有 %s 出口，优先 %s 时，有 %s 地址的网站可能无法经节点访问。确定设置？", fam, fam, fam)
 }
 
 // XrayStatusLine is the status of the Xray menu, e.g.
