@@ -20,6 +20,7 @@
 - 测试机上用户可能开着 `lnode`（实例锁）：运行菜单前先 `pgrep -x lnode` 检查，不要结束用户的进程；远程 `pkill -f` 的匹配模式不能匹配到执行它的 shell 命令本身。
 - 非 root 用户登录的测试机（如 AWS 的 Debian 13 用 `admin`）：`VPS_USER=admin scripts/dev/vps.sh 'sudo ...'`。
 - **测试连通性检测**（M10-02）：落地机上用 `ptyx.py` 驱动菜单开始检测，几秒后在**另一台**测试机上运行客户端 `scripts/dev/m10cli.sh`（本机连自己不经过防火墙）。一次 DNS 查询只有 1 个 UDP 包，要连续查询 6 次才能达到"通"（5 个包）。LiteNode 每次打开菜单都会补回 ufw 规则（D-038），所以要在检测开始**之后**删除 ufw / LiteNode 防火墙的规则。`ptyx.py` 超时会 SIGKILL 程序，临时表留到下次启动时删除。非 root 用户的测试机上客户端配置不要写到 root 留下的 `/tmp/c.json`。
+- **测试 WARP**（M12-04）：每个端点尝试约 15 秒（启动 + 等握手 10 秒），重新选择端点时 `ptyx.py` 超时要给到 300 秒，否则 SIGKILL 会让隧道停在未验证的端点上（检查定时器 2 分钟内换回）。测试自动换端点：把 `/etc/wireguard/litenode-warp.conf` 的 Endpoint 改成 `[2001:db8::1]:2408` 后 `systemctl restart wg-quick@litenode-warp`，看 `journalctl -u litenode-warp-check`。
 - 验证脚本只输出结论（PASS / FAIL、关键几行），不要把整屏菜单或完整日志拿回会话（节省 token，见 CLAUDE.md）。
 
 ## 资源占用（M7-11，2026-10-19）
