@@ -1,6 +1,10 @@
 package text
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+	"time"
+)
 
 // System optimization menu (DESIGN section 15).
 const (
@@ -178,3 +182,97 @@ func ClockCurrent(tz string, ntp, synced bool) string {
 
 // TimezoneSet reports the new time zone.
 func TimezoneSet(tz string) string { return "时区已设置为 " + tz + "。" }
+
+// WARP (DESIGN section 19.4).
+const (
+	SysoptWARP         = "WARP"
+	WARPEnable         = "开启 WARP"
+	WARPReselect       = "重新选择端点"
+	WARPDisable        = "关闭 WARP"
+	WARPOff            = "WARP: 未开启。可为只有 IPv6（或只有 IPv4）的机器补上缺少的出口。"
+	WARPNoExit         = "本机 IPv4 和 IPv6 都没有出口，无法向 Cloudflare 注册 WARP。请先检查网络。"
+	WARPPreparing      = "正在准备（缺少时安装 wireguard-tools）并向 Cloudflare 注册……"
+	WARPNoKernel       = "当前内核不支持 WireGuard（容器环境或内核缺少模块），无法开启 WARP。"
+	ConfirmWARPDisable = "关闭后该协议将没有出口，依赖它的节点出站和下载会失败。确定关闭 WARP？"
+	WARPDisabled       = "WARP 已关闭，配置已删除。"
+	WARPNoHandshake    = "尚未握手"
+	WARPInactive       = "服务未运行"
+)
+
+// Messages of "litenode internal warp-check", run by
+// litenode-warp-check.timer.
+const WARPCheckSkipped = "LiteNode 菜单正在运行，跳过本轮 WARP 检查。"
+
+// WARPCheckFailed reports a failed check; the tunnel keeps its endpoint.
+func WARPCheckFailed(err error) string {
+	return fmt.Sprintf("WARP 检查失败，下一轮再试：%v", err)
+}
+
+// StatusWARP labels the WARP field of the system optimization status.
+func StatusWARP(v string) string { return "WARP: " + v }
+
+// WARPNone is the WARP field when it is off.
+const WARPNone = "无"
+
+// familyLabel is "IPv4" or "IPv6".
+func familyLabel(ipv6 bool) string {
+	if ipv6 {
+		return "IPv6"
+	}
+	return "IPv4"
+}
+
+// WARPNotNeeded explains that both exits exist; byWARP names a family
+// that already goes through a WARP LiteNode did not set up.
+func WARPNotNeeded(byWARP string) string {
+	if byWARP != "" {
+		return byWARP + " 出口已经是 WARP（不是 LiteNode 开启的），另一个协议也有出口，不需要再开启。"
+	}
+	return "本机 IPv4 和 IPv6 都有出口，不需要 WARP。"
+}
+
+// ConfirmWARPEnable explains what enabling does for the missing family.
+func ConfirmWARPEnable(ipv6 bool) string {
+	f := familyLabel(ipv6)
+	return "将安装 wireguard-tools 并向 Cloudflare 注册一个免费 WARP 账号，只让 " + f + " 出站流量经 WARP；" +
+		"另一个协议、入站连接和 SSH 不受影响。WARP 出口 IP 属于 Cloudflare，不会用作分享地址。确定开启？"
+}
+
+// WARPTrying shows the endpoint being tried.
+func WARPTrying(ep string) string { return "尝试端点 " + ep + " ……" }
+
+// WARPEnabled confirms the tunnel and its exit address.
+func WARPEnabled(ipv6 bool, exit string) string {
+	if exit == "" {
+		return "WARP 已开启，" + familyLabel(ipv6) + " 出站经 WARP。"
+	}
+	return "WARP 已开启，" + familyLabel(ipv6) + " 出站经 WARP，出口 " + exit + "。"
+}
+
+// WARPNoEndpoint explains that no endpoint worked; nothing was kept.
+func WARPNoEndpoint(err error) string {
+	return fmt.Sprintf("所有 WARP 端点都无法连通，已撤销，未保留任何配置：%v\n可能是商家屏蔽了 WireGuard（UDP），可稍后重试。", err)
+}
+
+// WARPReselected confirms the new endpoint.
+func WARPReselected(ep string) string { return "已改用端点 " + ep + "。" }
+
+// WARPOn is the status line of an enabled tunnel.
+func WARPOn(ipv6 bool, exit, endpoint, handshake string) string {
+	s := "WARP: 已开启（" + familyLabel(ipv6) + " 经 WARP"
+	if exit != "" {
+		s += "，出口 " + exit
+	}
+	return s + "，端点 " + endpoint + "，" + handshake + "）"
+}
+
+// WARPHandshakeAgo formats the time since the latest handshake.
+func WARPHandshakeAgo(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("最近握手 %d 秒前", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("最近握手 %d 分钟前", int(d.Minutes()))
+	}
+	return fmt.Sprintf("最近握手 %d 小时前", int(d.Hours()))
+}

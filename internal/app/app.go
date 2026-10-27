@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"runtime"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
+	"github.com/Aspeternity/litenode/internal/warp"
 	"github.com/Aspeternity/litenode/internal/xray"
 )
 
@@ -67,6 +69,10 @@ type Env struct {
 	DNSProber sysopt.DNSProber
 	// Egress detects the exits; nil asks Cloudflare (DESIGN 19.1).
 	Egress Egress
+	// WARPClient and WARPTrace replace the registration API and the exit
+	// check of the WARP service (nil: the real ones).
+	WARPClient *http.Client
+	WARPTrace  func(ctx context.Context, v6 bool) (egress.Trace, error)
 }
 
 // Egress detects the IPv4 and IPv6 exits once per run (egress.Prober).
@@ -173,6 +179,9 @@ func runInternal(ctx context.Context, env Env, args []string) int {
 	if len(args) == 1 && args[0] == "resolve" {
 		return resolve(ctx, env)
 	}
+	if len(args) == 1 && args[0] == "warp-check" {
+		return warpCheck(ctx, env)
+	}
 	fmt.Fprintln(env.Stderr, text.UnknownCommand(strings.Join(append([]string{"internal"}, args...), " ")))
 	return 2
 }
@@ -259,7 +268,10 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	fwMenu := &firewallUI{ctx: ctx, s: s, svc: fwSvc, reg: reg}
 	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store)}
 	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r), probeDNS: env.dnsProber(), syncWait: 30 * time.Second,
-		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)}}
+		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)},
+		warp: &warp.Service{Runner: r, Changes: change.NewManager(r, store), Rand: env.rand(), Trace: env.WARPTrace, Client: env.WARPClient,
+			Executable: env.Executable},
+		egress: eg}
 	maintMenu := &maintUI{ctx: ctx, s: s, reg: reg, svc: &maint.Service{Runner: r, Store: store, Nodes: svc, Forwards: env.forwards(r, store),
 		Confirmer: sshSvc.Confirmer, Version: env.Version},
 		upd: &maint.Updater{Runner: r, Fetcher: env.fetcher(), Arch: runtime.GOARCH}, version: env.Version}

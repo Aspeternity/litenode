@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
+	"github.com/Aspeternity/litenode/internal/warp"
 )
 
 // sysoptUI holds the system optimization menu (DESIGN section 15). It
@@ -24,6 +26,8 @@ type sysoptUI struct {
 	probeDNS sysopt.DNSProber
 	// syncWait is how long to wait for the clock to synchronize.
 	syncWait time.Duration
+	warp     *warp.Service
+	egress   Egress
 }
 
 // mark shows a yes / no state; the thin ✗ is red, gray is hard to see
@@ -62,15 +66,25 @@ func (u *sysoptUI) menu() ui.Menu {
 		}
 		fields = append(fields, text.StatusClock(clock.Timezone, synced))
 	}
+	status := []string{strings.Join(fields, "   ")}
+	if !u.info.Virt.Container {
+		// On its own line: the first one is full.
+		v := text.WARPNone
+		if st, _ := u.warp.Status(u.ctx); st.Enabled {
+			v = u.s.Colors.Good(text.StateOn)
+		}
+		status = append(status, text.StatusWARP(v))
+	}
 	m := ui.Menu{
 		Heading: text.MenuSysopt,
-		Status:  []string{strings.Join(fields, "   ")},
+		Status:  status,
 		Items: []ui.Item{
 			{Label: text.SysoptBBR, Hidden: !u.caps.Has(system.CapBBR), Action: func() error { return u.bbr(bbr) }},
 			{Label: text.SysoptSwap, Hidden: !u.caps.Has(system.CapSwap), Action: u.swap},
 			{Label: text.SysoptPreference, Action: u.preference},
 			{Label: text.SysoptDNS, Action: u.dns},
 			{Label: text.SysoptClock, Hidden: clockErr != nil, Action: u.clock},
+			{Label: text.SysoptWARP, Hidden: u.info.Virt.Container, Page: true, Action: func() error { return u.s.Run(u.warpMenu) }},
 		},
 	}
 	for _, it := range m.Items {
@@ -383,5 +397,100 @@ func (u *sysoptUI) timezone(cur string) error {
 		return err
 	}
 	u.s.Done(text.TimezoneSet(strings.TrimSpace(tz)))
+	return nil
+}
+
+// warpMenu is the WARP page (DESIGN section 19.4).
+func (u *sysoptUI) warpMenu() ui.Menu {
+	st, err := u.warp.Status(u.ctx)
+	if err != nil {
+		return ui.Menu{Heading: text.SysoptWARP, Status: []string{u.s.Colors.Bad(text.ActionFailed(err))}}
+	}
+	if !st.Enabled {
+		return ui.Menu{Heading: text.SysoptWARP, Status: []string{text.WARPOff},
+			Items: []ui.Item{{Label: text.WARPEnable, Action: u.warpEnable}}}
+	}
+	exit := ""
+	if f := u.egress.Status(u.ctx).Of(st.Conf.IPv6); f.WARP {
+		exit = f.IP.String()
+	}
+	hs := text.WARPNoHandshake
+	switch {
+	case !st.Active:
+		hs = u.s.Colors.Bad(text.WARPInactive)
+	case !st.Handshake.IsZero():
+		hs = text.WARPHandshakeAgo(time.Since(st.Handshake))
+	}
+	return ui.Menu{Heading: text.SysoptWARP,
+		Status: []string{text.WARPOn(st.Conf.IPv6, exit, st.Conf.Endpoint.String(), hs)},
+		Items:  []ui.Item{{Label: text.WARPReselect, Action: u.warpReselect}, {Label: text.WARPDisable, Action: u.warpDisable}}}
+}
+
+func (u *sysoptUI) warpEnable() error {
+	eg := u.egress.Status(u.ctx)
+	switch {
+	case !eg.IPv4.OK && !eg.IPv6.OK:
+		u.s.EndWarn(text.WARPNoExit)
+		return nil
+	case eg.IPv4.OK && eg.IPv6.OK:
+		byWARP := ""
+		if eg.IPv4.WARP {
+			byWARP = "IPv4"
+		} else if eg.IPv6.WARP {
+			byWARP = "IPv6"
+		}
+		u.s.End(text.WARPNotNeeded(byWARP))
+		return nil
+	}
+	ipv6 := !eg.IPv6.OK
+	if ok, err := u.s.Confirm(text.ConfirmWARPEnable(ipv6)); err != nil || !ok {
+		return err
+	}
+	u.s.Println(text.WARPPreparing)
+	if err := u.warp.Enable(u.ctx, ipv6, u.warpTrying); err != nil {
+		return u.warpFailed(err)
+	}
+	u.egress.Reset()
+	exit := ""
+	if f := u.egress.Status(u.ctx).Of(ipv6); f.OK {
+		exit = f.IP.String()
+	}
+	u.s.Done(text.WARPEnabled(ipv6, exit))
+	return nil
+}
+
+func (u *sysoptUI) warpTrying(ep netip.AddrPort) { u.s.Println(text.WARPTrying(ep.String())) }
+
+func (u *sysoptUI) warpFailed(err error) error {
+	switch {
+	case errors.Is(err, warp.ErrNoKernel):
+		u.s.EndWarn(text.WARPNoKernel)
+	case errors.Is(err, warp.ErrNoEndpoint):
+		u.s.EndWarn(text.WARPNoEndpoint(err))
+	default:
+		return err
+	}
+	return nil
+}
+
+func (u *sysoptUI) warpReselect() error {
+	if err := u.warp.Reselect(u.ctx, u.warpTrying); err != nil {
+		return u.warpFailed(err)
+	}
+	u.egress.Reset()
+	c, _ := u.warp.Conf()
+	u.s.Done(text.WARPReselected(c.Endpoint.String()))
+	return nil
+}
+
+func (u *sysoptUI) warpDisable() error {
+	if ok, err := u.s.Confirm(text.ConfirmWARPDisable); err != nil || !ok {
+		return err
+	}
+	if err := u.warp.Disable(u.ctx); err != nil {
+		return err
+	}
+	u.egress.Reset()
+	u.s.Done(text.WARPDisabled)
 	return nil
 }
