@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"syscall"
 )
 
@@ -31,11 +32,26 @@ func NetReason(err error) string {
 	case errors.Is(err, syscall.ECONNRESET), errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
 		return "连接被对方断开"
 	case errors.Is(err, syscall.ENETUNREACH), errors.Is(err, syscall.EHOSTUNREACH), errors.Is(err, syscall.EADDRNOTAVAIL):
-		return "网络不可达（本机没有到该地址的路由，如没有 IPv6）"
+		return unreachable(err)
 	case errors.As(err, &alert), errors.As(err, &recordErr), errors.As(err, &opErr) && opErr.Op == "remote error":
 		return "TLS 握手失败（对方不是 HTTPS 网站或不接受该域名）"
 	}
 	return err.Error()
+}
+
+// unreachable names the family of the address that could not be reached,
+// when the error carries it (D-134).
+func unreachable(err error) string {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) && opErr.Addr != nil {
+		if ap, err := netip.ParseAddrPort(opErr.Addr.String()); err == nil {
+			if ap.Addr().Unmap().Is4() {
+				return "网络不可达（本机没有 IPv4 出口，或没有到该地址的路由）"
+			}
+			return "网络不可达（本机没有 IPv6 出口，或没有到该地址的路由）"
+		}
+	}
+	return "网络不可达（本机没有到该地址的路由，如没有 IPv6）"
 }
 
 func isTimeout(err error) bool {

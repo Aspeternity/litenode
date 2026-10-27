@@ -77,9 +77,9 @@ func (s *Service) installCheck(ctx context.Context, r system.Runner) error {
 	return nil
 }
 
-// removeCheck stops and removes the check timer; it is not an error if
+// RemoveCheck stops and removes the check timer; it is not an error if
 // it does not exist.
-func removeCheck(ctx context.Context, r system.Runner) {
+func RemoveCheck(ctx context.Context, r system.Runner) {
 	if _, err := r.ReadFile(unitDir + "/" + CheckTimer); err != nil {
 		return
 	}

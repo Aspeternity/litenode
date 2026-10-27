@@ -141,6 +141,13 @@ func DNSProbeFailed(server, reason string) string {
 	return "⚠ " + server + " 无法解析域名：" + reason
 }
 
+// DNSUnreachable marks a current DNS server that did not answer.
+func DNSUnreachable(server string) string { return server + "（不可达）" }
+
+// DNSUnreachableHint follows a current server list with unreachable
+// servers.
+const DNSUnreachableHint = "标为不可达的 DNS 服务器连不上，会拖慢域名解析，建议更换。"
+
 // DNSSet reports the new DNS servers.
 func DNSSet(servers string) string { return "DNS 已设置为 " + servers + "。" }
 

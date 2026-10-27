@@ -1,13 +1,6 @@
 package xray
 
-import (
-	"context"
-	"fmt"
-	"net/netip"
-	"strings"
-
-	"github.com/Aspeternity/litenode/internal/system"
-)
+import "fmt"
 
 // Node outbound IP modes, stored in xray.outbound_ip (DESIGN section 12,
 // D-084). They set the domainStrategy of the freedom outbound and are
@@ -53,55 +46,24 @@ func OnlyIPv6(mode string) (ipv6, ok bool) {
 	return false, false
 }
 
-// FamilyReady reports whether this host can reach the internet over IPv4
-// (ipv6 false) or IPv6: it needs a default route and a global address of
-// that family. IPv4 accepts private addresses behind NAT, which many VPSes
-// use; IPv6 needs a public address, since IPv6 is normally not NATed.
-func FamilyReady(ctx context.Context, r system.Runner, ipv6 bool) (bool, error) {
-	fam := "-4"
-	if ipv6 {
-		fam = "-6"
+// OutboundCheck tells whether mode suits the exits the machine has
+// (egress detection, WARP included; D-134): an "only" mode for a family
+// without an exit is refused, a "prefer" mode for one needs confirmation.
+// When neither family has an exit the detection tells nothing and
+// nothing is refused.
+func OutboundCheck(mode string, ipv4, ipv6 bool) (refuse, confirm bool) {
+	if !ipv4 && !ipv6 {
+		return false, false
 	}
-	route, err := r.Query(ctx, "ip", fam, "route", "show", "default")
-	if err != nil {
-		return false, fmt.Errorf("ip %s route: %w", fam, err)
+	switch mode {
+	case OutboundIPv4Only:
+		return !ipv4, false
+	case OutboundIPv6Only:
+		return !ipv6, false
+	case OutboundPreferIPv4:
+		return false, !ipv4
+	case OutboundPreferIPv6:
+		return false, !ipv6
 	}
-	addrs, err := r.Query(ctx, "ip", "-o", fam, "addr", "show", "scope", "global")
-	if err != nil {
-		return false, fmt.Errorf("ip %s addr: %w", fam, err)
-	}
-	return ParseFamilyReady(route.Stdout, addrs.Stdout, ipv6), nil
-}
-
-// ParseFamilyReady decides FamilyReady from the output of "ip route show
-// default" and "ip -o addr show scope global".
-func ParseFamilyReady(routeOut, addrOut string, ipv6 bool) bool {
-	if strings.TrimSpace(routeOut) == "" {
-		return false
-	}
-	for _, line := range strings.Split(addrOut, "\n") {
-		f := strings.Fields(line)
-		for i := 0; i+1 < len(f); i++ {
-			if f[i] != "inet" && f[i] != "inet6" {
-				continue
-			}
-			p, err := netip.ParsePrefix(f[i+1])
-			if err != nil {
-				continue
-			}
-			a := p.Addr()
-			if a.Is6() != ipv6 || !a.IsGlobalUnicast() {
-				continue
-			}
-			if !ipv6 || isPublicIPv6(a) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// isPublicIPv6 excludes unique local and documentation addresses.
-func isPublicIPv6(a netip.Addr) bool {
-	return !a.IsPrivate() && !netip.MustParsePrefix("2001:db8::/32").Contains(a)
+	return false, false
 }

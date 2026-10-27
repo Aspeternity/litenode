@@ -214,15 +214,24 @@ func (u *nodeUI) xrayOutboundIP() error {
 		return nil
 	}
 	ipv6, only := xray.OnlyIPv6(mode)
-	if only {
-		u.s.Println(u.s.Colors.Warn(text.OutboundIPOnlyWarning))
+	if mode == xray.OutboundPreferIPv6 {
+		ipv6 = true
 	}
-	err = u.svc.SetOutboundIP(u.ctx, mode)
-	if errors.Is(err, nodemgr.ErrFamilyUnavailable) {
+	eg := u.egress.Status(u.ctx)
+	refuse, confirm := xray.OutboundCheck(mode, eg.IPv4.OK, eg.IPv6.OK)
+	if refuse {
 		u.s.EndWarn(text.OutboundIPUnavailable(ipv6))
 		return nil
 	}
-	if err != nil {
+	if confirm {
+		if ok, err := u.s.Confirm(text.ConfirmOutboundNoExit(ipv6)); err != nil || !ok {
+			return err
+		}
+	}
+	if only {
+		u.s.Println(u.s.Colors.Warn(text.OutboundIPOnlyWarning))
+	}
+	if err := u.svc.SetOutboundIP(u.ctx, mode); err != nil {
 		return err
 	}
 	u.s.Done(text.OutboundIPDone(text.OutboundIPLabels[c-1]))

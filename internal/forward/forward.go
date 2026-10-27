@@ -67,6 +67,17 @@ func Check(f Forward) error {
 	return nil
 }
 
+// Unreachable reports whether a target with the given address families
+// can only be reached over a family the machine has no exit for (D-134):
+// connections are forwarded within their family (D-046). ipv6 names that
+// family. When neither exit works the detection tells nothing.
+func Unreachable(targetV4, targetV6, exitV4, exitV6 bool) (ipv6, unreachable bool) {
+	if !exitV4 && !exitV6 || targetV4 && exitV4 || targetV6 && exitV6 {
+		return false, false
+	}
+	return !targetV4, targetV4 || targetV6
+}
+
 // CheckFields validates what the user enters, before a domain target is
 // resolved.
 func CheckFields(f Forward) error {

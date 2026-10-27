@@ -437,10 +437,15 @@ func (u *nodeUI) chooseResult(heading, status string, results []reality.Result) 
 func (u *nodeUI) commonTarget() (string, error) {
 	u.s.Println(text.Checking)
 	var usable []reality.Result
+	slow := false
 	for _, r := range u.checker.CheckAll(u.ctx, reality.CommonTargets, 10) {
+		slow = slow || r.SlowDNS()
 		if r.Usable() {
 			usable = append(usable, r)
 		}
+	}
+	if slow {
+		u.s.Println(u.s.Colors.Warn(text.SlowDNS))
 	}
 	if len(usable) == 0 {
 		u.s.Println(u.s.Colors.Warn(text.TargetNoneUsable))
@@ -452,6 +457,12 @@ func (u *nodeUI) commonTarget() (string, error) {
 // scanTarget scans nearby sites (DESIGN section 10.3, D-058). "" with no
 // error means the user declined or went back, or nothing usable was found.
 func (u *nodeUI) scanTarget() (string, error) {
+	// Scanning needs the machine's own IPv4: through WARP it would scan
+	// Cloudflare's network, not the neighbors (D-134).
+	if eg := u.egress.Status(u.ctx); !eg.IPv4.Native() && eg.IPv6.OK {
+		u.s.Println(u.s.Colors.Warn(text.ScanIPv6Only))
+		return "", nil
+	}
 	st := u.state()
 	if !st.Server.ScanWarned {
 		ok, err := u.s.Confirm(text.ScanWarning)
@@ -536,6 +547,9 @@ func (u *nodeUI) manualTarget() (string, error) {
 }
 
 func (u *nodeUI) printCheck(r reality.Result) {
+	if r.SlowDNS() {
+		defer u.s.Println(u.s.Colors.Warn(text.SlowDNS))
+	}
 	if r.Err != nil {
 		u.s.Println(text.CheckUnreachable(r.Host, text.NetReason(r.Err)))
 		return

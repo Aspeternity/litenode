@@ -873,7 +873,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
   - 程序本身不走第 6 节的变更流程（体积大，不保留 10 份备份），见下方"更新"。
 - **服务**：`litenode-xray.service`，以专用系统用户 `litenode-xray` 运行，通过 `AmbientCapabilities=CAP_NET_BIND_SERVICE` 允许绑定 443 等低端口（`CapabilityBoundingSet` 也只保留这一项），另加 `NoNewPrivileges`、`ProtectSystem=full`、`ProtectHome`、`PrivateTmp`。配置 `/etc/litenode/xray.json` 为 640、属组 `litenode-xray`。
 - **启动 / 停止**（D-045）：Xray 默认按节点自动启停（有启用的节点时运行，否则停止并取消开机启动）。用户在菜单中"停止"时，在状态文件中记为手动停止（`xray.stopped`），停止服务并取消开机启动；之后的配置变更照常写入和校验配置，但不启动 Xray，重启机器后也不启动。"启动"清除这个标记并按节点情况运行；没有启用的节点时提示"没有启用的节点，Xray 无需运行"。已在运行（且不是手动停止）时"启动"只提示"Xray 已在运行，没有重启"，不重启、不改配置；服务为 inactive 或 failed 时"停止"只提示"Xray 已经是停止状态"，不记为手动停止（D-090、D-092）。
-- **节点出站 IP**（D-084）：设置 freedom 出站的 `domainStrategy`，与系统 `gai.conf` 的优先级互相独立（节点可以仅 IPv6 出站，系统工具仍用 IPv4）。选项：默认（AsIs，不写该字段）、优先 IPv4（UseIPv4v6）、优先 IPv6（UseIPv6v4）、仅 IPv4（ForceIPv4）、仅 IPv6（ForceIPv6）。存在状态文件 `xray.outbound_ip`，走 Xray 变更流程。选"仅"之前检查本机有该协议的公网地址和默认路由，没有则拒绝；并提示目标网站没有该协议的地址时无法访问。Xray 服务菜单状态区显示"节点出站: <模式>"。状态值为 `""`（默认）、`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only`；"本机可用"指有该协议的默认路由和 global 地址，IPv4 允许 NAT 后的私有地址，IPv6 要求公网地址（D-085）。
+- **节点出站 IP**（D-084）：设置 freedom 出站的 `domainStrategy`，与系统 `gai.conf` 的优先级互相独立（节点可以仅 IPv6 出站，系统工具仍用 IPv4）。选项：默认（AsIs，不写该字段）、优先 IPv4（UseIPv4v6）、优先 IPv6（UseIPv6v4）、仅 IPv4（ForceIPv4）、仅 IPv6（ForceIPv6）。存在状态文件 `xray.outbound_ip`，走 Xray 变更流程。选"仅"之前按出口检测（第 19.1 节，WARP 算可用）检查本机有该协议的出口，没有则拒绝，"优先"则需确认（D-134，取代原来按默认路由和 global 地址的判断）；并提示目标网站没有该协议的地址时无法访问。Xray 服务菜单状态区显示"节点出站: <模式>"。状态值为 `""`（默认）、`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only`。
 - **查看日志**（子菜单，D-090）：
   - **最近日志**：输入行数（默认 50，最多 1000，0 返回），显示 `journalctl -u litenode-xray -n <行数>`。
   - **实时日志**：`journalctl -u litenode-xray -f -n 20`，按 Ctrl+C 回到日志菜单，不退出 LiteNode。实现：journalctl 在自己的进程组中运行（终端的 Ctrl+C 只发给 LiteNode），LiteNode 收到 SIGINT 时取消这个命令而不是退出；SIGHUP / SIGTERM 仍然退出（D-092）。
@@ -1237,7 +1237,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 
 - **Reality 检测**：解析域名与连接分开限时（解析 5 秒，连接加握手 5 秒）；解析超过 2 秒时，检测结果下方提示"域名解析慢，建议在 系统优化 → DNS 中更换"。
 - **DNS 预设**：只有 IPv6 出口时预设使用各服务的 IPv6 地址（Cloudflare `2606:4700:4700::1111`、`::1001`，Google `2001:4860:4860::8888`、`::8844`，Quad9 `2620:fe::fe`、`2620:fe::9`）；两种出口都有时两个 IPv4 加一个 IPv6；只有 IPv4 时不变。DNS 菜单的状态区逐个探测当前服务器（并行，各 2 秒），连不上的标红并注明"不可达"，提示更换。
-- **节点出站 IP**：IPv4 是否可用改用出口检测结果（WARP 也算可用）。没有 IPv4 出口时"仅 IPv4"拒绝，"优先 IPv4"需确认；IPv6 同理。
-- **端口转发**：没有 IPv4 出口时添加或修改指向 IPv4 目标的规则需确认（IPv6 同理）。连通性测试的"网络不可达"提示按目标的地址族说明是本机没有该协议的出口。
+- **节点出站 IP**：IPv4 是否可用改用出口检测结果（WARP 也算可用）。没有 IPv4 出口时"仅 IPv4"拒绝，"优先 IPv4"需确认；IPv6 同理。出口检测两种协议都失败时，出站 IP、转发、扫描都不据此拒绝或询问。
+- **端口转发**：没有本机自己的 IPv4（WARP 不算：转发只在同一地址族内进行，WARP 没有入站）时，添加或修改只有 IPv4 地址的目标需确认（IPv6 同理）。连通性测试的"网络不可达"提示按目标的地址族说明是本机没有该协议的出口。
 - **扫描附近网站**：没有本机 IPv4 地址（WARP 不算）时提示"纯 IPv6 机器不能扫描附近网站，请从常用列表选择或手动输入"，不进行扫描。
-- **全部卸载**：保留的设置中列出 DNS（文件位置）和 WARP。
+- **全部卸载**：保留的设置中列出 DNS（文件位置：resolved 片段或 LiteNode 写的 resolv.conf）和 WARP；WARP 检查定时器随程序删除，隧道保留。

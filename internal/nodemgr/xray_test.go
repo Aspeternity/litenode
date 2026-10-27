@@ -116,15 +116,6 @@ func TestSetOutboundIP(t *testing.T) {
 	if fx.state(t).Xray.OutboundIP != xray.OutboundPreferIPv6 || !strings.Contains(string(fx.f.Files[xray.ConfigPath]), `"UseIPv6v4"`) {
 		t.Errorf("prefer IPv6 not applied:\n%s", fx.f.Files[xray.ConfigPath])
 	}
-	// No IPv6 default route: "only IPv6" is refused and nothing changes.
-	if err := fx.svc.SetOutboundIP(ctx, xray.OutboundIPv6Only); !errors.Is(err, ErrFamilyUnavailable) {
-		t.Fatalf("err = %v, want ErrFamilyUnavailable", err)
-	}
-	if fx.state(t).Xray.OutboundIP != xray.OutboundPreferIPv6 {
-		t.Error("refused mode was stored")
-	}
-	fx.f.Respond(systemtest.Response{Result: system.Result{Stdout: "default via 1.2.3.1 dev eth0\n"}}, "ip", "-4", "route", "show", "default")
-	fx.f.Respond(systemtest.Response{Result: system.Result{Stdout: "2: eth0    inet 1.2.3.4/24 scope global eth0\n"}}, "ip", "-o", "-4", "addr", "show", "scope", "global")
 	if err := fx.svc.SetOutboundIP(ctx, xray.OutboundIPv4Only); err != nil {
 		t.Fatal(err)
 	}

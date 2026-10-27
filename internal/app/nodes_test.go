@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/reality"
 	"github.com/Aspeternity/litenode/internal/share"
@@ -220,16 +221,28 @@ func TestXrayMenu(t *testing.T) {
 	if st, _ := state.NewStore(f).Load(); !st.Xray.Stopped {
 		t.Error("stop not recorded")
 	}
-	// Node outbound IP: prefer IPv6 is applied; only IPv6 is refused
-	// without an IPv6 default route.
-	r = runNodes(t, f, "5\n5\n3\n5\n5\n0\n0\n")
-	for _, want := range []string{"节点出站 IP 已设置为优先 IPv6。", "节点出站: 优先 IPv6", "优先 IPv6 （当前）", "本机没有可用的 IPv6 公网地址或默认路由"} {
+	// Node outbound IP: prefer IPv6 is applied.
+	r = runNodes(t, f, "5\n5\n3\n0\n0\n")
+	for _, want := range []string{"节点出站 IP 已设置为优先 IPv6。", "节点出站: 优先 IPv6"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("outbound IP: output missing %q:\n%s", want, r.stdout)
 		}
 	}
 	if st, _ := state.NewStore(f).Load(); st.Xray.OutboundIP != xray.OutboundPreferIPv6 {
 		t.Errorf("outbound IP = %q", st.Xray.OutboundIP)
+	}
+	// Without an IPv4 exit (D-134): only IPv4 is refused, prefer IPv4
+	// asks and "no" keeps the mode.
+	v6only := fakeEgress{IPv6: egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}}
+	r = runEnv(t, Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), TargetChecker: fakeChecker{},
+		AddressDetector: fakeDetector{}, Egress: v6only}, "5\n5\n4\n5\n2\nn\n0\n0\n")
+	for _, want := range []string{"优先 IPv6 （当前）", text.OutboundIPUnavailable(false), text.ConfirmOutboundNoExit(false)} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("no IPv4 exit: output missing %q:\n%s", want, r.stdout)
+		}
+	}
+	if st, _ := state.NewStore(f).Load(); st.Xray.OutboundIP != xray.OutboundPreferIPv6 {
+		t.Errorf("outbound IP changed to %q", st.Xray.OutboundIP)
 	}
 	// Main menu warns while nodes exist but Xray was stopped by hand.
 	r = runNodes(t, f, "0\n")
@@ -279,6 +292,14 @@ func TestScanTargetFlow(t *testing.T) {
 	st, _ := state.NewStore(f).Load()
 	if !st.Server.ScanWarned || len(st.Nodes) != 1 {
 		t.Errorf("state = %+v", st)
+	}
+	// IPv6 only (IPv4 through WARP): no scan, back to the target menu.
+	pure := env()
+	pure.Egress = fakeEgress{IPv4: egress.Family{OK: true, WARP: true, IP: netip.MustParseAddr("104.28.215.68")},
+		IPv6: egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}}
+	r = runEnv(t, pure, strings.Join([]string{"1", "1", "1", "", "1", "0", "0", "0"}, "\n")+"\n")
+	if !strings.Contains(r.stdout, text.ScanIPv6Only) || sc.calls != 1 {
+		t.Errorf("IPv6 only: calls=%d\n%s", sc.calls, r.stdout)
 	}
 	// Second scan: no warning again.
 	r = runEnv(t, env(), strings.Join([]string{"1", "1", "1", "", "1", "1", "Two", "0", "0"}, "\n")+"\n")

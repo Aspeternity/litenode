@@ -131,3 +131,22 @@ func TestReresolve(t *testing.T) {
 		}
 	}
 }
+
+func TestUnreachable(t *testing.T) {
+	cases := []struct {
+		tv4, tv6, ev4, ev6 bool
+		ipv6, unreachable  bool
+	}{
+		{true, false, false, true, false, true},   // IPv4 target, IPv6 only
+		{false, true, true, false, true, true},    // IPv6 target, IPv4 only
+		{true, true, false, true, false, false},   // dual-stack target
+		{true, false, true, true, false, false},   // both exits
+		{true, false, false, false, false, false}, // detection failed
+	}
+	for _, c := range cases {
+		v6, u := Unreachable(c.tv4, c.tv6, c.ev4, c.ev6)
+		if v6 != c.ipv6 || u != c.unreachable {
+			t.Errorf("Unreachable(%v, %v, %v, %v) = %v, %v", c.tv4, c.tv6, c.ev4, c.ev6, v6, u)
+		}
+	}
+}

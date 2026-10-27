@@ -128,6 +128,16 @@ func (s *Service) build(ctx context.Context, in Input, old forward.Forward) (for
 	return f, nil
 }
 
+// TargetFamilies resolves the target of in as Add and Update do and
+// reports which address families it has.
+func (s *Service) TargetFamilies(ctx context.Context, in Input) (ipv4, ipv6 bool, err error) {
+	f, err := s.build(ctx, in, forward.Forward{})
+	if err != nil {
+		return false, false, err
+	}
+	return f.IPv4() != "", f.IPv6() != "", nil
+}
+
 // checkPorts fails with *PortTakenError if f's local ports are used by a
 // program, a node or another forward (D-037).
 func (s *Service) checkPorts(st *state.State, f forward.Forward) error {

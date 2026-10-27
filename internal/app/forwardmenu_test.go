@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/nft"
 	"github.com/Aspeternity/litenode/internal/node"
@@ -155,4 +157,23 @@ func TestForwardMenuProbe(t *testing.T) {
 	r := runForward(t, f, d, "4", "4", "1", "4", "2", "0", "0")
 	wantOutput(t, r.stdout, text.ProbeTCPOnly, "203.0.113.20:443  连通，延迟",
 		"[2001:db8::20]:443  无法连接：i/o timeout", text.ProbeSomeFails, "└─ "+text.ProbeUDPOnly)
+}
+
+// An IPv4 target on a machine without IPv4 of its own asks first; WARP
+// does not count (D-134).
+func TestForwardMenuNoIPv4(t *testing.T) {
+	f := supported()
+	eg := fakeEgress{IPv4: egress.Family{OK: true, WARP: true, IP: netip.MustParseAddr("104.28.215.68")},
+		IPv6: egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}}
+	env := Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), ForwardResolver: resolveTo("203.0.113.20"), Egress: eg}
+	// main: 4; add IPv4 target, no; add IPv6 target (no question); back; quit.
+	r := runEnv(t, env, strings.Join([]string{"4", "1", "30001", "1", "203.0.113.5", "", "", "n",
+		"1", "30002", "1", "2001:db8::5", "", "", "0", "0"}, "\n")+"\n")
+	wantOutput(t, r.stdout, text.ConfirmForwardNoExit(false))
+	if fs := loadForwards(t, f); len(fs) != 1 || fs[0].TargetHost != "2001:db8::5" {
+		t.Errorf("forwards = %+v", fs)
+	}
+	if strings.Count(r.stdout, "仍要保存") != 1 {
+		t.Errorf("asked for the IPv6 target:\n%s", r.stdout)
+	}
 }

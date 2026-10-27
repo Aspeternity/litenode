@@ -158,7 +158,7 @@ const downConf = "/run/litenode/" + Interface + ".conf"
 // stop fails without the file, so the interface, its rules and nftables
 // table are removed with the stand-in file.
 func down(ctx context.Context, r system.Runner) error {
-	removeCheck(ctx, r)
+	RemoveCheck(ctx, r)
 	// The unit may not exist (wireguard-tools removed); errors are
 	// expected here.
 	_, _ = r.Exec(ctx, "systemctl", "disable", "--now", Unit)

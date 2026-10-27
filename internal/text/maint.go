@@ -113,6 +113,7 @@ var KeptNames = map[string]string{
 	"dns":      "DNS 设置",
 	"gai":      "系统 IPv4 / IPv6 优先级（LiteNode 标记的段落）",
 	"log":      "LiteNode 操作日志",
+	"warp":     "WARP（开机由 wg-quick@litenode-warp 启动；停用：systemctl disable --now wg-quick@litenode-warp）",
 }
 
 // KeptLine names one kept setting and its file.

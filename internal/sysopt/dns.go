@@ -40,11 +40,36 @@ type DNSPreset struct {
 	Servers []string
 }
 
-// DNSPresets are the choices of the DNS menu.
-var DNSPresets = []DNSPreset{
-	{"Cloudflare", []string{"1.1.1.1", "1.0.0.1"}},
-	{"Google", []string{"8.8.8.8", "8.8.4.4"}},
-	{"Quad9", []string{"9.9.9.9", "149.112.112.112"}},
+// dnsServices are the public DNS services of the DNS menu, with their
+// IPv4 and IPv6 addresses.
+var dnsServices = []struct {
+	name string
+	ipv4 [2]string
+	ipv6 [2]string
+}{
+	{"Cloudflare", [2]string{"1.1.1.1", "1.0.0.1"}, [2]string{"2606:4700:4700::1111", "2606:4700:4700::1001"}},
+	{"Google", [2]string{"8.8.8.8", "8.8.4.4"}, [2]string{"2001:4860:4860::8888", "2001:4860:4860::8844"}},
+	{"Quad9", [2]string{"9.9.9.9", "149.112.112.112"}, [2]string{"2620:fe::fe", "2620:fe::9"}},
+}
+
+// PresetsFor returns the DNS menu choices for the exits the machine has
+// (D-134): IPv6 addresses only when there is no IPv4 exit, two IPv4 and
+// one IPv6 when both work, IPv4 otherwise.
+func PresetsFor(ipv4, ipv6 bool) []DNSPreset {
+	out := make([]DNSPreset, 0, len(dnsServices))
+	for _, d := range dnsServices {
+		var servers []string
+		switch {
+		case ipv6 && !ipv4:
+			servers = d.ipv6[:]
+		case ipv6:
+			servers = []string{d.ipv4[0], d.ipv4[1], d.ipv6[0]}
+		default:
+			servers = d.ipv4[:]
+		}
+		out = append(out, DNSPreset{d.name, servers})
+	}
+	return out
 }
 
 // DNS is the DNS state shown in the menu.
@@ -127,6 +152,9 @@ func usesResolved(resolvConf []byte) bool {
 }
 
 // DNSStatus reads the DNS configuration.
+// ResolvConfManaged reports whether LiteNode wrote this resolv.conf.
+func ResolvConfManaged(data []byte) bool { return strings.HasPrefix(string(data), dnsHeader) }
+
 func (s *Service) DNSStatus(ctx context.Context) (DNS, error) {
 	rc, err := s.Runner.ReadFile(ResolvConfPath)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -134,7 +162,7 @@ func (s *Service) DNSStatus(ctx context.Context) (DNS, error) {
 	}
 	active, _ := system.ServiceActive(ctx, s.Runner, ResolvedUnit)
 	if !active || !usesResolved(rc) {
-		return DNS{Servers: nameservers(rc), Managed: strings.HasPrefix(string(rc), dnsHeader)}, nil
+		return DNS{Servers: nameservers(rc), Managed: ResolvConfManaged(rc)}, nil
 	}
 	d := DNS{Resolved: true}
 	if data, err := s.Runner.ReadFile(ResolvedDropIn); err == nil {
