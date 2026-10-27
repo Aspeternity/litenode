@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/maint"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
@@ -128,5 +130,25 @@ func TestMaintUninstallMenu(t *testing.T) {
 	}
 	if f.Files[maint.BinPath] != nil || f.Files[state.DefaultPath] != nil {
 		t.Error("files left after full uninstall")
+	}
+}
+
+// noIPv4Fetcher fails like the NAT64 dialer without IPv4 exit or NAT64.
+type noIPv4Fetcher struct{}
+
+func (noIPv4Fetcher) Fetch(context.Context, string, int64) ([]byte, error) {
+	return nil, fmt.Errorf("download: %w", egress.ErrNoIPv4)
+}
+func (noIPv4Fetcher) Redirect(context.Context, string) (string, error) {
+	return "", fmt.Errorf("request: %w", egress.ErrNoIPv4)
+}
+
+// TestUpdateNoIPv4: without an IPv4 exit the failure points to WARP
+// (DESIGN section 19.3).
+func TestUpdateNoIPv4(t *testing.T) {
+	env := Env{Runner: supported(), Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), XrayFetcher: noIPv4Fetcher{}, Version: "v0.0.2"}
+	r := runEnv(t, env, "9\n3\n\n0\n0\n")
+	if !strings.Contains(r.stdout, "系统优化 → WARP") {
+		t.Errorf("no WARP hint:\n%s", r.stdout)
 	}
 }

@@ -63,7 +63,7 @@ func TestVPS(t *testing.T) {
 	}
 	ctx := context.Background()
 	r := system.NewReal(system.NewOpLog(system.DefaultLogPath))
-	real := NewHTTPFetcher()
+	real := NewHTTPFetcher(nil)
 	fetch := overrideFetcher{real: real, override: map[string][]byte{}}
 	in := NewInstaller(r, fetch, runtime.GOARCH)
 
@@ -281,7 +281,7 @@ func TestVPSGeneratedConfig(t *testing.T) {
 	}
 	ctx := context.Background()
 	r := system.NewReal(system.NewOpLog(system.DefaultLogPath))
-	in := NewInstaller(r, NewHTTPFetcher(), runtime.GOARCH)
+	in := NewInstaller(r, NewHTTPFetcher(nil), runtime.GOARCH)
 	_, statErr := os.Stat(state.ConfigDir)
 	createdConfigDir := errors.Is(statErr, os.ErrNotExist)
 	in.Uninstall(ctx)
@@ -341,7 +341,7 @@ func TestVPSKeysMatchXray(t *testing.T) {
 	}
 	ctx := context.Background()
 	r := system.NewReal(nil)
-	in := NewInstaller(r, NewHTTPFetcher(), runtime.GOARCH)
+	in := NewInstaller(r, NewHTTPFetcher(nil), runtime.GOARCH)
 	_, statErr := os.Stat(state.ConfigDir)
 	createdConfigDir := errors.Is(statErr, os.ErrNotExist)
 	in.Uninstall(ctx)

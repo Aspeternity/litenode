@@ -80,9 +80,52 @@ detect_arch() {
 	esac
 }
 
+# Extra curl options; setup_nat64 fills them.
+curl_opts=()
+no_ipv4=""
+
+# nat64_prefix prints the provider's /96 NAT64 prefix, found from the
+# AAAA records its DNS64 gives the IPv4-only name ipv4only.arpa (RFC 7050),
+# e.g. "64:ff9b::" for 64:ff9b::c000:aa.
+nat64_prefix() {
+	getent ahostsv6 ipv4only.arpa 2>/dev/null | awk '
+		tolower($1) ~ /^::ffff:/ { next }
+		tolower($1) ~ /:c000:a[ab]$/ { sub(/c000:a[ab]$/, "", $1); print $1; exit }'
+}
+
+# setup_nat64 lets a host without an IPv4 exit download from GitHub, which
+# has only IPv4 addresses, through the provider's NAT64: curl connects to
+# the synthesized IPv6 addresses, TLS still checks the real host names.
+# Nothing on the system is changed (DESIGN section 19.3).
+setup_nat64() {
+	if curl -4 -fsS --max-time 3 -o /dev/null https://1.1.1.1/cdn-cgi/trace 2>/dev/null; then
+		return 0
+	fi
+	# A DNS64 resolver already gives github.com an IPv6 address.
+	if getent ahostsv6 github.com 2>/dev/null | awk 'tolower($1) !~ /^::ffff:/ { found = 1 } END { exit !found }'; then
+		return 0
+	fi
+	local prefix host v4
+	prefix="$(nat64_prefix)"
+	if [ -z "$prefix" ]; then
+		no_ipv4=1
+		return 0
+	fi
+	for host in github.com release-assets.githubusercontent.com objects.githubusercontent.com; do
+		v4="$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR == 1 { print $1 }')"
+		if [ -n "$v4" ]; then
+			curl_opts+=(--resolve "${host}:443:[${prefix}${v4}]")
+		fi
+	done
+	echo "本机没有 IPv4 出口，经商家的 NAT64（${prefix}/96）下载。"
+}
+
 download() {
 	local name="$1"
-	if ! curl -fsSL --retry 3 --connect-timeout 15 -o "${tmp_dir}/${name}" "${BASE_URL}/${name}"; then
+	if ! curl -fsSL --retry 3 --connect-timeout 15 "${curl_opts[@]}" -o "${tmp_dir}/${name}" "${BASE_URL}/${name}"; then
+		if [ -n "$no_ipv4" ]; then
+			die "下载 ${name} 失败，未做任何修改。本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。请参考 ${README_URL}（手动安装，或先开启 WARP / NAT64）"
+		fi
 		die "下载 ${name} 失败，未做任何修改。这台机器可能无法访问 GitHub，手动安装方法见 ${README_URL}"
 	fi
 }
@@ -128,6 +171,7 @@ main() {
 	name="litenode-linux-${arch}"
 
 	tmp_dir="$(mktemp -d)"
+	setup_nat64
 	echo "正在下载 LiteNode（${arch}）……"
 	download "$name"
 	download sha256sums.txt

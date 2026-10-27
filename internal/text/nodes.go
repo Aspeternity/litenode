@@ -181,15 +181,27 @@ func ErrRemarkTooLong(max int) string {
 	return fmt.Sprintf("备注最多 %d 个字符。", max)
 }
 
-// XrayInstallFailed explains a failed Xray download (D-042).
-func XrayInstallFailed(err error) string {
-	return fmt.Sprintf("安装 Xray 失败：%v\n如果这台机器无法访问 GitHub，请参考 %s", err, NoGitHubURL)
+// XrayInstallFailed explains a failed Xray download (D-042); noIPv4 means
+// the host has no IPv4 exit and no NAT64 (DESIGN section 19.3).
+func XrayInstallFailed(err error, noIPv4 bool) string {
+	return fmt.Sprintf("安装 Xray 失败：%v\n%s", err, noGitHubHint(noIPv4))
 }
 
 // XrayDownloadFailed explains a failed Xray update download (D-042).
-func XrayDownloadFailed(err error) string {
-	return fmt.Sprintf("下载 Xray 失败，未做任何修改：%v\n如果这台机器无法访问 GitHub，请参考 %s", err, NoGitHubURL)
+func XrayDownloadFailed(err error, noIPv4 bool) string {
+	return fmt.Sprintf("下载 Xray 失败，未做任何修改：%v\n%s", err, noGitHubHint(noIPv4))
 }
+
+func noGitHubHint(noIPv4 bool) string {
+	if noIPv4 {
+		return NoIPv4Download
+	}
+	return "如果这台机器无法访问 GitHub，请参考 " + NoGitHubURL
+}
+
+// NoIPv4Download explains why GitHub cannot be reached from an IPv6-only
+// host without NAT64 (DESIGN section 19.3).
+const NoIPv4Download = "本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。\n可在 系统优化 → WARP 开启 IPv4 出口后重试，或参考 " + NoGitHubURL
 
 // ChangeFailed explains a failed configuration change; restored reports
 // whether the previous configuration is back.

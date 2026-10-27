@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -23,9 +24,13 @@ type HTTPFetcher struct {
 }
 
 // NewHTTPFetcher returns a Fetcher with a generous timeout for slow VPS
-// networks.
-func NewHTTPFetcher() *HTTPFetcher {
-	return &HTTPFetcher{Client: &http.Client{Timeout: 10 * time.Minute}}
+// networks. dial replaces how connections are made (nil: directly).
+func NewHTTPFetcher(dial func(ctx context.Context, network, addr string) (net.Conn, error)) *HTTPFetcher {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	if dial != nil {
+		tr.DialContext = dial
+	}
+	return &HTTPFetcher{Client: &http.Client{Timeout: 10 * time.Minute, Transport: tr}}
 }
 
 func (f *HTTPFetcher) Redirect(ctx context.Context, url string) (string, error) {
