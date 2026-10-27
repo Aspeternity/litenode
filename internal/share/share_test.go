@@ -2,7 +2,6 @@ package share
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/netip"
 	"net/url"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
 )
@@ -236,19 +236,6 @@ func TestQRRendering(t *testing.T) {
 	}
 }
 
-func TestParseTrace(t *testing.T) {
-	body := []byte("fl=123\nh=1.1.1.1\nip=203.0.113.10\nts=1\nvisit_scheme=https\n")
-	if ip, ok := ParseTrace(body); !ok || ip.String() != "203.0.113.10" {
-		t.Errorf("ParseTrace = %v, %v", ip, ok)
-	}
-	if ip, ok := ParseTrace([]byte("ip=2001:db8::1\n")); !ok || !ip.Is6() {
-		t.Errorf("IPv6: %v %v", ip, ok)
-	}
-	if _, ok := ParseTrace([]byte("<html>")); ok {
-		t.Error("garbage parsed")
-	}
-}
-
 type fakeAddr string
 
 func (a fakeAddr) Network() string { return "ip+net" }
@@ -264,22 +251,24 @@ func addrs(s ...string) func() ([]net.Addr, error) {
 	}
 }
 
+func exits(v4, v6 string, warp4 bool) func(context.Context) egress.Status {
+	return func(context.Context) egress.Status {
+		var st egress.Status
+		if v4 != "" {
+			st.IPv4 = egress.Family{OK: true, IP: netip.MustParseAddr(v4), WARP: warp4}
+		}
+		if v6 != "" {
+			st.IPv6 = egress.Family{OK: true, IP: netip.MustParseAddr(v6)}
+		}
+		return st
+	}
+}
+
 func TestDetect(t *testing.T) {
 	ctx := context.Background()
-	trace := map[string]string{TraceURLv4: "ip=203.0.113.10\n", TraceURLv6: "ip=2001:db8:abcd::1\n"}
-	get := func(fail ...string) func(context.Context, string) ([]byte, error) {
-		return func(_ context.Context, u string) ([]byte, error) {
-			for _, f := range fail {
-				if f == u {
-					return nil, errors.New("unreachable")
-				}
-			}
-			return []byte(trace[u]), nil
-		}
-	}
 
 	// Both families answer: IPv4 first.
-	d := &Detector{Get: get(), InterfaceAddrs: addrs("10.0.0.5/24")}
+	d := &Detector{Egress: exits("203.0.113.10", "2001:db8:abcd::1", false), InterfaceAddrs: addrs("10.0.0.5/24")}
 	res := d.Detect(ctx)
 	if res.Source != SourceTrace || res.IPv4 != "203.0.113.10" || res.IPv6 != "2001:db8:abcd::1" {
 		t.Errorf("both: %+v", res)
@@ -293,8 +282,19 @@ func TestDetect(t *testing.T) {
 		t.Error("public IP reported on interface")
 	}
 
+	// IPv6-only with WARP for IPv4: the WARP address is not ours (D-132).
+	d = &Detector{Egress: exits("104.28.215.68", "2a01:4f8::1", true), InterfaceAddrs: addrs("10.0.0.5/24", "2a01:4f8::1/64")}
+	if res := d.Detect(ctx); res.IPv4 != "" || res.IPv6 != "2a01:4f8::1" || res.Source != SourceTrace {
+		t.Errorf("warp: %+v", res)
+	}
+	// WARP although the interface has a public IPv4: use that.
+	d = &Detector{Egress: exits("104.28.215.68", "", true), InterfaceAddrs: addrs("198.51.200.7/24")}
+	if res := d.Detect(ctx); res.IPv4 != "198.51.200.7" || res.Source != SourceInterface {
+		t.Errorf("warp with public interface: %+v", res)
+	}
+
 	// No network: fall back to interfaces, skipping non-public ones.
-	d = &Detector{Get: get(TraceURLv4, TraceURLv6), InterfaceAddrs: addrs(
+	d = &Detector{Egress: exits("", "", false), InterfaceAddrs: addrs(
 		"127.0.0.1/8", "10.0.0.5/24", "100.64.1.2/10", "fe80::1/64", "fd00::1/64", "198.51.200.7/24", "2a01:4f8::1/64")}
 	res = d.Detect(ctx)
 	if res.Source != SourceInterface || res.IPv4 != "198.51.200.7" || res.IPv6 != "2a01:4f8::1" {
@@ -305,7 +305,7 @@ func TestDetect(t *testing.T) {
 	}
 
 	// Nothing at all: the user must enter an address.
-	d = &Detector{Get: get(TraceURLv4, TraceURLv6), InterfaceAddrs: addrs("10.0.0.5/24")}
+	d = &Detector{Egress: exits("", "", false), InterfaceAddrs: addrs("10.0.0.5/24")}
 	if res := d.Detect(ctx); res.Source != SourceNone || len(res.Candidates()) != 0 {
 		t.Errorf("none: %+v", res)
 	}

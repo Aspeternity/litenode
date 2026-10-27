@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/forward"
 	"github.com/Aspeternity/litenode/internal/forwardmgr"
@@ -64,6 +65,15 @@ type Env struct {
 	ForwardDialer   forwardmgr.Dialer
 	// DNSProber tests DNS servers; nil queries them over the network.
 	DNSProber sysopt.DNSProber
+	// Egress detects the exits; nil asks Cloudflare (DESIGN 19.1).
+	Egress Egress
+}
+
+// Egress detects the IPv4 and IPv6 exits once per run (egress.Prober).
+type Egress interface {
+	Start(ctx context.Context)
+	Status(ctx context.Context) egress.Status
+	Reset()
 }
 
 func (env Env) fetcher() xray.Fetcher {
@@ -198,6 +208,12 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	if env.Session == nil {
 		return 0
 	}
+	eg := env.Egress
+	if eg == nil {
+		eg = egress.New()
+	}
+	// Runs alongside the rest of the startup; the main menu waits for it.
+	eg.Start(ctx)
 	svc, err := env.services(r, store)
 	if err != nil {
 		fmt.Fprintln(env.Stderr, text.ActionFailed(err))
@@ -214,7 +230,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		s.HoldAll = true
 		pause = true
 	}
-	nodes := &nodeUI{ctx: ctx, s: s, svc: svc, checker: env.TargetChecker, detector: env.AddressDetector, dns: env.Resolver}
+	nodes := &nodeUI{ctx: ctx, s: s, svc: svc, checker: env.TargetChecker, detector: env.AddressDetector, dns: env.Resolver, egress: eg}
 	if nodes.checker == nil {
 		nodes.checker = &reality.Checker{}
 	}
@@ -228,7 +244,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		nodes.scanner = s
 	}
 	if nodes.detector == nil {
-		nodes.detector = share.NewDetector()
+		nodes.detector = share.NewDetector(eg.Status)
 	}
 	sshSvc := &ssh.Service{Store: store, Confirmer: change.NewConfirmer(change.NewManager(r, store), env.Executable),
 		Fetcher: env.fetcher(), Rand: env.rand(), Firewall: firewall.SyncKind(store)}
@@ -263,7 +279,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		if installed {
 			active, _ = system.ServiceActive(ctx, r, xray.UnitName)
 		}
-		return mainMenu(s, env.Version, info, st, xrayStatus(s, installed, active, st), sshMainStatus(ctx, sshSvc),
+		return mainMenu(s, env.Version, info, egressStatus(s, eg.Status(ctx)), st, xrayStatus(s, installed, active, st), sshMainStatus(ctx, sshSvc),
 			fwSvc.BothActive(ctx, st),
 			func() error { return s.Run(nodes.menu) },
 			func() error { return s.Run(nodes.clientsMenu) },

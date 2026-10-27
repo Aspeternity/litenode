@@ -1,21 +1,11 @@
 package share
 
 import (
-	"bufio"
 	"context"
-	"crypto/tls"
-	"io"
 	"net"
-	"net/http"
 	"net/netip"
-	"strings"
-	"time"
-)
 
-// Cloudflare trace endpoints, reached by IP so no DNS is needed (D-041).
-const (
-	TraceURLv4 = "https://1.1.1.1/cdn-cgi/trace"
-	TraceURLv6 = "https://[2606:4700:4700::1111]/cdn-cgi/trace"
+	"github.com/Aspeternity/litenode/internal/egress"
 )
 
 // Source tells where detected addresses came from.
@@ -47,83 +37,56 @@ func (d Detected) Candidates() []string {
 
 // Detector finds the public address. Fields are replaceable in tests.
 type Detector struct {
-	// Get fetches a URL with a timeout and returns the body.
-	Get func(ctx context.Context, url string) ([]byte, error)
+	// Egress returns the detected exits (egress.Prober.Status).
+	Egress func(ctx context.Context) egress.Status
 	// InterfaceAddrs lists the addresses on the network interfaces.
 	InterfaceAddrs func() ([]net.Addr, error)
 }
 
-// NewDetector returns a Detector using HTTPS with a 5 second timeout.
-func NewDetector() *Detector {
-	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
-		Proxy:           nil, // never through a proxy: we want this host's address
-	}}
-	return &Detector{
-		Get: func(ctx context.Context, url string) ([]byte, error) {
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-			if err != nil {
-				return nil, err
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				return nil, err
-			}
-			defer resp.Body.Close()
-			return io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		},
-		InterfaceAddrs: net.InterfaceAddrs,
-	}
+// NewDetector returns a Detector using the given exit detection.
+func NewDetector(status func(ctx context.Context) egress.Status) *Detector {
+	return &Detector{Egress: status, InterfaceAddrs: net.InterfaceAddrs}
 }
 
-// Detect asks Cloudflare over IPv4 and IPv6; if neither answers it falls
-// back to public addresses on the network interfaces (D-041).
+// Detect uses the address Cloudflare saw for each family. A WARP exit is
+// Cloudflare's address, not this host's: that family falls back to a
+// public address on the network interfaces. If no family answered at
+// all, both fall back to the interfaces (D-041, D-132).
 func (d *Detector) Detect(ctx context.Context) Detected {
+	st := d.Egress(ctx)
+	var local []netip.Addr
+	if addrs, err := d.InterfaceAddrs(); err == nil {
+		local = publicAddrs(addrs)
+	}
+	fromLocal := func(v6 bool) string {
+		for _, ip := range local {
+			if ip.Is6() == v6 {
+				return ip.String()
+			}
+		}
+		return ""
+	}
 	var res Detected
-	for _, u := range []struct {
-		url  string
+	for _, f := range []struct {
 		dest *string
-		v4   bool
-	}{{TraceURLv4, &res.IPv4, true}, {TraceURLv6, &res.IPv6, false}} {
-		body, err := d.Get(ctx, u.url)
-		if err != nil {
-			continue
-		}
-		if ip, ok := ParseTrace(body); ok && ip.Is4() == u.v4 {
-			*u.dest = ip.String()
-		}
-	}
-	if res.IPv4 != "" || res.IPv6 != "" {
-		res.Source = SourceTrace
-		return res
-	}
-	addrs, err := d.InterfaceAddrs()
-	if err != nil {
-		return res
-	}
-	for _, ip := range publicAddrs(addrs) {
-		if ip.Is4() && res.IPv4 == "" {
-			res.IPv4 = ip.String()
-		} else if ip.Is6() && res.IPv6 == "" {
-			res.IPv6 = ip.String()
+		v6   bool
+	}{{&res.IPv4, false}, {&res.IPv6, true}} {
+		fam := st.Of(f.v6)
+		switch {
+		case fam.Native():
+			*f.dest = fam.IP.String()
+			res.Source = SourceTrace
+		case fam.WARP:
+			*f.dest = fromLocal(f.v6)
 		}
 	}
-	if res.IPv4 != "" || res.IPv6 != "" {
+	if !st.IPv4.OK && !st.IPv6.OK {
+		res.IPv4, res.IPv6 = fromLocal(false), fromLocal(true)
+	}
+	if res.Source == SourceNone && (res.IPv4 != "" || res.IPv6 != "") {
 		res.Source = SourceInterface
 	}
 	return res
-}
-
-// ParseTrace extracts the "ip=" line of a Cloudflare trace response.
-func ParseTrace(body []byte) (netip.Addr, bool) {
-	sc := bufio.NewScanner(strings.NewReader(string(body)))
-	for sc.Scan() {
-		if v, ok := strings.CutPrefix(sc.Text(), "ip="); ok {
-			ip, err := netip.ParseAddr(strings.TrimSpace(v))
-			return ip.Unmap(), err == nil
-		}
-	}
-	return netip.Addr{}, false
 }
 
 // nonPublic are ranges not reachable from the internet, beyond what
