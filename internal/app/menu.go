@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
@@ -8,7 +9,7 @@ import (
 )
 
 // mainMenu builds the main menu (DESIGN section 8).
-func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, xrayState, sshState string, ufwToo bool, nodes, clients, shareMenu, forwards, xrayMenu, sshMenu, firewallMenu, sysoptMenu, maintMenu func() error) ui.Menu {
+func mainMenu(s *ui.Session, version string, info system.Info, exits string, st *state.State, xrayState, sshState string, ufwToo bool, nodes, clients, shareMenu, forwards, xrayMenu, sshMenu, firewallMenu, sysoptMenu, maintMenu func() error) ui.Menu {
 	var warnings []string
 	if st.Xray.Stopped && enabledNodes(st) > 0 {
 		warnings = append(warnings, text.XrayManualWarning)
@@ -25,6 +26,7 @@ func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, 
 			SSH:      sshState,
 			Firewall: firewallMainStatus(s, st.Firewall.Enabled),
 			System:   info,
+			Egress:   exits,
 			Warnings: warnings,
 		}, s.Colors),
 		Grouped:   true,
@@ -41,6 +43,21 @@ func mainMenu(s *ui.Session, version string, info system.Info, st *state.State, 
 			{Label: text.MenuMaint, Group: 3, Page: true, Action: maintMenu},
 		},
 	}
+}
+
+// egressStatus renders the exits for the main menu system line (DESIGN
+// section 19.1).
+func egressStatus(s *ui.Session, st egress.Status) string {
+	mark := func(f egress.Family) string {
+		switch {
+		case f.WARP:
+			return s.Colors.Warn(text.ExitWARP)
+		case f.OK:
+			return text.ExitOK
+		}
+		return s.Colors.Bad(text.ExitNone)
+	}
+	return text.Exits(mark(st.IPv4), mark(st.IPv6))
 }
 
 func enabledNodes(st *state.State) int {

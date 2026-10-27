@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"net"
+	"net/netip"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/share"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
@@ -117,5 +119,35 @@ func TestShareAddressPage(t *testing.T) {
 	got, _ := state.NewStore(f).Load()
 	if want := []string{"here.example.com", "203.0.113.10"}; strings.Join(got.Server.ShareAddresses, ",") != strings.Join(want, ",") {
 		t.Errorf("addresses = %v", got.Server.ShareAddresses)
+	}
+}
+
+// v6Detector finds only an IPv6 address, as on an IPv6-only host with
+// WARP for IPv4.
+type v6Detector struct{}
+
+func (v6Detector) Detect(context.Context) share.Detected {
+	return share.Detected{IPv6: "2001:db8::10", Source: share.SourceTrace}
+}
+func (v6Detector) OnInterface(string) bool { return true }
+
+// TestWARPShareAddressReplaced: a WARP exit saved as the default address
+// by an older version is replaced when a node is added (D-132).
+func TestWARPShareAddressReplaced(t *testing.T) {
+	f := nodeSystem()
+	st := state.New()
+	st.Server.ShareAddresses = []string{"104.28.215.68", "here.example.com"}
+	state.NewStore(f).Save(st)
+	eg := fakeEgress{IPv4: egress.Family{OK: true, WARP: true, IP: netip.MustParseAddr("104.28.215.68")},
+		IPv6: egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}}
+	r := runEnv(t, Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
+		TargetChecker: fakeChecker{}, AddressDetector: v6Detector{}, Egress: eg},
+		strings.Join([]string{"1", "1", "1", "", "3", "www.example.com", "", "0", "0"}, "\n")+"\n")
+	if !strings.Contains(r.stdout, "@[2001:db8::10]:443?") {
+		t.Errorf("link not on IPv6:\n%s", r.stdout)
+	}
+	got, _ := state.NewStore(f).Load()
+	if want := "2001:db8::10,here.example.com"; strings.Join(got.Server.ShareAddresses, ",") != want {
+		t.Errorf("addresses = %v, want %s", got.Server.ShareAddresses, want)
 	}
 }

@@ -78,6 +78,8 @@ type MainStatus struct {
 	SSH      string
 	Firewall string
 	System   system.Info
+	// Egress is the pre-rendered exits, appended to the system line.
+	Egress string
 	// Warnings are shown below the system line, e.g. when the LiteNode
 	// firewall and ufw are both active (DESIGN section 2).
 	Warnings []string
@@ -110,6 +112,9 @@ func MainStatusLines(st MainStatus, c Colors) []string {
 			text.StatusForwards(st.Forwards),
 		column(text.StatusSSH(ssh), statusCol3) + text.StatusFirewall(fw),
 		SystemLine(st.System),
+	}
+	if st.Egress != "" {
+		lines[2] += " | " + st.Egress
 	}
 	for _, w := range st.Warnings {
 		lines = append(lines, c.Warn(text.Warning(w)))

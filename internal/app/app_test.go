@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"github.com/Aspeternity/litenode/internal/egress"
+	"net/netip"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -27,6 +29,13 @@ func run(t *testing.T, f *systemtest.Fake, euid int, input string, args ...strin
 	return runEnv(t, Env{Runner: f, Euid: euid, Args: args, LockPath: filepath.Join(t.TempDir(), "litenode.lock")}, input)
 }
 
+// fakeEgress reports fixed exits.
+type fakeEgress egress.Status
+
+func (fakeEgress) Start(context.Context)                  {}
+func (e fakeEgress) Status(context.Context) egress.Status { return egress.Status(e) }
+func (fakeEgress) Reset()                                 {}
+
 func runEnv(t *testing.T, env Env, input string) result {
 	t.Helper()
 	var out, errOut strings.Builder
@@ -36,6 +45,10 @@ func runEnv(t *testing.T, env Env, input string) result {
 	}
 	if env.Executable == "" {
 		env.Executable = "/usr/local/bin/litenode"
+	}
+	if env.Egress == nil {
+		env.Egress = fakeEgress{IPv4: egress.Family{OK: true, IP: netip.MustParseAddr("203.0.113.10")},
+			IPv6: egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}}
 	}
 	if input != "" {
 		env.Session = ui.NewSession(strings.NewReader(input), &out, nil, ui.Colors{})
@@ -217,5 +230,22 @@ func TestRunInternalRollback(t *testing.T) {
 	env.Euid = 1000
 	if r := runEnv(t, env, ""); r.code == 0 {
 		t.Error("rollback must require root")
+	}
+}
+
+// TestMainMenuExits: the system line shows the exits (DESIGN 19.1).
+func TestMainMenuExits(t *testing.T) {
+	for _, c := range []struct {
+		eg   fakeEgress
+		want string
+	}{
+		{fakeEgress{IPv4: egress.Family{OK: true, WARP: true}, IPv6: egress.Family{OK: true}}, "| IPv4 WARP  IPv6 ✓\n"},
+		{fakeEgress{IPv6: egress.Family{OK: true}}, "| IPv4 ✗  IPv6 ✓\n"},
+		{fakeEgress{IPv4: egress.Family{OK: true}}, "| IPv4 ✓  IPv6 ✗\n"},
+	} {
+		r := runEnv(t, Env{Runner: supported(), Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), Egress: c.eg}, "0\n")
+		if !strings.Contains(r.stdout, c.want) {
+			t.Errorf("want %q:\n%s", c.want, r.stdout)
+		}
 	}
 }

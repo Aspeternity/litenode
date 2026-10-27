@@ -65,6 +65,16 @@ func BBR(enabled bool) string {
 	return "BBR ✗"
 }
 
+// Exit marks of the main menu system line (DESIGN section 19.1).
+const (
+	ExitOK   = "✓"
+	ExitWARP = "WARP"
+	ExitNone = "✗"
+)
+
+// Exits shows the IPv4 and IPv6 exits, e.g. "IPv4 WARP  IPv6 ✓".
+func Exits(v4, v6 string) string { return "IPv4 " + v4 + "  IPv6 " + v6 }
+
 // Warning marks a warning line in a status area.
 func Warning(s string) string {
 	return "⚠ " + s

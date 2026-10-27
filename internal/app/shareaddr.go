@@ -4,6 +4,7 @@ import (
 	"net"
 	"slices"
 
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/share"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
@@ -20,14 +21,28 @@ func (u *nodeUI) shareAddresses() []string {
 // addresses the first time; only when nothing is detected does it ask.
 // "" means the user went back.
 func (u *nodeUI) ensureShareAddresses() (string, error) {
-	if list := u.shareAddresses(); len(list) > 0 {
+	list := u.shareAddresses()
+	if len(list) > 0 && !u.hasWARPAddress(list) {
 		return list[0], nil
 	}
-	list, err := u.detectAddresses(nil)
+	// Versions before M12 saved the WARP exit as this host's address;
+	// detecting again replaces it (D-132).
+	list, err := u.detectAddresses(list)
 	if err != nil || len(list) == 0 {
 		return "", err
 	}
 	return list[0], nil
+}
+
+// hasWARPAddress reports whether list holds the address of a WARP exit.
+func (u *nodeUI) hasWARPAddress(list []string) bool {
+	st := u.egress.Status(u.ctx)
+	for _, f := range []egress.Family{st.IPv4, st.IPv6} {
+		if f.WARP && slices.Contains(list, f.IP.String()) {
+			return true
+		}
+	}
+	return false
 }
 
 // detectAddresses detects the public addresses, merges them into list and

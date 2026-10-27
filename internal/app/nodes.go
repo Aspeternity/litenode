@@ -56,6 +56,7 @@ type nodeUI struct {
 	svc      *nodemgr.Service
 	checker  TargetChecker
 	detector AddressDetector
+	egress   Egress
 	scanner  TargetScanner
 	// dns resolves domains added as share addresses (nil: the system
 	// resolver).
