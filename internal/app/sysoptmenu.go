@@ -339,7 +339,7 @@ func (u *sysoptUI) dns() error {
 		}
 	}
 	if !d.Resolved {
-		u.s.Println(u.s.Colors.Warn(text.DNSResolvConfNote))
+		u.s.Println(u.s.Colors.Warn(text.DNSResolvConfNote(d.Openresolv)))
 	}
 	if err := u.svc.SetDNS(u.ctx, servers); err != nil {
 		return err
@@ -385,7 +385,7 @@ func (u *sysoptUI) offerDNSFix() (bool, error) {
 		u.s.Println(u.s.Colors.Warn(text.DNSUnreachableHint))
 		return true, nil
 	}
-	u.s.Println(u.s.Colors.Warn(text.DNSResolvConfNote))
+	u.s.Println(u.s.Colors.Warn(text.DNSResolvConfNote(d.Openresolv)))
 	servers := strings.Join(preset.Servers, " ")
 	yes, err := u.s.ConfirmYes(text.ConfirmDNSFix(preset.Name, servers))
 	if err != nil {

@@ -1125,3 +1125,9 @@
 - **内容**：见 DESIGN 19 节"DNS 第一个服务器不可达"。只在系统直接读 resolv.conf、没有 IPv4 出口、第一个服务器是 IPv4 且探测不应答时询问；默认是（新增 `Session.ConfirmYes`，`[Y/n]`）；改为第一个能应答的 IPv6 预设；拒绝后记入状态不再询问。install.sh 只提示原因。
 - **原因**：实测纯 IPv6 Debian 12 的 resolv.conf 是 `1.1.1.1 8.8.8.8 2001:4860:4860::8888 ...`，每次解析先等两个 IPv4 服务器超时：`getent` 6 秒，添加节点选完类型到提示 20 秒；Ubuntu 22.04 的 systemd-resolved 会记住能应答的服务器，0.5 秒。改成 IPv6 DNS 后同一步骤 0.0 秒。
 - **否决**：只显示提示（用户选择询问）；不询问直接修改（会在用户不知情时改系统设置）；每次启动都询问（拒绝后反复打扰）；systemd-resolved 时也提示（实测不慢）；不探测、只看地址族（私网 IPv4 解析服务器可能能应答）；install.sh 也修改 DNS（安装脚本只装程序；它的 DNS 修改只限 nat64.net 且会恢复）。
+
+### D-139 openresolv 系统上 DNS 设置在重启后保持（由 Claude 决定（用户授权），FIX-12）
+
+- **内容**：系统未使用 systemd-resolved 且存在 `/etc/resolvconf.conf`（openresolv）时，设置 DNS 除了写 `/etc/resolv.conf`，同一次变更还在 `/etc/resolvconf.conf` 末尾写入 LiteNode 标记行和 `name_servers="..."`（再次设置时替换，不动用户原有的行）。openresolv 重新生成 resolv.conf 时把这些服务器排在最前，网卡和 DHCP 给的服务器排在后面作为备用（glibc 只用前 3 个）。DNS 页面显示标记行中的服务器，状态为"LiteNode 设置"；全部卸载时列为保留的设置。
+- **原因**：实测纯 IPv6 Debian 13（cloud-init + ifupdown + openresolv）上 FIX-11 改好的 DNS 重启后被改回 `1.1.1.1 8.8.8.8 ...`（开机时 ifup 把 `dns-nameservers` 交给 resolvconf 重新生成），每次启动又询问。改后重启仍是 IPv6 DNS 在前，解析 0.01 秒，不再询问。
+- **否决**：`resolvconf=NO` 关闭 openresolv（会停掉 dnsmasq / unbound 等订阅者，也不再接收 DHCP 的服务器）；修改 `/etc/network/interfaces.d/50-cloud-init` 的 `dns-nameservers`（cloud-init 生成的文件，可能被重新生成）；`chattr +i` 锁定 resolv.conf（其他程序写入会失败，用户难以察觉）；同时处理 Debian 的 resolvconf 包（它管理的 resolv.conf 是软链接，LiteNode 原子写入会替换软链接，之后不再被改写，无需处理）。

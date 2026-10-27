@@ -109,18 +109,17 @@ func StatusPreference(ipv4 bool) string {
 
 // DNS (DESIGN section 15).
 const (
-	SysoptDNS         = "DNS"
-	DNSCustom         = "自定义"
-	DNSReset          = "恢复系统默认"
-	PromptDNSServers  = "DNS 服务器 IP（最多 3 个，空格分隔，0 返回）"
-	ErrDNSServers     = "请输入 1 到 3 个 IP 地址，用空格分隔。"
-	ConfirmDNSFailed  = "仍要使用这些 DNS 服务器？"
-	DNSResetDone      = "已恢复系统默认 DNS。"
-	DNSResolvConfNote = "系统未使用 systemd-resolved，将直接修改 /etc/resolv.conf。该文件可能被 DHCP、cloud-init 或 resolvconf 改回，届时请重新设置。"
-	DNSVerifyFailed   = "⚠ 设置后解析测试失败，请检查网络或换用其他 DNS。"
-	DNSNone           = "无"
-	DNSByLiteNode     = "LiteNode 设置"
-	DNSBySystem       = "系统配置"
+	SysoptDNS        = "DNS"
+	DNSCustom        = "自定义"
+	DNSReset         = "恢复系统默认"
+	PromptDNSServers = "DNS 服务器 IP（最多 3 个，空格分隔，0 返回）"
+	ErrDNSServers    = "请输入 1 到 3 个 IP 地址，用空格分隔。"
+	ConfirmDNSFailed = "仍要使用这些 DNS 服务器？"
+	DNSResetDone     = "已恢复系统默认 DNS。"
+	DNSVerifyFailed  = "⚠ 设置后解析测试失败，请检查网络或换用其他 DNS。"
+	DNSNone          = "无"
+	DNSByLiteNode    = "LiteNode 设置"
+	DNSBySystem      = "系统配置"
 )
 
 // DNSCurrent shows the DNS servers in use and where they come from.
@@ -297,4 +296,14 @@ func WARPHandshakeAgo(d time.Duration) string {
 		return fmt.Sprintf("最近握手 %d 分钟前", int(d.Minutes()))
 	}
 	return fmt.Sprintf("最近握手 %d 小时前", int(d.Hours()))
+}
+
+// DNSResolvConfNote says which files a DNS change writes when the system
+// does not use systemd-resolved; with openresolv the servers stay first
+// after a reboot (D-139).
+func DNSResolvConfNote(openresolv bool) string {
+	if openresolv {
+		return "系统未使用 systemd-resolved，将修改 /etc/resolv.conf，并在 /etc/resolvconf.conf 中把这些服务器排在最前，重启后仍然有效。"
+	}
+	return "系统未使用 systemd-resolved，将直接修改 /etc/resolv.conf。该文件可能被 DHCP 或 cloud-init 改回，届时请重新设置。"
 }
