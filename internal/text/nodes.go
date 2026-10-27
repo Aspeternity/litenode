@@ -201,6 +201,10 @@ func noGitHubHint(noIPv4 bool) string {
 	return "如果这台机器无法访问 GitHub，请参考 " + NoGitHubURL
 }
 
+// XrayNeedsIPv4 stops adding a node before any question when Xray is not
+// installed and GitHub cannot be reached for lack of an IPv4 exit (D-137).
+const XrayNeedsIPv4 = "⚠ 添加节点需要先从 GitHub 安装 Xray，但" + NoIPv4Download
+
 // NoIPv4Download explains why GitHub cannot be reached from an IPv6-only
 // host without NAT64 (DESIGN section 19.3).
 const NoIPv4Download = "本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。\n可在 系统优化 → WARP 开启 IPv4 出口后重试，或参考 " + IPv6OnlyURL

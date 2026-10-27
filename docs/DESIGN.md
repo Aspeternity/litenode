@@ -1207,7 +1207,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 
 - 下载（Xray、更新脚本）使用的 HTTP 客户端在 IPv4 出口不可用、IPv6 可用时，查询 `ipv4only.arpa` 的 AAAA 记录（RFC 7050）检测商家 DNS64 / NAT64：结果中嵌入了 `192.0.0.170` 或 `192.0.0.171` 的 /96 前缀即为 NAT64 前缀。之后只有 IPv4 地址的主机（github.com、release-assets.githubusercontent.com 等）用"前缀 + IPv4"连接。只影响本次运行的下载，不改系统 DNS 或路由。TLS 仍与原主机名建立，内容无法被篡改。
 - **公共 DNS64 只在 install.sh 中询问后使用**（D-136，修改 D-131）：不写死 NAT64 前缀（nat64.net 的服务条款禁止绕过其 DNS64）。LiteNode 程序本身不使用公共 DNS64，程序内补 IPv4 出口的方法是 WARP。
-- 没有 IPv4 出口且下载失败时，报错改为提示开启 WARP（系统优化 → WARP）或参考 README。
+- 没有 IPv4 出口且下载失败时，报错改为提示开启 WARP（系统优化 → WARP）或参考 README。添加节点时 Xray 未安装，选完节点类型就查询要安装的 Xray 版本：因没有 IPv4 出口而失败时立即提示先开启 WARP 并结束，不再询问端口和目标网站（D-137）；查询结果在本次添加中复用。
 - install.sh：`curl -4` 访问不到 trace 且 github.com 没有 IPv6 地址（系统 DNS 不是 DNS64）时，用 `getent ahostsv6 ipv4only.arpa` 检测 NAT64 前缀，有则对 github.com 和 release-assets.githubusercontent.com 用 `curl --resolve` 指向换算后的地址。都没有、且标准输入和输出都是终端时，说明情况和 nat64.net 服务条款链接，询问是否临时使用 nat64.net（默认否）：同意则把 `/etc/resolv.conf`（文件或软链接）原样移到 `/etc/resolv.conf.litenode-install`，写入 nat64.net 的 DNS 服务器，确认 github.com 能解析到 IPv6 地址后下载；安装结束、失败、Ctrl+C 或被结束时都移回原文件，并提示先开启 WARP 再安装 Xray。上次安装被强制结束留下备份时，下次运行先恢复。拒绝或不是终端时报错，提示手动上传程序或参考 README。
 
 ### 19.4 WARP（系统优化第 6 项，D-133）

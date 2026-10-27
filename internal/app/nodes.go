@@ -62,6 +62,11 @@ type nodeUI struct {
 	// dns resolves domains added as share addresses (nil: the system
 	// resolver).
 	dns share.Resolver
+	// xrayDefault is the Xray version the running add will install,
+	// queried once when Xray is not installed (queried reports it).
+	xrayDefault    string
+	xrayDefaultErr error
+	queried        bool
 }
 
 func (u *nodeUI) state() *state.State {
@@ -176,6 +181,18 @@ func (u *nodeUI) add() error {
 		u.s.Println(text.Hy2Hint)
 		if v, ok := u.svc.Xray.Installed(u.ctx); ok && !xray.SupportsHysteria(v) {
 			u.s.EndWarn(text.XrayTooOldFor(text.FeatureHysteria, v, xray.MinHysteriaVersion))
+			return nil
+		}
+	}
+	u.queried = false
+	if _, ok := u.svc.Xray.Installed(u.ctx); !ok {
+		// The first node installs Xray from GitHub, which cannot work
+		// without an IPv4 exit or NAT64: say so before asking anything
+		// (D-137).
+		u.xrayDefault, u.xrayDefaultErr = u.svc.Xray.DefaultVersion(u.ctx)
+		u.queried = true
+		if errors.Is(u.xrayDefaultErr, egress.ErrNoIPv4) {
+			u.s.EndWarn(text.XrayNeedsIPv4)
 			return nil
 		}
 	}
@@ -370,8 +387,11 @@ func (u *nodeUI) prepareChecker() {
 	}
 	v, installed := u.svc.Xray.Installed(u.ctx)
 	if !installed {
-		var err error
-		if v, err = u.svc.Xray.DefaultVersion(u.ctx); err != nil {
+		err := u.xrayDefaultErr
+		if v = u.xrayDefault; !u.queried {
+			v, err = u.svc.Xray.DefaultVersion(u.ctx)
+		}
+		if err != nil {
 			// The version to be installed is unknown; installing will
 			// fail the same way, so do not reject ML-KEM targets for it
 			// (D-130).
