@@ -65,6 +65,21 @@ func SupportsMLKEMTargets(v string) bool {
 	return v != "" && CompareVersions(v, MinMLKEMVersion) >= 0
 }
 
+// recentReleases lists recent releases, pre-releases included: from the
+// Atom feed, or the GitHub API if the feed fails (D-130).
+func (in *Installer) recentReleases(ctx context.Context) ([]Release, error) {
+	if data, err := in.Fetcher.Fetch(ctx, FeedURL(Repo), maxAPISize); err == nil {
+		if rs, err := ParseFeed(data); err == nil && len(rs) > 0 {
+			return rs, nil
+		}
+	}
+	data, err := in.Fetcher.Fetch(ctx, ReleasesURL, 32<<20)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReleases(data)
+}
+
 // ReleasesURL lists recent releases, newest first (pre-releases included).
 const ReleasesURL = "https://api.github.com/repos/" + Repo + "/releases?per_page=30"
 
@@ -117,13 +132,9 @@ func (in *Installer) DefaultVersion(ctx context.Context) (string, error) {
 	if SupportsMLKEMTargets(stable) {
 		return stable, nil
 	}
-	data, err := in.Fetcher.Fetch(ctx, ReleasesURL, 32<<20)
+	rs, err := in.recentReleases(ctx)
 	if err != nil {
 		return stable, nil // fall back to stable rather than fail
-	}
-	rs, err := ParseReleases(data)
-	if err != nil {
-		return stable, nil
 	}
 	return PickDefault(stable, rs), nil
 }

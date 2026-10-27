@@ -47,11 +47,7 @@ func NewInstaller(r system.Runner, f Fetcher, arch string) *Installer {
 
 // Latest returns the latest stable Xray version.
 func (in *Installer) Latest(ctx context.Context) (string, error) {
-	data, err := in.Fetcher.Fetch(ctx, LatestReleaseURL, maxAPISize)
-	if err != nil {
-		return "", fmt.Errorf("query latest xray release: %w", err)
-	}
-	return ParseLatestRelease(data)
+	return LatestTag(ctx, in.Fetcher, Repo)
 }
 
 // Installed returns the version of the installed Xray program, or false

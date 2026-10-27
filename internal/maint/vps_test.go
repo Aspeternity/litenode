@@ -43,6 +43,10 @@ func (t tamper) Fetch(ctx context.Context, url string, limit int64) ([]byte, err
 	return t.real.Fetch(ctx, url, limit)
 }
 
+func (t tamper) Redirect(ctx context.Context, url string) (string, error) {
+	return t.real.Redirect(ctx, url)
+}
+
 func TestVPSUpdateChecks(t *testing.T) {
 	ctx := context.Background()
 	before, err := os.ReadFile(BinPath)

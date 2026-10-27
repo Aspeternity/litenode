@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -47,21 +46,6 @@ func AssetName(goarch string) (string, error) {
 // DownloadURL returns the URL of a release asset.
 func DownloadURL(version, asset string) string {
 	return fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", Repo, version, asset)
-}
-
-// LatestReleaseURL is the GitHub API endpoint for the latest stable release.
-const LatestReleaseURL = "https://api.github.com/repos/" + Repo + "/releases/latest"
-
-// ParseLatestRelease extracts the tag from a GitHub "latest release" API
-// response.
-func ParseLatestRelease(data []byte) (string, error) {
-	var rel struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.Unmarshal(data, &rel); err != nil {
-		return "", fmt.Errorf("parse latest release: %w", err)
-	}
-	return NormalizeVersion(rel.TagName)
 }
 
 var versionRE = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)

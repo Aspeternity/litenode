@@ -15,6 +15,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 	"github.com/Aspeternity/litenode/internal/text"
+	"github.com/Aspeternity/litenode/internal/xray"
 )
 
 func TestMaintExportImport(t *testing.T) {
@@ -70,11 +71,18 @@ func (f releaseFetcher) Fetch(_ context.Context, url string, _ int64) ([]byte, e
 	return nil, errors.New("404")
 }
 
+func (f releaseFetcher) Redirect(_ context.Context, url string) (string, error) {
+	if d, ok := f[url]; ok {
+		return string(d), nil
+	}
+	return "", errors.New("404 " + url)
+}
+
 func TestMaintUpdate(t *testing.T) {
 	bin := []byte("new build")
 	sum := sha256.Sum256(bin)
 	fetch := releaseFetcher{
-		maint.LatestURL: []byte(`{"tag_name":"v0.1.0"}`),
+		xray.LatestPageURL(maint.Repo):                             []byte("https://github.com/" + maint.Repo + "/releases/tag/v0.1.0"),
 		maint.AssetURL("v0.1.0", "litenode-linux-"+runtime.GOARCH): bin,
 		maint.AssetURL("v0.1.0", "sha256sums.txt"):                 []byte(hex.EncodeToString(sum[:]) + "  litenode-linux-" + runtime.GOARCH + "\n"),
 	}

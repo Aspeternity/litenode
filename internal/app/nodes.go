@@ -368,7 +368,15 @@ func (u *nodeUI) prepareChecker() {
 	}
 	v, installed := u.svc.Xray.Installed(u.ctx)
 	if !installed {
-		v, _ = u.svc.Xray.DefaultVersion(u.ctx)
+		var err error
+		if v, err = u.svc.Xray.DefaultVersion(u.ctx); err != nil {
+			// The version to be installed is unknown; installing will
+			// fail the same way, so do not reject ML-KEM targets for it
+			// (D-130).
+			u.s.Println(u.s.Colors.Warn(text.XrayVersionUnknown(err, xray.MinMLKEMVersion)))
+			a.SetMLKEMSupported(true)
+			return
+		}
 	}
 	a.SetMLKEMSupported(xray.SupportsMLKEMTargets(v))
 }

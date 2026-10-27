@@ -31,6 +31,13 @@ func (f fakeFetcher) Fetch(_ context.Context, url string, limit int64) ([]byte, 
 	return data, nil
 }
 
+func (f fakeFetcher) Redirect(_ context.Context, url string) (string, error) {
+	if data, ok := f[url]; ok {
+		return string(data), nil
+	}
+	return "", fmt.Errorf("404 %s", url)
+}
+
 func makeZip(t *testing.T, files map[string]string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -67,7 +74,7 @@ type fixture struct {
 func newFixture(t *testing.T) *fixture {
 	fx := &fixture{r: systemtest.New(), f: fakeFetcher{}}
 	fx.in = &Installer{Runner: fx.r, Fetcher: fx.f, Arch: "amd64", Sleep: func(time.Duration) {}}
-	fx.f[LatestReleaseURL] = []byte(`{"tag_name": "v26.3.27"}`)
+	fx.f[LatestPageURL(Repo)] = []byte("https://github.com/XTLS/Xray-core/releases/tag/v26.3.27")
 	publish(t, fx.f, "v26.3.27", "program-26.3.27")
 	publish(t, fx.f, "v26.2.6", "program-26.2.6")
 	// "xray version" reports whatever version was last written.
@@ -258,13 +265,14 @@ func TestUninstall(t *testing.T) {
 	}
 }
 
-func TestLatestWithLongReleaseNotes(t *testing.T) {
+func TestDefaultVersionFeedWithLongReleaseNotes(t *testing.T) {
 	fx := newFixture(t)
-	// Real API responses carry the full release notes (well over 64 KiB).
+	// The feed carries the full release notes of each entry.
 	notes := strings.Repeat("x", 300<<10)
-	fx.f[LatestReleaseURL] = []byte(`{"tag_name": "v26.3.27", "body": "` + notes + `"}`)
-	if v, err := fx.in.Latest(context.Background()); err != nil || v != "v26.3.27" {
-		t.Errorf("Latest = (%q, %v)", v, err)
+	fx.f[LatestPageURL(Repo)] = []byte("https://github.com/XTLS/Xray-core/releases/tag/v26.3.27")
+	fx.f[FeedURL(Repo)] = []byte(`<feed xmlns="http://www.w3.org/2005/Atom"><entry><link rel="alternate" href="https://github.com/XTLS/Xray-core/releases/tag/v26.10.17"/><content>` + notes + `</content></entry></feed>`)
+	if v, err := fx.in.DefaultVersion(context.Background()); err != nil || v != "v26.10.17" {
+		t.Errorf("DefaultVersion = (%q, %v)", v, err)
 	}
 }
 
