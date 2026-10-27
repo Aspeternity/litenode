@@ -31,7 +31,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/sc
 - **端口转发**：nftables 内核转发 TCP / UDP，支持端口段和域名目标，不经过 Xray，几乎没有开销。
 - **防火墙**：nftables 防火墙，默认拒绝入站，节点和转发端口自动放行。
 - **SSH 安全**：登录方式（密钥 / 密码）、root 登录、SSH 端口、公钥和账户管理。
-- **系统优化**：BBR + fq、swap、IPv4 / IPv6 优先级、DNS、时区。
+- **系统优化**：BBR + fq、swap、IPv4 / IPv6 优先级、DNS、时区、WARP（为纯 IPv6 机器补上 IPv4 出口）。
 - **维护**：配置导出 / 导入、在线更新（sha256 校验）、两种卸载方式。
 
 **安全的变更方式**
@@ -107,7 +107,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/sc
  5. Xray 服务       启动 / 停止、日志、节点出站 IP、更新 Xray
  6. SSH 管理        登录方式、root 登录、SSH 端口、密钥、账户
  7. 防火墙管理      nftables 防火墙
- 8. 系统优化        BBR + fq、swap、IPv4 / IPv6 优先级、DNS、时区
+ 8. 系统优化        BBR + fq、swap、IPv4 / IPv6 优先级、DNS、时区、WARP
  9. 维护            导出 / 导入配置、更新、卸载
 ```
 
@@ -177,7 +177,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/sc
 
 ### 无法访问 GitHub 的机器
 
-安装 LiteNode、安装或更新 Xray、更新 LiteNode 都需要访问 GitHub。国内线路机和纯 IPv6 的 VPS（github.com 没有 IPv6 地址）通常无法访问。LiteNode 不内置镜像或下载代理：校验文件也要经过代理下载，用代理就等于完全信任代理。
+安装 LiteNode、安装或更新 Xray、更新 LiteNode 都需要访问 GitHub。国内线路机通常无法访问；纯 IPv6 的 VPS 见下面的[纯 IPv6 的 VPS](#纯-ipv6-的-vps)。LiteNode 不内置镜像或下载代理：校验文件也要经过代理下载，用代理就等于完全信任代理。
 
 <details>
 <summary>手动安装 LiteNode</summary>
@@ -206,19 +206,25 @@ Xray 只能由 LiteNode 从 GitHub 下载，不能手动安装。只做中转的
 
 </details>
 
-<details>
-<summary>纯 IPv6 的 VPS</summary>
+### 纯 IPv6 的 VPS
 
-<br>
+只有 IPv6（或只有内网 IPv4）的 VPS 访问不了 github.com 等只有 IPv4 的网站。主菜单第一行会显示出口情况，如 `IPv4 ✗  IPv6 ✓`。
 
-先让机器能访问 IPv4 网站，再用一行命令安装：
+**1. 安装 LiteNode**，按情况选一种：
 
-- 开启 Cloudflare WARP，得到 IPv4 出口；或者
-- 把 DNS 换成同时提供 NAT64 的公共 DNS64 服务（如 [nat64.net](https://nat64.net/)）。
+- **商家提供 NAT64**（系统 DNS 是商家的 DNS64）：直接执行一行命令安装。安装脚本和 LiteNode 会自动发现商家的 NAT64 并经它下载，不需要其他设置。
+- **没有 NAT64**：按上面的[手动安装 LiteNode](#无法访问-github-的机器) 上传程序。
+- 也可以自行把 DNS 临时换成公共 DNS64 / NAT64 服务（如 [nat64.net](https://nat64.net/)）后用一行命令安装。这类服务有自己的使用条款，请先阅读；LiteNode 不内置它们。
 
-节点本身用 IPv6 地址连接即可。开启 WARP 后，程序检测到的 IPv4 主机地址是 WARP 的出口地址，用它连接不上：在"分享节点 → 配置主机地址"中把 IPv6 地址设为默认，或删除这个 IPv4 地址。
+**2. 补上 IPv4 出口**：进入"系统优化 → WARP → 开启 WARP"。LiteNode 用系统的 WireGuard 注册一个免费的 Cloudflare WARP 账号，只让 IPv4 出站流量经 WARP；IPv6、入站连接和 SSH 不受影响，重启后保持。之后就可以安装 Xray、更新 LiteNode，节点也能访问只有 IPv4 的网站。WARP 端点偶尔会失效，LiteNode 每 2 分钟检查一次并自动换用可用的端点。
 
-</details>
+**3. 添加节点**：和普通 VPS 一样。分享链接使用本机的 IPv6 地址，客户端需要有 IPv6 才能连接。
+
+注意：
+
+- WARP 的出口 IP 属于 Cloudflare，不是本机地址，不会用作分享地址，也不能用来扫描附近网站（请从常用列表选择目标网站或手动输入）。
+- 商家默认 DNS 里常有连不上的 IPv4 服务器，会让域名解析很慢。"系统优化 → DNS"会标出不可达的服务器，预设会按本机情况改用 IPv6 地址。
+- 端口转发只在同一协议内进行，WARP 不提供入站，因此纯 IPv6 机器只能转发到有 IPv6 地址的目标。
 
 ### NAT 机
 
@@ -236,7 +242,7 @@ NAT 机没有独立的公网 IP，商家只分配一部分端口，外部端口�
 | 卸载脚本 | "维护 → 卸载脚本" | 只删除 LiteNode 程序，节点、转发、防火墙照常运行，重新安装后可继续管理 |
 | 全部卸载 | "维护 → 全部卸载" | 删除 Xray、所有节点、转发规则和 LiteNode；防火墙如果开着会保持生效 |
 
-两种卸载都不会撤销 SSH、防火墙、BBR、swap、DNS、时区的设置，避免机器恢复成密码登录、端口全开等不安全的状态。卸载完成后会列出保留下来的设置和文件位置。
+两种卸载都不会撤销 SSH、防火墙、BBR、swap、DNS、时区、WARP 的设置，避免机器恢复成密码登录、端口全开等不安全的状态。卸载完成后会列出保留下来的设置和文件位置。
 
 ## 反馈与安全
 

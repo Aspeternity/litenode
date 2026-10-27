@@ -87,6 +87,9 @@ const AlreadyRunning = "另一个 LiteNode 正在运行。请先退出另一个�
 // GitHub, including the manual install steps (D-042).
 const NoGitHubURL = "https://github.com/Aspeternity/litenode#无法访问-github-的机器"
 
+// IPv6OnlyURL is the README section on IPv6-only machines.
+const IPv6OnlyURL = "https://github.com/Aspeternity/litenode#纯-ipv6-的-vps"
+
 // LockFailed is shown when the lock file cannot be created.
 func LockFailed(err error) string {
 	return fmt.Sprintf("无法创建锁文件：%v\n请确认以 root 运行，且 /run 目录可写。", err)

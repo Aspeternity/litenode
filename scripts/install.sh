@@ -17,6 +17,7 @@ BIN_DIR="/usr/local/bin"
 BIN="${BIN_DIR}/litenode"
 LINK="${BIN_DIR}/lnode"
 README_URL="https://github.com/${REPO}#无法访问-github-的机器"
+IPV6_URL="https://github.com/${REPO}#纯-ipv6-的-vps"
 
 # Colors only when the output (fd 1 of the call, so "red ... >&2" checks
 # stderr) is a terminal and NO_COLOR is unset.
@@ -124,7 +125,7 @@ download() {
 	local name="$1"
 	if ! curl -fsSL --retry 3 --connect-timeout 15 "${curl_opts[@]}" -o "${tmp_dir}/${name}" "${BASE_URL}/${name}"; then
 		if [ -n "$no_ipv4" ]; then
-			die "下载 ${name} 失败，未做任何修改。本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。请参考 ${README_URL}（手动安装，或先开启 WARP / NAT64）"
+			die "下载 ${name} 失败，未做任何修改。本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。请参考 ${IPV6_URL}（手动上传程序后在 系统优化 → WARP 开启 IPv4 出口）"
 		fi
 		die "下载 ${name} 失败，未做任何修改。这台机器可能无法访问 GitHub，手动安装方法见 ${README_URL}"
 	fi
