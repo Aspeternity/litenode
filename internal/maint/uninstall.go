@@ -234,6 +234,9 @@ func (s *Service) keptSettings(st *state.State) []Kept {
 	} else if data, err := r.ReadFile(sysopt.ResolvConfPath); err == nil && sysopt.ResolvConfManaged(data) {
 		out = append(out, Kept{KeptDNS, sysopt.ResolvConfPath})
 	}
+	if data, err := r.ReadFile(sysopt.OpenresolvConfPath); err == nil && sysopt.OpenresolvManaged(data) {
+		out = append(out, Kept{KeptDNS, sysopt.OpenresolvConfPath})
+	}
 	if data, err := r.ReadFile(sysopt.GaiPath); err == nil && sysopt.ParseGai(data).Managed {
 		out = append(out, Kept{KeptGai, sysopt.GaiPath})
 	}

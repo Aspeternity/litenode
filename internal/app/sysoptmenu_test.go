@@ -118,7 +118,7 @@ func TestSysoptMenuDNS(t *testing.T) {
 	// 2 DNS, Cloudflare; back; quit.
 	r := runEnv(t, Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), DNSProber: probe}, in)
 	wantOutput(t, r.stdout, "当前 DNS：10.0.0.1（系统配置，/etc/resolv.conf）", "9.9.9.9 无法解析域名：timeout",
-		text.DNSResolvConfNote, text.DNSSet("1.1.1.1 1.0.0.1 2606:4700:4700::1111"))
+		text.DNSResolvConfNote(false), text.DNSSet("1.1.1.1 1.0.0.1 2606:4700:4700::1111"))
 	if strings.Contains(r.stdout, text.DNSUnreachableHint) {
 		t.Errorf("reachable server marked:\n%s", r.stdout)
 	}

@@ -10,11 +10,11 @@
 
 ## 下次会话从这里开始
 
-1. v0.4.1 已发布（FIX-07 成功结果也按回车返回、FIX-08 install.sh 询问后临时使用公共 DNS64、FIX-09 没有 IPv4 出口时添加节点先提示开启 WARP）。FIX-09 已在纯 IPv6 测试机上验证。FIX-10（经 nat64.net 下载失败时换网关重试）只改 install.sh。FIX-11（DNS 第一个服务器不可达时启动询问修复）需要发版才生效（发版前问用户）。
+1. v0.4.1 已发布（FIX-07 ~ FIX-09）。之后合并了 FIX-10（install.sh 经 nat64.net 下载失败时换网关重试）、FIX-11（DNS 第一个服务器不可达时启动询问修复）、FIX-12（openresolv 系统上 DNS 设置重启后保持，D-139）；三项已在纯 IPv6 Debian 13 上验证，用户 2026-10-28 要求验证通过后发布新版本。
 
 ## 测试 VPS
 
-- **纯 IPv6 测试机**（2026-10-27，Debian 13，425M，只有内网 IPv4）：访问方式在本机记忆中。WSL 没有 IPv6，经 Windows 上的中转程序作 ssh ProxyCommand 连接（见记忆）。当前状态：M12-06 从零走过一遍——用户 2026-10-28 重装为 Ubuntu 22.04（systemd-resolved，新密码在本机记忆中），经 nat64.net 安装了 v0.4.1；未开 WARP、未装 Xray。
+- **纯 IPv6 测试机**（2026-10-27，Debian 13，425M，只有内网 IPv4）：访问方式在本机记忆中。WSL 没有 IPv6，经 Windows 上的中转程序作 ssh ProxyCommand 连接（见记忆）。当前状态：用户 2026-10-28 重装为 Debian 13（cloud-init + ifupdown + openresolv，新密码在本机记忆中），经 nat64.net 安装后换成 main 构建；DNS 已由 LiteNode 设为 Cloudflare IPv6；未开 WARP、未装 Xray。
 - **双栈测试机**（2026-10-27，Debian 11，用户说可随便使用）：作客户端 / 探测机，能经 IPv6 访问纯 IPv6 机；上面有 LiteNode v0.2.0-m11 和 Xray。访问方式在本机记忆中。
 - 原 Debian 12 测试机（2026-10-23）已改为仅密钥登录，暂不可用。
 - 测试机的 IP、密码只保存在本机记忆中，**不写入仓库**（测试数据用文档专用地址 192.0.2.0/24、198.51.100.0/24、203.0.113.0/24、2001:db8::/32）。

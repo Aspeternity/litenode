@@ -667,6 +667,11 @@ v0.3.0 之后的小修复，不属于任何阶段，按编号单独提交。
 - 验收：[x] 条件判断（resolved、IPv6 在前、有 IPv4 出口时不提示）单元测试；启动时询问、回车即改为第一个能应答的 IPv6 预设；拒绝后不再询问；WARP 出口或私网服务器能应答时不询问（单元测试）。shellcheck 通过。全部测试通过。
 - 验收：[x] [VPS]（2026-10-28，纯 IPv6 测试机 Ubuntu 22.04，临时把 resolv.conf 换成 `1.1.1.1 8.8.8.8 2001:4860:4860::8888` 模拟 Debian 的配置）启动时显示原因和 `[Y/n]`，回车后 DNS 改为 Cloudflare IPv6 并停住；添加节点选完类型到出现提示由 20.4 秒变为 0.0 秒；再次启动不询问。测试后恢复原 resolv.conf。
 
+### FIX-12 openresolv 系统上 DNS 设置在重启后保持 `已完成`
+- 纯 IPv6 Debian 13（cloud-init + openresolv）上 FIX-11 改好的 DNS 重启后被改回，每次启动又询问。方案见 D-139。
+- 验收：[x] 写入 / 替换 resolvconf.conf 的标记行、状态读取、卸载列出（单元测试）。全部测试通过。
+- 验收：[x] [VPS]（2026-10-28，纯 IPv6 测试机 Debian 13）启动询问回车后 resolv.conf 和 resolvconf.conf 都写入 Cloudflare IPv6；`resolvconf -u` 和重启后 IPv6 DNS 仍在最前，`getent` 由 6.3 秒变为 0.01 秒，再次启动不询问；菜单改为 Google 时标记行被替换（只有一组）；提示文字为 openresolv 版本。
+
 ## 未排期
 
 产品成熟后再决定（D-089）：
