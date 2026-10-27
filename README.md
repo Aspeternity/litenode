@@ -213,8 +213,8 @@ Xray 只能由 LiteNode 从 GitHub 下载，不能手动安装。只做中转的
 **1. 安装 LiteNode**，按情况选一种：
 
 - **商家提供 NAT64**（系统 DNS 是商家的 DNS64）：直接执行一行命令安装。安装脚本和 LiteNode 会自动发现商家的 NAT64 并经它下载，不需要其他设置。
-- **没有 NAT64**：按上面的[手动安装 LiteNode](#无法访问-github-的机器) 上传程序。
-- 也可以自行把 DNS 临时换成公共 DNS64 / NAT64 服务（如 [nat64.net](https://nat64.net/)）后用一行命令安装。这类服务有自己的使用条款，请先阅读；LiteNode 不内置它们。
+- **没有 NAT64**：执行一行命令时，安装脚本会询问是否临时使用公共 DNS64 / NAT64 服务 [nat64.net](https://nat64.net/)（默认否）。同意后安装期间把系统 DNS 换成它的服务器，安装结束后自动换回。这是第三方服务，使用即表示同意它的[服务条款](https://nat64.net/tos)，请先阅读。
+- 不想使用 nat64.net 时，按上面的[手动安装 LiteNode](#无法访问-github-的机器) 上传程序。
 
 **2. 补上 IPv4 出口**：进入"系统优化 → WARP → 开启 WARP"。LiteNode 用系统的 WireGuard 注册一个免费的 Cloudflare WARP 账号，只让 IPv4 出站流量经 WARP；IPv6、入站连接和 SSH 不受影响，重启后保持。之后就可以安装 Xray、更新 LiteNode，节点也能访问只有 IPv4 的网站。WARP 端点偶尔会失效，LiteNode 每 2 分钟检查一次并自动换用可用的端点。
 

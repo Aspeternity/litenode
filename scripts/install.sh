@@ -18,6 +18,11 @@ BIN="${BIN_DIR}/litenode"
 LINK="${BIN_DIR}/lnode"
 README_URL="https://github.com/${REPO}#无法访问-github-的机器"
 IPV6_URL="https://github.com/${REPO}#纯-ipv6-的-vps"
+# Public DNS64 servers of nat64.net, used only when the user agrees (D-136).
+PUBLIC_DNS64=(2a00:1098:2b::1 2a00:1098:2c::1 2a01:4f9:c010:3f02::1)
+PUBLIC_DNS64_TOS="https://nat64.net/tos"
+RESOLV="/etc/resolv.conf"
+RESOLV_BACKUP="/etc/resolv.conf.litenode-install"
 
 # Colors only when the output (fd 1 of the call, so "red ... >&2" checks
 # stderr) is a terminal and NO_COLOR is unset.
@@ -41,11 +46,35 @@ die() {
 
 tmp_dir=""
 tmp_bin=""
+# resolv_saved: RESOLV_BACKUP holds the original resolv.conf.
+resolv_saved=""
 cleanup() {
 	if [ -n "$tmp_dir" ]; then rm -rf "$tmp_dir"; fi
 	if [ -n "$tmp_bin" ]; then rm -f "$tmp_bin"; fi
+	restore_resolv
 }
 trap cleanup EXIT
+# Ctrl+C and kill still restore the DNS settings through the EXIT trap.
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+# restore_resolv puts back the resolv.conf moved aside by use_public_dns64
+# (a file or a symlink, as it was).
+restore_resolv() {
+	if [ -n "$resolv_saved" ]; then
+		mv -f "$RESOLV_BACKUP" "$RESOLV"
+		resolv_saved=""
+	fi
+}
+
+# recover_resolv puts back a resolv.conf left by a run that was killed
+# before it could restore it.
+recover_resolv() {
+	if [ -e "$RESOLV_BACKUP" ] || [ -L "$RESOLV_BACKUP" ]; then
+		mv -f "$RESOLV_BACKUP" "$RESOLV"
+		yellow "已恢复上次安装中断时留下的 DNS 设置（${RESOLV}）。"
+	fi
+}
 
 check_root() {
 	if [ "$(id -u)" -ne 0 ]; then
@@ -84,6 +113,8 @@ detect_arch() {
 # Extra curl options; setup_nat64 fills them.
 curl_opts=()
 no_ipv4=""
+# public_dns64: downloading through nat64.net's DNS64 (D-136).
+public_dns64=""
 
 # nat64_prefix prints the provider's /96 NAT64 prefix, found from the
 # AAAA records its DNS64 gives the IPv4-only name ipv4only.arpa (RFC 7050),
@@ -121,9 +152,45 @@ setup_nat64() {
 	echo "本机没有 IPv4 出口，经商家的 NAT64（${prefix}/96）下载。"
 }
 
+# use_public_dns64 offers, when there is no IPv4 exit and no NAT64, to
+# point the system DNS at nat64.net's DNS64 for the download (default no);
+# cleanup puts the original resolv.conf back (D-136).
+use_public_dns64() {
+	if [ -z "$no_ipv4" ] || ! [ -t 0 ] || ! [ -t 1 ]; then
+		return 0
+	fi
+	local answer server
+	echo "本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。"
+	echo "可以临时使用公共 DNS64 / NAT64 服务 nat64.net 下载：安装期间把系统 DNS 换成它的服务器，安装结束后自动换回。"
+	echo "这是第三方服务，使用即表示同意它的服务条款，请先阅读：${PUBLIC_DNS64_TOS}"
+	read -r -p "是否临时使用 nat64.net？[y/N]: " answer || answer=""
+	case "$answer" in
+	y | Y | yes | YES) ;;
+	*) return 0 ;;
+	esac
+	mv -f "$RESOLV" "$RESOLV_BACKUP" || die "无法修改 ${RESOLV}，未做任何修改。"
+	resolv_saved=1
+	{
+		echo "# Temporary DNS64 set by the LiteNode installer; restored when it ends."
+		for server in "${PUBLIC_DNS64[@]}"; do
+			echo "nameserver ${server}"
+		done
+	} >"$RESOLV"
+	chmod 644 "$RESOLV"
+	if ! getent ahostsv6 github.com 2>/dev/null | awk 'tolower($1) !~ /^::ffff:/ { found = 1 } END { exit !found }'; then
+		die "无法通过 nat64.net 的 DNS 服务器解析 github.com，已恢复原来的 DNS 设置，未做任何修改。请参考 ${IPV6_URL}"
+	fi
+	no_ipv4=""
+	public_dns64=1
+	echo "已临时改用 nat64.net 的 DNS（原设置备份在 ${RESOLV_BACKUP}）。"
+}
+
 download() {
 	local name="$1"
 	if ! curl -fsSL --retry 3 --connect-timeout 15 "${curl_opts[@]}" -o "${tmp_dir}/${name}" "${BASE_URL}/${name}"; then
+		if [ -n "$public_dns64" ]; then
+			die "经 nat64.net 下载 ${name} 失败，已恢复原来的 DNS 设置，未做任何修改。请参考 ${IPV6_URL}"
+		fi
 		if [ -n "$no_ipv4" ]; then
 			die "下载 ${name} 失败，未做任何修改。本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。请参考 ${IPV6_URL}（手动上传程序后在 系统优化 → WARP 开启 IPv4 出口）"
 		fi
@@ -172,7 +239,9 @@ main() {
 	name="litenode-linux-${arch}"
 
 	tmp_dir="$(mktemp -d)"
+	recover_resolv
 	setup_nat64
+	use_public_dns64
 	echo "正在下载 LiteNode（${arch}）……"
 	download "$name"
 	download sha256sums.txt
@@ -183,6 +252,11 @@ main() {
 	install_link
 	green "安装完成：$("$BIN" version)"
 	echo "以后输入 litenode 或 lnode 即可打开菜单。"
+	if [ -n "$public_dns64" ]; then
+		restore_resolv
+		echo "已恢复原来的 DNS 设置。"
+		yellow "本机没有 IPv4 出口：安装 Xray、以后更新前，请先在 系统优化 → WARP 开启 IPv4 出口。"
+	fi
 
 	cleanup
 	trap - EXIT
