@@ -55,7 +55,7 @@ func TestVPSUpdateChecks(t *testing.T) {
 	}
 	bakBefore, bakErr := os.ReadFile(BakPath)
 	r := system.NewReal(nil)
-	real := xray.NewHTTPFetcher()
+	real := xray.NewHTTPFetcher(nil)
 	tag, err := (&Updater{Runner: r, Fetcher: real, Arch: runtime.GOARCH}).Latest(ctx)
 	if err != nil {
 		t.Fatal(err)

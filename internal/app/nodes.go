@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/firewall"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
@@ -635,9 +636,9 @@ func describe(err error) string {
 	case errors.As(err, &pt):
 		return portConflicts(pt.Conflicts)
 	case errors.As(err, &ie):
-		return text.XrayInstallFailed(ie.Err)
+		return text.XrayInstallFailed(ie.Err, errors.Is(err, egress.ErrNoIPv4))
 	case errors.As(err, &de):
-		return text.XrayDownloadFailed(de.Err)
+		return text.XrayDownloadFailed(de.Err, errors.Is(err, egress.ErrNoIPv4))
 	case errors.As(err, &ce):
 		return text.ChangeFailed(ce, ce.RestoreErr == nil)
 	}

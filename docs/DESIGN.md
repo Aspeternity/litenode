@@ -1207,7 +1207,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 - 下载（Xray、更新脚本）使用的 HTTP 客户端在 IPv4 出口不可用、IPv6 可用时，查询 `ipv4only.arpa` 的 AAAA 记录（RFC 7050）检测商家 DNS64 / NAT64：结果中嵌入了 `192.0.0.170` 或 `192.0.0.171` 的 /96 前缀即为 NAT64 前缀。之后只有 IPv4 地址的主机（github.com、release-assets.githubusercontent.com 等）用"前缀 + IPv4"连接。只影响本次运行的下载，不改系统 DNS 或路由。TLS 仍与原主机名建立，内容无法被篡改。
 - **不内置公共 NAT64**：nat64.net 的服务条款禁止绕过其 DNS64 的网关分配直接使用前缀，且条款可随时修改、要求使用者自己关注，不适合写进软件。公共 NAT64 / DNS64 只在 README 介绍，由用户自己决定。
 - 没有 IPv4 出口且下载失败时，报错改为提示开启 WARP（系统优化 → WARP）或参考 README。
-- install.sh：`curl -4` 访问不到 trace 且 github.com 没有 IPv6 地址时，用 `getent ahostsv6 ipv4only.arpa` 检测 NAT64 前缀，有则对 github.com 和 release-assets.githubusercontent.com 用 `curl --resolve` 指向换算后的地址；否则提示可先手动开启 WARP 或参考 README。
+- install.sh：`curl -4` 访问不到 trace 且 github.com 没有 IPv6 地址（系统 DNS 不是 DNS64）时，用 `getent ahostsv6 ipv4only.arpa` 检测 NAT64 前缀，有则对 github.com 和 release-assets.githubusercontent.com 用 `curl --resolve` 指向换算后的地址；否则提示可先手动开启 WARP 或参考 README。
 
 ### 19.4 WARP（系统优化第 6 项，D-133）
 

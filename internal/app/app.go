@@ -80,7 +80,7 @@ func (env Env) fetcher() xray.Fetcher {
 	if env.XrayFetcher != nil {
 		return env.XrayFetcher
 	}
-	return xray.NewHTTPFetcher()
+	return xray.NewHTTPFetcher(nil)
 }
 
 func (env Env) dnsProber() sysopt.DNSProber {
@@ -214,6 +214,11 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	}
 	// Runs alongside the rest of the startup; the main menu waits for it.
 	eg.Start(ctx)
+	if env.XrayFetcher == nil {
+		// Downloads use the provider's NAT64 when there is no IPv4 exit
+		// (DESIGN section 19.3).
+		env.XrayFetcher = xray.NewHTTPFetcher(egress.NewDialer(eg.Status).DialContext)
+	}
 	svc, err := env.services(r, store)
 	if err != nil {
 		fmt.Fprintln(env.Stderr, text.ActionFailed(err))

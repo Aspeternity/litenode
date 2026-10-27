@@ -588,10 +588,10 @@
 - 主菜单状态行显示出口情况；WARP 出口不作默认分享地址、不提示 NAT 机、不用于扫描附近网站。
 - 验收：[x] 单元测试（trace 解析、只检测一次、WARP 地址不作分享地址、旧版本保存的 WARP 地址被替换、主菜单显示）；[x] [VPS] 纯 IPv6 显示 `IPv4 ✗  IPv6 ✓`；纯 IPv6 + WARP 显示 `IPv4 WARP  IPv6 ✓`、默认地址为本机 IPv6、无 NAT 提示；双栈（Debian 11）显示 `IPv4 ✓  IPv6 ✓`、默认 IPv4。
 
-### M12-03 没有 IPv4 出口时经 NAT64 下载 `未开始`
-- 先用 `ipv4only.arpa` 检测商家 NAT64 并自动使用；否则询问是否经公共 NAT64（默认否），内置两三个备选前缀，全部失败时给出 README 链接。只影响本次下载，不改系统 DNS / 路由。install.sh 同样处理（`curl --resolve`）。
-- 动手前先查公共 NAT64（nat64.net 等）是否允许被软件内置；不允许则只做商家 NAT64 检测，公共服务只在 README 介绍。
-- 验收：[ ] 单元测试（前缀换算、检测、询问）；[ ] [VPS] 纯 IPv6 机器一行命令安装、安装 Xray、更新脚本。
+### M12-03 没有 IPv4 出口时经 NAT64 下载 `已完成`
+- 用 `ipv4only.arpa` 检测商家 NAT64 并自动使用（只影响本次下载，不改系统 DNS / 路由）；install.sh 同样处理（`curl --resolve`）。
+- 公共 NAT64：查了 nat64.net 服务条款，禁止绕过其 DNS64 的网关分配直接使用前缀、条款可随时修改，**不内置**，只在 README 介绍（D-131）；程序内补 IPv4 出口的方法是 WARP（M12-04）。没有 IPv4 出口也没有 NAT64 时，报错提示开启 WARP 或参考 README。
+- 验收：[x] 单元测试（前缀识别与换算、拨号选择、无 NAT64 的错误与提示）；[x] [VPS] 纯 IPv6 测试机（关闭 WARP，临时使用 nat64.net 的 DNS64 模拟商家 NAT64）：一行命令安装成功；安装 Xray 成功；用 /etc/hosts 让 github.com 只有 IPv4，更新脚本经前缀换算成功；恢复原 DNS 后更新和 install.sh 都给出 WARP 提示。
 
 ### M12-04 WARP 管理 `未开始`
 - 系统优化第 6 项。`wireguard-tools`（apt）+ 内核 WireGuard；密钥（`crypto/ecdh` X25519）和注册（`api.cloudflareclient.com`）用 Go 标准库；只补本机缺少的协议（纯 IPv6 只让 IPv4 走 WARP），不影响 SSH，不需要限时确认。

@@ -70,8 +70,12 @@ func UpdateDone(latest, bak string) string {
 	return fmt.Sprintf("已更新到 %s，旧版本保留为 %s（恢复：mv %s /usr/local/bin/litenode）。", latest, bak, bak)
 }
 
-// UpdateFailed explains a failed query or download (D-042).
-func UpdateFailed(err error) string {
+// UpdateFailed explains a failed query or download (D-042); noIPv4 as in
+// XrayInstallFailed.
+func UpdateFailed(err error, noIPv4 bool) string {
+	if noIPv4 {
+		return fmt.Sprintf("更新失败，未做任何修改：%v\n%s", err, NoIPv4Download)
+	}
 	return fmt.Sprintf("更新失败，未做任何修改：%v\n如果这台机器无法访问 GitHub，手动更新方法见 %s", err, NoGitHubURL)
 }
 

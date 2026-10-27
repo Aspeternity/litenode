@@ -214,7 +214,7 @@ func keySetup(t *testing.T) (context.Context, system.Runner, *Service) {
 	r := system.NewReal(nil)
 	store := state.NewStore(r)
 	return context.Background(), r, &Service{Store: store, Confirmer: change.NewConfirmer(change.NewManager(r, store), "/usr/local/bin/litenode"),
-		Fetcher: xray.NewHTTPFetcher(), Rand: rand.Reader}
+		Fetcher: xray.NewHTTPFetcher(nil), Rand: rand.Reader}
 }
 
 // TestVPSGitHubImport (M2-03) imports a GitHub user's keys for root:

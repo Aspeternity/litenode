@@ -6,6 +6,7 @@ import (
 	"io/fs"
 
 	"github.com/Aspeternity/litenode/internal/change"
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/maint"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/text"
@@ -118,7 +119,7 @@ func (u *maintUI) update() error {
 	u.s.Println(text.UpdateChecking)
 	latest, err := u.upd.Latest(u.ctx)
 	if err != nil {
-		u.s.EndWarn(text.UpdateFailed(err))
+		u.s.EndWarn(text.UpdateFailed(err, errors.Is(err, egress.ErrNoIPv4)))
 		return nil
 	}
 	if !maint.UpdateAvailable(u.version, latest) {
@@ -139,7 +140,7 @@ func (u *maintUI) update() error {
 		u.s.EndWarn(text.ErrUpdateBadBinary(err))
 		return nil
 	case err != nil:
-		u.s.EndWarn(text.UpdateFailed(err))
+		u.s.EndWarn(text.UpdateFailed(err, errors.Is(err, egress.ErrNoIPv4)))
 		return nil
 	}
 	u.s.Done(text.UpdateDone(latest, maint.BakPath))
