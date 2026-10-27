@@ -265,7 +265,8 @@ func TestRunHoldsAfterContentAndErrors(t *testing.T) {
 		// After a hold the next line only returns to the menu: "1" is
 		// not taken as a choice.
 		{"content", "1\n1\n0\n", 1},
-		{"one line", "2\n2\n0\n", 0},
+		// D-135: a one-line success holds too.
+		{"one line", "2\n2\n0\n", 1},
 		{"error", "3\n\n0\n", 1},
 		// D-128: nothing to do, or no result without a question, holds; a
 		// cancel after a question does not.
