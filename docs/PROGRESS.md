@@ -4,17 +4,17 @@
 
 ## 当前状态
 
-- **M0 ~ M12 全部完成**，最新版本 **v0.4.1**（2026-10-27，FIX-07 ~ FIX-09；v0.4.0 为 M12 纯 IPv6 支持；v0.3.4 为 FIX-05、FIX-06；v0.3.3 为 FIX-04；v0.3.2 为 FIX-03 与 Go 1.27.3；v0.3.1 为 FIX-01、FIX-02；v0.3.0 为 M11 Hysteria2）。各阶段内容见 ROADMAP，发布记录见 GitHub Releases。
+- **M0 ~ M12 全部完成**，最新版本 **v0.4.2**（2026-10-28，FIX-10 ~ FIX-12；v0.4.1 为 FIX-07 ~ FIX-09；v0.4.0 为 M12 纯 IPv6 支持；v0.3.4 为 FIX-05、FIX-06；v0.3.3 为 FIX-04；v0.3.2 为 FIX-03 与 Go 1.27.3；v0.3.1 为 FIX-01、FIX-02；v0.3.0 为 M11 Hysteria2）。各阶段内容见 ROADMAP，发布记录见 GitHub Releases。
 - **用户决定（2026-10-20）：暂时不增加新功能**。ROADMAP"未排期"中的项目保留，等用户提出再排期。
 - **项目收尾（2026-10-20，D-121）**：测试用的真实 IP 换成文档专用地址；新增 Dependabot、Issue 模板、SECURITY.md、CI 的 govulncheck、README 徽章；调整 GitHub 仓库设置。
 
 ## 下次会话从这里开始
 
-1. v0.4.1 已发布（FIX-07 ~ FIX-09）。之后合并了 FIX-10（install.sh 经 nat64.net 下载失败时换网关重试）、FIX-11（DNS 第一个服务器不可达时启动询问修复）、FIX-12（openresolv 系统上 DNS 设置重启后保持，D-139）；三项已在纯 IPv6 Debian 13 上验证，用户 2026-10-28 要求验证通过后发布新版本。
+1. v0.4.2 已发布（FIX-10 ~ FIX-12，已在纯 IPv6 Debian 13 上验证，发布后的程序也在该机安装通过）。没有排期中的任务，等用户提出。
 
 ## 测试 VPS
 
-- **纯 IPv6 测试机**（2026-10-27，Debian 13，425M，只有内网 IPv4）：访问方式在本机记忆中。WSL 没有 IPv6，经 Windows 上的中转程序作 ssh ProxyCommand 连接（见记忆）。当前状态：用户 2026-10-28 重装为 Debian 13（cloud-init + ifupdown + openresolv，新密码在本机记忆中），经 nat64.net 安装后换成 main 构建；DNS 已由 LiteNode 设为 Cloudflare IPv6；未开 WARP、未装 Xray。
+- **纯 IPv6 测试机**（2026-10-27，Debian 13，425M，只有内网 IPv4）：访问方式在本机记忆中。WSL 没有 IPv6，经 Windows 上的中转程序作 ssh ProxyCommand 连接（见记忆）。当前状态：用户 2026-10-28 重装为 Debian 13（cloud-init + ifupdown + openresolv，新密码在本机记忆中），经 nat64.net 安装了 v0.4.2；DNS 已由 LiteNode 设为 Cloudflare IPv6；未开 WARP、未装 Xray。
 - **双栈测试机**（2026-10-27，Debian 11，用户说可随便使用）：作客户端 / 探测机，能经 IPv6 访问纯 IPv6 机；上面有 LiteNode v0.2.0-m11 和 Xray。访问方式在本机记忆中。
 - 原 Debian 12 测试机（2026-10-23）已改为仅密钥登录，暂不可用。
 - 测试机的 IP、密码只保存在本机记忆中，**不写入仓库**（测试数据用文档专用地址 192.0.2.0/24、198.51.100.0/24、203.0.113.0/24、2001:db8::/32）。
