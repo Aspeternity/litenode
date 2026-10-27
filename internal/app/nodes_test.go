@@ -634,3 +634,18 @@ func TestTargetCheckXrayVersionUnknown(t *testing.T) {
 		t.Errorf("supported = %v:\n%s", ok, r.stdout)
 	}
 }
+
+// TestAddNodeNoIPv4StopsEarly: with Xray not installed and GitHub
+// unreachable for lack of an IPv4 exit, adding a node says to turn on WARP
+// before asking for the port (D-137).
+func TestAddNodeNoIPv4StopsEarly(t *testing.T) {
+	env := Env{Runner: supported(), Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
+		TargetChecker: fakeChecker{}, AddressDetector: fakeDetector{}, XrayFetcher: noIPv4Fetcher{}}
+	r := runEnv(t, env, "1\n1\n1\n0\n0\n")
+	if !strings.Contains(r.stdout, text.XrayNeedsIPv4) {
+		t.Errorf("no WARP hint:\n%s", r.stdout)
+	}
+	if strings.Contains(r.stdout, "1/3 "+text.PromptPort) {
+		t.Errorf("asked for the port:\n%s", r.stdout)
+	}
+}
