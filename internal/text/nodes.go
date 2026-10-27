@@ -203,7 +203,7 @@ func noGitHubHint(noIPv4 bool) string {
 
 // NoIPv4Download explains why GitHub cannot be reached from an IPv6-only
 // host without NAT64 (DESIGN section 19.3).
-const NoIPv4Download = "本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。\n可在 系统优化 → WARP 开启 IPv4 出口后重试，或参考 " + NoGitHubURL
+const NoIPv4Download = "本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。\n可在 系统优化 → WARP 开启 IPv4 出口后重试，或参考 " + IPv6OnlyURL
 
 // ChangeFailed explains a failed configuration change; restored reports
 // whether the previous configuration is back.
