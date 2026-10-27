@@ -109,3 +109,25 @@ func TestPresetsFor(t *testing.T) {
 		}
 	}
 }
+
+func TestSlowFirstServer(t *testing.T) {
+	cases := []struct {
+		name     string
+		d        DNS
+		ipv4Exit bool
+		want     string
+	}{
+		{"ipv4 first", DNS{Servers: []string{"1.1.1.1", "2001:db8::53"}}, false, "1.1.1.1"},
+		{"ipv6 first", DNS{Servers: []string{"2001:db8::53", "1.1.1.1"}}, false, ""},
+		{"ipv4 exit", DNS{Servers: []string{"1.1.1.1"}}, true, ""},
+		// systemd-resolved moves on to a server that answers.
+		{"resolved", DNS{Resolved: true, Servers: []string{"1.1.1.1"}}, false, ""},
+		{"none", DNS{}, false, ""},
+	}
+	for _, tc := range cases {
+		got, ok := SlowFirstServer(tc.d, tc.ipv4Exit)
+		if got != tc.want || ok != (tc.want != "") {
+			t.Errorf("%s: got %q %v, want %q", tc.name, got, ok, tc.want)
+		}
+	}
+}

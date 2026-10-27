@@ -352,6 +352,62 @@ func (u *sysoptUI) dns() error {
 	return nil
 }
 
+// offerDNSFix asks at startup to replace an unreachable IPv4 DNS server
+// that every lookup waits for, with the IPv6 servers of the first preset
+// that answers (D-138). It reports whether it printed anything, so that
+// the caller waits for Enter before the main menu clears the screen.
+func (u *sysoptUI) offerDNSFix() (bool, error) {
+	st, err := u.svc.Store.Load()
+	if err != nil || st.Server.SlowDNSDeclined {
+		return false, nil
+	}
+	eg := u.egress.Status(u.ctx)
+	if !eg.IPv6.OK {
+		return false, nil
+	}
+	d, err := u.svc.DNSStatus(u.ctx)
+	if err != nil {
+		return false, nil
+	}
+	slow, ok := sysopt.SlowFirstServer(d, eg.IPv4.OK)
+	if !ok || !u.unreachableDNS([]string{slow})[0] {
+		return false, nil
+	}
+	var preset sysopt.DNSPreset
+	for _, p := range sysopt.PresetsFor(false, true) {
+		if u.probeDNS(u.ctx, p.Servers[0]) == nil {
+			preset = p
+			break
+		}
+	}
+	u.s.Println(u.s.Colors.Warn(text.DNSSlowFirst(slow)))
+	if preset.Name == "" {
+		u.s.Println(u.s.Colors.Warn(text.DNSUnreachableHint))
+		return true, nil
+	}
+	u.s.Println(u.s.Colors.Warn(text.DNSResolvConfNote))
+	servers := strings.Join(preset.Servers, " ")
+	yes, err := u.s.ConfirmYes(text.ConfirmDNSFix(preset.Name, servers))
+	if err != nil {
+		return true, err
+	}
+	if !yes {
+		st.Server.SlowDNSDeclined = true
+		if err := u.svc.Store.Save(st); err != nil {
+			u.s.Println(u.s.Colors.Bad(text.ActionFailed(err)))
+			return true, nil
+		}
+		u.s.Println(text.DNSFixDeclined)
+		return true, nil
+	}
+	if err := u.svc.SetDNS(u.ctx, preset.Servers); err != nil {
+		u.s.Println(u.s.Colors.Bad(text.ActionFailed(err)))
+		return true, nil
+	}
+	u.s.Done(text.DNSSet(servers))
+	return true, nil
+}
+
 // unreachableDNS probes the servers in parallel, 2 seconds each, and
 // reports which did not answer (D-134).
 func (u *sysoptUI) unreachableDNS(servers []string) []bool {

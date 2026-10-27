@@ -125,6 +125,19 @@ nat64_prefix() {
 		tolower($1) ~ /:c000:a[ab]$/ { sub(/c000:a[ab]$/, "", $1); print $1; exit }'
 }
 
+# warn_slow_dns explains a slow install: the first DNS server is a public
+# IPv4 address this host cannot reach, and every lookup waits for it to
+# time out (D-138). Loopback (systemd-resolved) and private resolvers may
+# answer and are not mentioned.
+warn_slow_dns() {
+	local first
+	first="$(awk '$1 == "nameserver" { print $2; exit }' "$RESOLV" 2>/dev/null)" || true
+	case "$first" in
+	"" | *:* | 127.* | 10.* | 172.* | 192.168.*) return 0 ;;
+	esac
+	yellow "提示：系统 DNS 的第一个服务器 ${first} 是 IPv4 地址，本机访问不到，每次解析域名都要先等它超时，安装会比较慢。LiteNode 启动后会询问是否改为 IPv6 DNS。"
+}
+
 # setup_nat64 lets a host without an IPv4 exit download from GitHub, which
 # has only IPv4 addresses, through the provider's NAT64: curl connects to
 # the synthesized IPv6 addresses, TLS still checks the real host names.
@@ -133,6 +146,7 @@ setup_nat64() {
 	if curl -4 -fsS --max-time 3 -o /dev/null https://1.1.1.1/cdn-cgi/trace 2>/dev/null; then
 		return 0
 	fi
+	warn_slow_dns
 	# A DNS64 resolver already gives github.com an IPv6 address.
 	if getent ahostsv6 github.com 2>/dev/null | awk 'tolower($1) !~ /^::ffff:/ { found = 1 } END { exit !found }'; then
 		return 0

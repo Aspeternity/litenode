@@ -284,6 +284,20 @@ func (s *Session) Confirm(question string) (bool, error) {
 	return false, nil
 }
 
+// ConfirmYes asks a yes/no question whose default is yes: anything but
+// "n" or "no" means yes.
+func (s *Session) ConfirmYes(question string) (bool, error) {
+	answer, err := s.Prompt(question + text.ConfirmSuffixYes)
+	if err != nil {
+		return false, err
+	}
+	switch strings.ToLower(answer) {
+	case "n", "no":
+		return false, nil
+	}
+	return true, nil
+}
+
 // Println prints a line; in a flow, in the gutter.
 func (s *Session) Println(a ...any) {
 	if s.flow != nil {

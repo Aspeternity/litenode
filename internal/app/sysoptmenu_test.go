@@ -140,10 +140,60 @@ func TestSysoptMenuDNSIPv6Only(t *testing.T) {
 		return nil
 	}
 	eg := fakeEgress{IPv6: egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}}
-	// main: 8; 2 DNS, back; back; quit.
-	r := runEnv(t, Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), DNSProber: probe, Egress: eg}, "8\n2\n0\n0\n0\n")
-	wantOutput(t, r.stdout, "当前 DNS：10.0.0.1（不可达） 2001:db8::53（", text.DNSUnreachableHint,
+	// Startup: decline the DNS fix (D-138); main: 8; 2 DNS, back; back; quit.
+	env := Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), DNSProber: probe, Egress: eg}
+	r := runEnv(t, env, "n\n8\n2\n0\n0\n0\n")
+	wantOutput(t, r.stdout, text.DNSSlowFirst("10.0.0.1"), text.DNSFixDeclined,
+		"当前 DNS：10.0.0.1（不可达） 2001:db8::53（", text.DNSUnreachableHint,
 		text.DNSPresetLabel("Cloudflare", "2606:4700:4700::1111 2606:4700:4700::1001"))
+	// Declined once: not asked again.
+	r = runEnv(t, env, "0\n")
+	if strings.Contains(r.stdout, text.DNSSlowFirst("10.0.0.1")) {
+		t.Errorf("asked again:\n%s", r.stdout)
+	}
+}
+
+// TestStartupDNSFix: without an IPv4 exit, an unreachable IPv4 first DNS
+// server is replaced at startup by the first IPv6 preset that answers;
+// Enter means yes (D-138). A WARP IPv4 exit or a private server that
+// answers does not ask.
+func TestStartupDNSFix(t *testing.T) {
+	v6 := egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}
+	cases := []struct {
+		name string
+		eg   fakeEgress
+		// down is the server that does not answer.
+		down string
+		ask  bool
+	}{
+		{"ipv6 only", fakeEgress{IPv6: v6}, "10.0.0.1", true},
+		{"warp", fakeEgress{IPv4: egress.Family{OK: true, WARP: true}, IPv6: v6}, "10.0.0.1", false},
+		{"private answers", fakeEgress{IPv6: v6}, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := supported()
+			f.Files["/etc/resolv.conf"] = []byte("nameserver 10.0.0.1\nnameserver 2001:db8::53\n")
+			probe := func(_ context.Context, server string) error {
+				if server == tc.down || server == "2606:4700:4700::1111" {
+					return errors.New("timeout")
+				}
+				return nil
+			}
+			r := runEnv(t, Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), DNSProber: probe, Egress: tc.eg}, "\n0\n")
+			if got := strings.Contains(r.stdout, text.DNSSlowFirst("10.0.0.1")); got != tc.ask {
+				t.Fatalf("asked = %v, want %v:\n%s", got, tc.ask, r.stdout)
+			}
+			if !tc.ask {
+				return
+			}
+			// Cloudflare does not answer: Google is offered.
+			wantOutput(t, r.stdout, text.DNSSet("2001:4860:4860::8888 2001:4860:4860::8844"))
+			if got := string(f.Files["/etc/resolv.conf"]); !strings.Contains(got, "nameserver 2001:4860:4860::8888\nnameserver 2001:4860:4860::8844\n") {
+				t.Errorf("resolv.conf:\n%s", got)
+			}
+		})
+	}
 }
 
 func TestSysoptMenuDNSCustomEmptyGoesBack(t *testing.T) {

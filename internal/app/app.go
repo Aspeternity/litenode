@@ -284,6 +284,12 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		s.Println(s.Colors.Warn(text.ActionFailed(err)))
 		pause = true
 	}
+	// Every lookup waits for an unreachable IPv4 DNS server (D-138).
+	if shown, err := optMenu.offerDNSFix(); err != nil {
+		return 0
+	} else if shown {
+		pause = true
+	}
 	if pause && s.Pause() != nil {
 		return 0
 	}
