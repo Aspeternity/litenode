@@ -200,6 +200,9 @@ const PressEnter = "按回车返回菜单"
 // ConfirmSuffix is appended to yes/no questions; the default is no.
 const ConfirmSuffix = " [y/N]: "
 
+// ConfirmSuffixYes is appended to yes/no questions whose default is yes.
+const ConfirmSuffixYes = " [Y/n]: "
+
 // BusyInterrupt is shown when Ctrl+C is pressed while an operation runs.
 const BusyInterrupt = "正在执行操作，完成后退出……"
 

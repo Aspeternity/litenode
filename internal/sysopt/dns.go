@@ -72,6 +72,22 @@ func PresetsFor(ipv4, ipv6 bool) []DNSPreset {
 	return out
 }
 
+// SlowFirstServer returns the first DNS server when every lookup would
+// wait for it to time out: the system reads resolv.conf directly
+// (systemd-resolved remembers a server that answers) and the first server
+// is an IPv4 address while the machine has no IPv4 exit (D-138). A
+// private resolver may still answer; the caller probes it.
+func SlowFirstServer(d DNS, ipv4Exit bool) (string, bool) {
+	if ipv4Exit || d.Resolved || len(d.Servers) == 0 {
+		return "", false
+	}
+	a, err := netip.ParseAddr(d.Servers[0])
+	if err != nil || !a.Is4() {
+		return "", false
+	}
+	return d.Servers[0], true
+}
+
 // DNS is the DNS state shown in the menu.
 type DNS struct {
 	// Resolved is true when the system resolves through systemd-resolved:

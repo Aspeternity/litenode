@@ -56,6 +56,9 @@ type Server struct {
 	// ScanWarned is set once the user confirmed the nearby-site scan
 	// warning (DESIGN section 10.3, D-058).
 	ScanWarned bool `json:"scan_warned,omitempty"`
+	// SlowDNSDeclined is set when the user declined to replace an
+	// unreachable IPv4 DNS server at startup (D-138).
+	SlowDNSDeclined bool `json:"slow_dns_declined,omitempty"`
 }
 
 // Xray holds the installed Xray version, whether the user stopped it and

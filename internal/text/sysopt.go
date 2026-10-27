@@ -148,6 +148,21 @@ func DNSUnreachable(server string) string { return server + "（不可达）" }
 // servers.
 const DNSUnreachableHint = "标为不可达的 DNS 服务器连不上，会拖慢域名解析，建议更换。"
 
+// DNSSlowFirst explains at startup that every lookup waits for an
+// unreachable IPv4 DNS server (D-138).
+func DNSSlowFirst(server string) string {
+	return fmt.Sprintf("⚠ 系统 DNS 的第一个服务器 %s 是 IPv4 地址，本机没有 IPv4 出口，访问不到它：每次解析域名都要先等它超时，添加节点、下载等操作会等待很久。", server)
+}
+
+// ConfirmDNSFix offers the IPv6 DNS servers of a preset (D-138).
+func ConfirmDNSFix(name, servers string) string {
+	return fmt.Sprintf("是否改为 %s 的 IPv6 DNS（%s）？以后可在 系统优化 → DNS 修改", name, servers)
+}
+
+// DNSFixDeclined tells where to change DNS later; LiteNode does not ask
+// again (D-138).
+const DNSFixDeclined = "未修改，以后不再询问。可在 系统优化 → DNS 修改。"
+
 // DNSSet reports the new DNS servers.
 func DNSSet(servers string) string { return "DNS 已设置为 " + servers + "。" }
 
