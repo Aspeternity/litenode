@@ -381,8 +381,8 @@ const clearScreen = "\x1b[H\x1b[2J"
 
 // Hold marks the running operation as having shown something to read
 // (links, logs, keys, results): when it ends, the menu comes back only
-// after Enter (D-096). Session.End and errors always hold; an operation
-// that ends with Done does not (D-128).
+// after Enter (D-096). Session.Done, Session.End and errors always hold
+// (D-128, D-135).
 func (s *Session) Hold() { s.hold = true }
 
 // Pause waits for Enter when the session is interactive, so that what was

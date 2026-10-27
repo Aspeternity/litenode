@@ -89,15 +89,16 @@ func (s *Session) flushStep() {
 }
 
 // Done closes the current flow as successful with msg. Outside a flow it
-// prints msg. The menu comes back at once: the result shows in the page.
+// prints msg. The menu comes back only after Enter: the next page clears
+// the screen, and the result would only flash on it (D-135).
 func (s *Session) Done(msg string) {
 	s.end(s.Colors.Good("✓ " + msg))
+	s.Hold()
 }
 
 // End closes the current flow with msg, neither success nor cancel (e.g.
-// nothing to do, or a change undone at the user's request). The page
-// looks the same afterwards, so the menu comes back only after Enter
-// (D-128).
+// nothing to do, or a change undone at the user's request). Like Done, the
+// menu comes back only after Enter (D-128).
 func (s *Session) End(msg string) {
 	s.end(msg)
 	s.Hold()
