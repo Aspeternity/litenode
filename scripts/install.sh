@@ -152,6 +152,19 @@ setup_nat64() {
 	echo "本机没有 IPv4 出口，经商家的 NAT64（${prefix}/96）下载。"
 }
 
+# write_public_resolv writes nat64.net's DNS servers, starting with the
+# one at index first: each server answers with its own gateways.
+write_public_resolv() {
+	local first="$1" i n=${#PUBLIC_DNS64[@]}
+	{
+		echo "# Temporary DNS64 set by the LiteNode installer; restored when it ends."
+		for ((i = 0; i < n; i++)); do
+			echo "nameserver ${PUBLIC_DNS64[$(((first + i) % n))]}"
+		done
+	} >"$RESOLV"
+	chmod 644 "$RESOLV"
+}
+
 # use_public_dns64 offers, when there is no IPv4 exit and no NAT64, to
 # point the system DNS at nat64.net's DNS64 for the download (default no);
 # cleanup puts the original resolv.conf back (D-136).
@@ -159,7 +172,7 @@ use_public_dns64() {
 	if [ -z "$no_ipv4" ] || ! [ -t 0 ] || ! [ -t 1 ]; then
 		return 0
 	fi
-	local answer server
+	local answer
 	echo "本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。"
 	echo "可以临时使用公共 DNS64 / NAT64 服务 nat64.net 下载：安装期间把系统 DNS 换成它的服务器，安装结束后自动换回。"
 	echo "这是第三方服务，使用即表示同意它的服务条款，请先阅读：${PUBLIC_DNS64_TOS}"
@@ -170,13 +183,7 @@ use_public_dns64() {
 	esac
 	mv -f "$RESOLV" "$RESOLV_BACKUP" || die "无法修改 ${RESOLV}，未做任何修改。"
 	resolv_saved=1
-	{
-		echo "# Temporary DNS64 set by the LiteNode installer; restored when it ends."
-		for server in "${PUBLIC_DNS64[@]}"; do
-			echo "nameserver ${server}"
-		done
-	} >"$RESOLV"
-	chmod 644 "$RESOLV"
+	write_public_resolv 0
 	if ! getent ahostsv6 github.com 2>/dev/null | awk 'tolower($1) !~ /^::ffff:/ { found = 1 } END { exit !found }'; then
 		die "无法通过 nat64.net 的 DNS 服务器解析 github.com，已恢复原来的 DNS 设置，未做任何修改。请参考 ${IPV6_URL}"
 	fi
@@ -186,11 +193,24 @@ use_public_dns64() {
 }
 
 download() {
-	local name="$1"
+	local name="$1" try
+	if [ -n "$public_dns64" ]; then
+		# nat64.net's gateways differ in load: one may reset or stall a
+		# large download while another finishes in seconds. Each attempt
+		# asks another DNS server first, which picks another gateway, and
+		# gives up on a transfer slower than 50 KB/s for 15 seconds.
+		for ((try = 0; try < ${#PUBLIC_DNS64[@]}; try++)); do
+			write_public_resolv "$try"
+			if curl -fsSL --connect-timeout 15 --speed-limit 51200 --speed-time 15 -o "${tmp_dir}/${name}" "${BASE_URL}/${name}"; then
+				return 0
+			fi
+			if ((try + 1 < ${#PUBLIC_DNS64[@]})); then
+				yellow "经 nat64.net 下载 ${name} 失败，换一个网关重试……"
+			fi
+		done
+		die "经 nat64.net 下载 ${name} 失败，已恢复原来的 DNS 设置，未做任何修改。nat64.net 的网关可能繁忙，可稍后重试，或参考 ${IPV6_URL}"
+	fi
 	if ! curl -fsSL --retry 3 --connect-timeout 15 "${curl_opts[@]}" -o "${tmp_dir}/${name}" "${BASE_URL}/${name}"; then
-		if [ -n "$public_dns64" ]; then
-			die "经 nat64.net 下载 ${name} 失败，已恢复原来的 DNS 设置，未做任何修改。请参考 ${IPV6_URL}"
-		fi
 		if [ -n "$no_ipv4" ]; then
 			die "下载 ${name} 失败，未做任何修改。本机没有 IPv4 出口，也没有检测到商家的 NAT64，而 GitHub 只有 IPv4 地址。请参考 ${IPV6_URL}（手动上传程序后在 系统优化 → WARP 开启 IPv4 出口）"
 		fi
