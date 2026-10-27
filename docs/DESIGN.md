@@ -1099,6 +1099,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 
 ```
  BBR: ✓   swap: 无   优先: IPv4   时区: UTC（同步 ✓）
+ WARP: 无
 ──────────────────────────────────────────────
  1. BBR + fq
  2. swap
@@ -1222,11 +1223,12 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 
 - **用途**：只补本机缺少的出口协议。纯 IPv6 机器让 IPv4 走 WARP；只有 IPv4 的机器让 IPv6 走 WARP。两种出口都有时提示不需要并停住；两种都没有时无法注册，提示后停住。原有协议、SSH 连接、入站流量都不变，因此不需要限时确认。
 - **实现**：`wireguard-tools`（缺少时 `apt-get install -y wireguard-tools`）+ 内核 WireGuard（`modprobe wireguard` 失败时提示当前环境不支持）。密钥用 `crypto/ecdh` X25519 生成；注册向 `https://api.cloudflareclient.com/v0a2158/reg` 发送公钥（标准库 HTTP），得到本机隧道地址、对端公钥和端点。不使用第三方程序或库，不使用官方 WARP 客户端。
-- **文件**：`/etc/wireguard/litenode-warp.conf`（600），接口名 `litenode-warp`，由 `wg-quick@litenode-warp` 开机启动。`[Interface]` 只写缺少协议的隧道地址、`MTU = 1280`，不写 `DNS`；`[Peer]` 的 `AllowedIPs` 为 `0.0.0.0/0` 或 `::/0`（wg-quick 用策略路由，本机已有的更具体路由不受影响）、`PersistentKeepalive = 25`。状态文件 `sysopt.warp` 记录账号 ID、令牌、补的协议和端点，私钥只在 conf 中。
+- **文件**：`/etc/wireguard/litenode-warp.conf`（600），接口名 `litenode-warp`，由 `wg-quick@litenode-warp` 开机启动。`[Interface]` 只写缺少协议的隧道地址、`MTU = 1280`，不写 `DNS`；`[Peer]` 的 `AllowedIPs` 为 `0.0.0.0/0` 或 `::/0`（wg-quick 用策略路由，本机已有的更具体路由不受影响）、`PersistentKeepalive = 25`。账号 ID、令牌、补的协议以注释形式写在同一个 conf 中，不写状态文件（导出配置不带出）；是否开启以 conf 是否存在为准。
 - **端点选择**：端点必须用本机已有的协议连接（纯 IPv6 用 IPv6 端点）。候选为注册响应中的端点地址和内置的几个地址（`2606:4700:d0::a29f:c001`、`2606:4700:d1::a29f:c001` / `162.159.192.1`、`162.159.193.1`），端口 2408、1701、500、4500 依次组合；逐个写入 conf 并启动，10 秒内有握手且缺少的协议能访问 trace 即选中。全部失败则关闭并删除文件，提示原因。
 - **开启**：统一变更流程（备份 → 生成 conf → 启用 `wg-quick@litenode-warp` → 检查出口），检查失败自动恢复（停用服务、删除 conf）。开启后重新检测出口，并提示 IPv4 出口已为 WARP、WARP 出口不会用作分享地址。
-- **状态**：出口 IP（trace）、最近握手（`wg show litenode-warp latest-handshakes`）。系统优化状态行加 `WARP: ✓ / 无`。
+- **状态**：出口 IP（trace）、端点、最近握手（`wg show litenode-warp latest-handshakes`）。系统优化状态区第二行显示 `WARP: ✓ / 无`（第一行已满）。
 - **重新选择端点**：断开后重新按上面的顺序选择（当前端点排最后）。
+- **自动切换端点**：实测同一端点会时通时断（重启后原端点不再握手，换一个即恢复）。开启后安装 `litenode-warp-check.timer`（每 2 分钟运行 `litenode internal warp-check`）：最近握手超过 3 分钟时，用 `wg set` 逐个尝试候选端点（每个最多 6 秒），握手成功即写回 conf；都不通则回到原端点，下一轮再试；接口不存在（开机启动失败）时先重启服务。菜单运行时跳过本轮；程序被卸载后跳过。关闭 WARP 时删除该定时器。
 - **关闭**：停用并删除服务与 conf，尽量向 Cloudflare 删除账号（失败忽略），清除 `sysopt.warp`，重新检测出口。
 - **卸载**：两种卸载都保留 WARP（卸载后 IPv4 出口不应突然消失），全部卸载完成后在保留的设置中列出 WARP 的文件和关闭方法。
 - 容器（LXC、OpenVZ）中该项隐藏。

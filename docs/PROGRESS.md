@@ -10,12 +10,12 @@
 
 ## 下次会话从这里开始
 
-1. **M12 纯 IPv6 支持**（用户 2026-10-27 同意全部方案，D-129，任务见 ROADMAP「M12」）。先把设计写进 DESIGN（出口检测、NAT64 下载、WARP 管理、各处提示），再从 M12-01 开始，一个任务一个分支，阶段结束请用户实机验收。M12-03 动手前先查公共 NAT64 的服务条款。
-2. 用户 2026-10-20"暂不加新功能"的决定已由 M12 取代（仅限本阶段）；ROADMAP"未排期"中的其他项目仍等用户提出。
+1. **M12 进行中**：M12-01 ~ M12-04 已合并（#105、#106、#107、M12-04 WARP 管理）。
+2. 下一个：M12-05（Reality 解析/连接分开限时、DNS 预设与不可达标记、出站 IP 与转发用出口检测、`NetReason` 按地址族说明、扫描在纯 IPv6 下拒绝、全部卸载列出 DNS 和 WARP）、M12-06（README、从零实机走一遍），阶段结束请用户验收。
 
 ## 测试 VPS
 
-- **纯 IPv6 测试机**（2026-10-27，Debian 13，425M，只有内网 IPv4）：访问方式在本机记忆中。WSL 没有 IPv6，经 Windows 上的中转程序作 ssh ProxyCommand 连接（见记忆）。当前状态：已手动开启 WARP（`wg-quick@warp`，只承载 IPv4，`/etc/wireguard/warp.conf`），DNS 为商家原配置（备份 `/root/resolv.conf.orig`），一行命令装了 LiteNode v0.3.4，**Xray 未装、无节点**（WARP 出口被 GitHub API 限流）；BBR 开启。测 M12 前可关闭 WARP（`systemctl disable --now wg-quick@warp`）还原纯 IPv6。
+- **纯 IPv6 测试机**（2026-10-27，Debian 13，425M，只有内网 IPv4）：访问方式在本机记忆中。WSL 没有 IPv6，经 Windows 上的中转程序作 ssh ProxyCommand 连接（见记忆）。当前状态：/usr/local/bin/litenode 为 M12 开发构建，IPv4 由 LiteNode 的 WARP（`wg-quick@litenode-warp` + 检查定时器）提供；旧的手动 `wg-quick@warp` 已停用（`/etc/wireguard/warp.conf` 保留）；DNS 为商家原配置（备份 `/root/resolv.conf.orig`）；**Xray 未装、无节点**；BBR 开启。需要纯 IPv6 时在 系统优化 → WARP 关闭。
 - **双栈测试机**（2026-10-27，Debian 11，用户说可随便使用）：作客户端 / 探测机，能经 IPv6 访问纯 IPv6 机；上面有 LiteNode v0.2.0-m11 和 Xray。访问方式在本机记忆中。
 - 原 Debian 12 测试机（2026-10-23）已改为仅密钥登录，暂不可用。
 - 测试机的 IP、密码只保存在本机记忆中，**不写入仓库**（测试数据用文档专用地址 192.0.2.0/24、198.51.100.0/24、203.0.113.0/24、2001:db8::/32）。

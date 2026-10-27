@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net/http"
 	"net/netip"
@@ -68,22 +69,46 @@ type run struct {
 
 // New returns a Prober using HTTPS with Timeout per request.
 func New() *Prober {
-	client := &http.Client{Timeout: Timeout, Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
-		Proxy:           nil, // never through a proxy: we want this host's exit
-	}}
-	return &Prober{Get: func(ctx context.Context, url string) ([]byte, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return nil, err
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-		return io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	}}
+	return &Prober{Get: get}
+}
+
+// client makes a new connection for every request: after WARP changes
+// the routes, a kept-alive connection would still use the old path.
+var client = &http.Client{Timeout: Timeout, Transport: &http.Transport{
+	TLSClientConfig:   &tls.Config{MinVersion: tls.VersionTLS12},
+	Proxy:             nil, // never through a proxy: we want this host's exit
+	DisableKeepAlives: true,
+}}
+
+func get(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+}
+
+// TraceFamily asks Cloudflare over one family now, bypassing the
+// Prober's cached result.
+func TraceFamily(ctx context.Context, v6 bool) (Trace, error) {
+	url := TraceURLv4
+	if v6 {
+		url = TraceURLv6
+	}
+	body, err := get(ctx, url)
+	if err != nil {
+		return Trace{}, err
+	}
+	t, ok := ParseTrace(body)
+	if !ok || t.IP.Is6() != v6 {
+		return Trace{}, fmt.Errorf("unexpected trace response from %s", url)
+	}
+	return t, nil
 }
 
 // Start begins detection in the background unless it already ran or is

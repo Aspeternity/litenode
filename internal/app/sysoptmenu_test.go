@@ -3,12 +3,17 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/Aspeternity/litenode/internal/egress"
 	"io"
+	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Aspeternity/litenode/internal/change"
 	"github.com/Aspeternity/litenode/internal/state"
@@ -18,6 +23,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ui"
+	"github.com/Aspeternity/litenode/internal/warp"
 )
 
 const ccPath = "/proc/sys/net/ipv4/tcp_congestion_control"
@@ -174,7 +180,8 @@ func sysoptMenu(t *testing.T, f *systemtest.Fake, virt system.Virt) string {
 	ctx := context.Background()
 	u := &sysoptUI{ctx: ctx, s: ui.NewSession(strings.NewReader(""), io.Discard, nil, ui.Colors{}),
 		info: system.Info{Virt: virt}, caps: system.ProbeAll(ctx, f),
-		svc: &sysopt.Service{Runner: f, Store: store, Changes: change.NewManager(f, store)}}
+		svc:  &sysopt.Service{Runner: f, Store: store, Changes: change.NewManager(f, store)},
+		warp: &warp.Service{Runner: f}}
 	m := u.menu()
 	m.Path = []string{text.MainMenuName}
 	return m.Render()
@@ -208,5 +215,62 @@ func TestSysoptMenuContainer(t *testing.T) {
 		if strings.Contains(got, hidden) {
 			t.Errorf("%q shown in a container:\n%s", hidden, got)
 		}
+	}
+}
+
+// warpAPI answers the WARP registration API.
+type warpAPI struct{ reqs []string }
+
+func (a *warpAPI) RoundTrip(r *http.Request) (*http.Response, error) {
+	a.reqs = append(a.reqs, r.Method)
+	body := `{"id":"dev-1","token":"tok-1","config":{"peers":[{"public_key":"PEER=",
+"endpoint":{"v4":"162.159.192.9:0","v6":"[2606:4700:d0::a29f:c009]:0"}}],
+"interface":{"addresses":{"v4":"172.16.0.2","v6":"2606:4700:110:8a1e::1"}}}}`
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+}
+
+// TestWARPMenu: on an IPv6-only host WARP supplies IPv4 (DESIGN 19.4).
+func TestWARPMenu(t *testing.T) {
+	f := supported()
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "PEER=\t" + strconv.FormatInt(time.Now().Unix()-5, 10) + "\n"}}, "wg", "show", warp.Interface, "latest-handshakes")
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "active\n"}}, "systemctl", "is-active", warp.Unit)
+	api := &warpAPI{}
+	env := func() Env {
+		return Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
+			Egress:     fakeEgress{IPv6: egress.Family{OK: true, IP: netip.MustParseAddr("2001:db8::10")}},
+			WARPClient: &http.Client{Transport: api},
+			WARPTrace: func(context.Context, bool) (egress.Trace, error) {
+				return egress.Trace{IP: netip.MustParseAddr("104.28.215.68"), WARP: true}, nil
+			}}
+	}
+	// 8 sysopt, 5 WARP (swap hidden), 1 enable, y.
+	r := runEnv(t, env(), "8\n5\n1\ny\n0\n0\n0\n")
+	for _, want := range []string{"WARP: 未开启", "只让 IPv4 出站流量经 WARP", "尝试端点 [2606:4700:d0::a29f:c009]:2408", "WARP 已开启，IPv4 出站经 WARP。"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q:\n%s", want, r.stdout)
+		}
+	}
+	if c, err := (&warp.Service{Runner: f}).Conf(); err != nil || c.IPv6 || c.Endpoint.String() != "[2606:4700:d0::a29f:c009]:2408" {
+		t.Errorf("conf = %+v, %v", c, err)
+	}
+	// The page shows the tunnel; 2 disable, y.
+	r = runEnv(t, env(), "8\n5\n2\ny\n0\n0\n0\n")
+	for _, want := range []string{"WARP: ✓", "WARP: 已开启（IPv4 经 WARP，端点 [2606:4700:d0::a29f:c009]:2408，最近握手", "WARP 已关闭"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("missing %q:\n%s", want, r.stdout)
+		}
+	}
+	if _, ok := f.Files[warp.ConfPath]; ok || api.reqs[len(api.reqs)-1] != http.MethodDelete {
+		t.Errorf("not disabled: requests %v", api.reqs)
+	}
+}
+
+// TestWARPNotNeeded: with both exits nothing is registered.
+func TestWARPNotNeeded(t *testing.T) {
+	api := &warpAPI{}
+	r := runEnv(t, Env{Runner: supported(), Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"), WARPClient: &http.Client{Transport: api}},
+		"8\n5\n1\n\n0\n0\n0\n")
+	if !strings.Contains(r.stdout, "本机 IPv4 和 IPv6 都有出口，不需要 WARP。") || len(api.reqs) != 0 {
+		t.Errorf("requests %v:\n%s", api.reqs, r.stdout)
 	}
 }
