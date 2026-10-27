@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Aspeternity/litenode/internal/egress"
 	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/builtin"
 )
@@ -77,7 +78,7 @@ func TestVPSQRDecodes(t *testing.T) {
 }
 
 func TestVPSDetect(t *testing.T) {
-	d := NewDetector()
+	d := NewDetector(egress.New().Status)
 	res := d.Detect(context.Background())
 	t.Logf("detected IPv4=%q IPv6=%q source=%d", res.IPv4, res.IPv6, res.Source)
 	if res.Source != SourceTrace || res.IPv4 == "" {
