@@ -27,14 +27,10 @@ const (
 	newPath = BinPath + ".new"
 )
 
-// LatestURL is the GitHub API endpoint for the latest release.
-const LatestURL = "https://api.github.com/repos/" + Repo + "/releases/latest"
-
 // Download size limits.
 const (
 	maxBinary = 64 << 20
 	maxSums   = 64 << 10
-	maxAPI    = 1 << 20
 )
 
 // Errors of Update.
@@ -92,11 +88,7 @@ type Updater struct {
 
 // Latest returns the tag of the latest release.
 func (u *Updater) Latest(ctx context.Context) (string, error) {
-	data, err := u.Fetcher.Fetch(ctx, LatestURL, maxAPI)
-	if err != nil {
-		return "", fmt.Errorf("query latest litenode release: %w", err)
-	}
-	return xray.ParseLatestRelease(data)
+	return xray.LatestTag(ctx, u.Fetcher, Repo)
 }
 
 // Update downloads release tag, checks its sha256 against the release's

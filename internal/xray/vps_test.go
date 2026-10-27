@@ -40,6 +40,13 @@ func (f overrideFetcher) Fetch(ctx context.Context, url string, limit int64) ([]
 	return f.real.Fetch(ctx, url, limit)
 }
 
+func (f overrideFetcher) Redirect(ctx context.Context, url string) (string, error) {
+	if data, ok := f.override[url]; ok {
+		return string(data), nil
+	}
+	return f.real.Redirect(ctx, url)
+}
+
 // testConfig listens on a privileged port to prove that the non-root
 // service can bind it (P-002).
 const testConfig = `{

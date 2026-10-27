@@ -590,3 +590,26 @@ func TestAddHysteria2NodeOldXray(t *testing.T) {
 		t.Error("node added")
 	}
 }
+
+// mlkemChecker records the ML-KEM support it was told about.
+type mlkemChecker struct {
+	fakeChecker
+	supported *bool
+}
+
+func (c mlkemChecker) SetMLKEMSupported(ok bool) { *c.supported = ok }
+
+// TestTargetCheckXrayVersionUnknown: with Xray not installed and its
+// version not found, the target choice explains why and does not reject
+// ML-KEM targets (D-130).
+func TestTargetCheckXrayVersionUnknown(t *testing.T) {
+	f := supported()
+	f.Files["/proc/net/tcp"] = []byte("  sl  local_address\n")
+	ok := false
+	env := Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
+		TargetChecker: mlkemChecker{supported: &ok}, AddressDetector: fakeDetector{}, XrayFetcher: releaseFetcher{}}
+	r := runEnv(t, env, "1\n1\n1\n\n0\n0\n0\n0\n0\n")
+	if !strings.Contains(r.stdout, "查询 Xray 最新版本失败") || !ok {
+		t.Errorf("supported = %v:\n%s", ok, r.stdout)
+	}
+}

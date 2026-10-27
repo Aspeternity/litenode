@@ -531,6 +531,12 @@ func XrayOldVersionFor(feature, v, min string) string {
 	return fmt.Sprintf("⚠ %s 低于 %s，不支持 %s 节点：配置检查会失败，Xray 保持当前版本。", v, min, feature)
 }
 
+// XrayVersionUnknown warns that the Xray version to install could not be
+// queried before checking REALITY targets (D-130).
+func XrayVersionUnknown(err error, min string) string {
+	return fmt.Sprintf("⚠ 查询 Xray 最新版本失败：%v\n  使用 X25519MLKEM768 的目标网站暂按可用显示；安装 Xray 时需要能访问 GitHub，并且版本不低于 %s。", err, min)
+}
+
 // XrayOldVersion warns about a version without ML-KEM target support.
 func XrayOldVersion(v, min string) string {
 	return fmt.Sprintf("⚠ %s 低于 %s，使用 X25519MLKEM768 的目标网站（多数大型网站）将无法使用。", v, min)

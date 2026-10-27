@@ -63,13 +63,45 @@ func TestNormalizeVersion(t *testing.T) {
 	}
 }
 
-func TestParseLatestRelease(t *testing.T) {
-	got, err := ParseLatestRelease([]byte(`{"tag_name": "v26.3.27", "prerelease": false}`))
-	if err != nil || got != "v26.3.27" {
-		t.Errorf("got (%q, %v)", got, err)
+func TestParseLatestLocation(t *testing.T) {
+	for loc, want := range map[string]string{
+		"https://github.com/XTLS/Xray-core/releases/tag/v26.3.27":     "v26.3.27",
+		"https://github.com/Aspeternity/litenode/releases/tag/v0.3.4": "v0.3.4",
+		"/XTLS/Xray-core/releases/tag/v26.10.17":                      "v26.10.17",
+	} {
+		if got, err := ParseLatestLocation(loc); err != nil || got != want {
+			t.Errorf("ParseLatestLocation(%q) = (%q, %v), want %q", loc, got, err, want)
+		}
 	}
-	if _, err := ParseLatestRelease([]byte(`{"message": "API rate limit exceeded"}`)); err == nil {
-		t.Error("missing tag should fail")
+	// A repository without releases redirects to the releases list.
+	for _, loc := range []string{"https://github.com/XTLS/Xray-core/releases", "https://github.com/login", "https://github.com/x/y/releases/tag/latest-build"} {
+		if got, err := ParseLatestLocation(loc); err == nil {
+			t.Errorf("ParseLatestLocation(%q) = %q, want an error", loc, got)
+		}
+	}
+}
+
+func TestParseFeed(t *testing.T) {
+	feed := `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en-US">
+  <link type="text/html" rel="alternate" href="https://github.com/XTLS/Xray-core/releases"/>
+  <entry>
+    <link rel="alternate" type="text/html" href="https://github.com/XTLS/Xray-core/releases/tag/v26.10.17"/>
+    <title>Xray-core v26.10.17</title>
+  </entry>
+  <entry>
+    <link rel="alternate" type="text/html" href="https://github.com/XTLS/Xray-core/releases/tag/nightly"/>
+  </entry>
+  <entry>
+    <link rel="alternate" type="text/html" href="https://github.com/XTLS/Xray-core/releases/tag/v26.3.27"/>
+  </entry>
+</feed>`
+	rs, err := ParseFeed([]byte(feed))
+	if err != nil || len(rs) != 2 || rs[0].Tag != "v26.10.17" || rs[1].Tag != "v26.3.27" {
+		t.Errorf("ParseFeed = (%v, %v)", rs, err)
+	}
+	if _, err := ParseFeed([]byte("<html>rate limited")); err == nil {
+		t.Error("garbage should fail")
 	}
 }
 
@@ -133,15 +165,29 @@ func TestPickDefault(t *testing.T) {
 
 func TestDefaultVersionUsesReleaseList(t *testing.T) {
 	f := fakeFetcher{
-		LatestReleaseURL: []byte(`{"tag_name": "v26.3.27"}`),
-		ReleasesURL:      []byte(`[{"tag_name": "v26.10.17", "prerelease": true}, {"tag_name": "v26.3.27"}]`),
+		LatestPageURL(Repo): []byte("https://github.com/XTLS/Xray-core/releases/tag/v26.3.27"),
+		FeedURL(Repo):       []byte(`<feed><entry><link href="https://github.com/XTLS/Xray-core/releases/tag/v26.10.20"/></entry></feed>`),
+		ReleasesURL:         []byte(`[{"tag_name": "v26.10.17", "prerelease": true}, {"tag_name": "v26.3.27"}]`),
 	}
 	in := &Installer{Fetcher: f}
+	if v, err := in.DefaultVersion(t.Context()); err != nil || v != "v26.10.20" {
+		t.Errorf("feed: DefaultVersion = (%q, %v)", v, err)
+	}
+	delete(f, FeedURL(Repo)) // feed unavailable: the API list
 	if v, err := in.DefaultVersion(t.Context()); err != nil || v != "v26.10.17" {
-		t.Errorf("DefaultVersion = (%q, %v)", v, err)
+		t.Errorf("api: DefaultVersion = (%q, %v)", v, err)
 	}
 	delete(f, ReleasesURL) // list unavailable: fall back to stable
 	if v, err := in.DefaultVersion(t.Context()); err != nil || v != "v26.3.27" {
 		t.Errorf("fallback = (%q, %v)", v, err)
+	}
+	// A stable release new enough needs no list.
+	f = fakeFetcher{LatestPageURL(Repo): []byte("https://github.com/XTLS/Xray-core/releases/tag/v26.11.1")}
+	if v, err := (&Installer{Fetcher: f}).DefaultVersion(t.Context()); err != nil || v != "v26.11.1" {
+		t.Errorf("new stable = (%q, %v)", v, err)
+	}
+	// The latest stable unknown: an error.
+	if _, err := (&Installer{Fetcher: fakeFetcher{}}).DefaultVersion(t.Context()); err == nil {
+		t.Error("unknown latest: want an error")
 	}
 }

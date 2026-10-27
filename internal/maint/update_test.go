@@ -9,6 +9,7 @@ import (
 
 	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/system/systemtest"
+	"github.com/Aspeternity/litenode/internal/xray"
 )
 
 type fakeFetcher map[string][]byte
@@ -20,10 +21,17 @@ func (f fakeFetcher) Fetch(_ context.Context, url string, _ int64) ([]byte, erro
 	return nil, errors.New("404 " + url)
 }
 
+func (f fakeFetcher) Redirect(_ context.Context, url string) (string, error) {
+	if d, ok := f[url]; ok {
+		return string(d), nil
+	}
+	return "", errors.New("404 " + url)
+}
+
 func release(tag string, bin []byte) fakeFetcher {
 	sum := sha256.Sum256(bin)
 	return fakeFetcher{
-		LatestURL:                             []byte(`{"tag_name":"` + tag + `"}`),
+		xray.LatestPageURL(Repo):              []byte("https://github.com/" + Repo + "/releases/tag/" + tag),
 		AssetURL(tag, "litenode-linux-amd64"): bin,
 		AssetURL(tag, "sha256sums.txt"):       []byte("0000000000000000000000000000000000000000000000000000000000000000  litenode-linux-arm64\n" + hex.EncodeToString(sum[:]) + "  litenode-linux-amd64\n"),
 	}

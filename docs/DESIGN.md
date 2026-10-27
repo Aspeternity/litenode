@@ -119,7 +119,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Aspeternity/litenode/main/sc
 - `/usr/local/bin/lnode` 已被其他程序占用（不是指向 `litenode` 的软链接）时不覆盖，提示用户使用 `litenode` 命令，安装照常完成。
 - 只有标准输入和输出都是终端时才在最后执行 `litenode` 进入菜单；否则只提示安装完成。
 
-**无法访问 GitHub 的机器**（D-042）：国内线路机、纯 IPv6 的 VPS（github.com 没有 IPv6 地址）无法下载。第一版不内置镜像或下载代理：install.sh、Xray 下载、更新脚本在下载失败时给出清楚的中文报错，说明可能无法访问 GitHub，并给出 README「无法访问 GitHub 的机器」一节的链接（`text.NoGitHubURL`，D-102），其中有手动安装说明（在本地下载程序和 `sha256sums.txt`、上传、校验、放到 `/usr/local/bin`）。Xray 没有手动安装方法。纯 IPv6 机器在 README 中提示可先开启 WARP 或使用 DNS64。线路机不需要 Xray，只需手动安装 LiteNode 本身。
+**无法访问 GitHub 的机器**（D-042）：国内线路机、纯 IPv6 的 VPS（github.com 没有 IPv6 地址）无法下载。第一版不内置镜像或下载代理：install.sh、Xray 下载、更新脚本在下载失败时给出清楚的中文报错，说明可能无法访问 GitHub，并给出 README「无法访问 GitHub 的机器」一节的链接（`text.NoGitHubURL`，D-102），其中有手动安装说明（在本地下载程序和 `sha256sums.txt`、上传、校验、放到 `/usr/local/bin`）。Xray 没有手动安装方法。纯 IPv6 机器的下载见第 19 节（M12：不使用 GitHub API、商家 NAT64、WARP）。线路机不需要 Xray，只需手动安装 LiteNode 本身。
 
 ### 发布
 
@@ -463,7 +463,7 @@ Xray 状态为"● 运行中 / ○ 已停止 / ○ 已停止（手动） / ○ �
 
 状态区中尚未实现的模块显示 `-`（SSH 在 M2、防火墙在 M3 接入真实值）；Xray 在 M1 之前按状态文件显示"○ 未安装"。
 
-系统行依次为：系统名称、虚拟化类型（`systemd-detect-virt` 的结果，物理机显示"物理机"）、内存（小于 1G 显示 `973M`，以上显示 `1.9G`）、BBR 是否已启用。警告行只在 LiteNode 防火墙与 ufw 同时启用时显示（第 2 节"与 ufw 共存"），不再显示共存软件提示（D-037）。
+系统行依次为：系统名称、虚拟化类型（`systemd-detect-virt` 的结果，物理机显示"物理机"）、内存（小于 1G 显示 `973M`，以上显示 `1.9G`）、BBR 是否已启用、出口（第 19.1 节）。警告行只在 LiteNode 防火墙与 ufw 同时启用时显示（第 2 节"与 ufw 共存"），不再显示共存软件提示（D-037）。
 
 ## 9. 节点管理
 
@@ -1105,6 +1105,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
  3. 系统 IPv4 / IPv6 优先级
  4. DNS
  5. 时区与时间同步
+ 6. WARP
 ──────────────────────────────────────────────
  0. 返回
 ```
@@ -1115,6 +1116,7 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 - **swap**：创建交换文件 `/litenode.swap`（`fallocate` 失败时回退到 `dd`），设置权限 600，写入 `/etc/fstab`；可调整大小或删除。内存小于 1G 时显示建议大小（1G）。只管理自己的文件，系统已有的其他 swap 只显示（D-079）。大小 128M ~ 32G，创建后磁盘至少保留 256M；调整大小时先建新文件再删旧文件，上限不含当前文件，提示中说明需要更大时先删除再创建。停用前检查 swap 中的数据不超过可用内存。容器环境（或没有 `/proc/swaps`）中该项隐藏。
 - **系统 IPv4 / IPv6 优先级**：通过 `/etc/gai.conf` 设置出站优先使用 IPv4 或 IPv6（D-080）。优先 IPv4 时在文件末尾加入带 `# BEGIN LiteNode` / `# END LiteNode` 标记的 `precedence ::ffff:0:0/96  100`；优先 IPv6 即系统默认，删除该段。文件中其他行不修改；其他行已设置优先 IPv4 时提示手动修改。只影响使用 glibc `getaddrinfo` 的程序（curl、apt 等），不影响 Xray；节点出站在 Xray 服务菜单的"节点出站 IP"中单独设置（第 12 节，D-084）。
 - **DNS**：系统使用 systemd-resolved 时写入 `/etc/systemd/resolved.conf.d/` 下的配置文件；否则修改 `/etc/resolv.conf`，并提示该文件可能被 DHCP 或 cloud-init 覆盖。提供常用 DNS 选项和自定义输入（D-081）：Cloudflare、Google、Quad9、自定义（1 ~ 3 个 IP）；systemd-resolved 下由 LiteNode 设置过时另有"恢复系统默认"。应用前直接向每个服务器查询测试，失败时询问是否仍要使用；应用后用系统解析测试一次，失败只提示。
+- **WARP**：补本机缺少的 IPv4 或 IPv6 出口，见第 19.4 节（M12）。
 - **时区与时间同步**：设置时区（`timedatectl`），启用 systemd-timesyncd 时间同步。Reality 对时间敏感，状态区显示同步状态。时区从常用列表选择或手动输入（按 `timedatectl list-timezones` 校验）；没有任何时间同步服务时先安装 systemd-timesyncd，已有 chrony 等则直接使用；开启后最多等待 30 秒确认同步（D-082）。容器中不显示时间同步（使用宿主机时间）；`timedatectl` 不可用时整项隐藏。
 
 ## 16. 维护
@@ -1181,3 +1183,59 @@ ss://2022-blake3-aes-128-gcm:<服务端密钥>%3A<用户密钥>@<地址>:<端口
 2. ~~**TLS 类协议的证书来源**~~：已确定，自签证书 + 指纹固定，不做自动申请（第 9.10 节、D-117）。
 3. ~~**常用目标网站列表**~~：已确定（第 10.2 节、D-051）。
 4. ~~**界面语言**~~：已确定，界面文字集中管理（见第 4 节、DECISIONS D-025）。
+
+## 19. 纯 IPv6 支持（M12，D-129 ~ D-134）
+
+纯 IPv6 的 VPS（只有内网 IPv4 或没有 IPv4）上，GitHub、部分 DNS 服务器和 IPv4 网站都不可达。本节规定程序如何发现这种情况、如何下载、如何补上 IPv4 出口，以及各处的提示。
+
+### 19.1 出口检测（D-132）
+
+- 包 `internal/egress`。分别经 IPv4（`https://1.1.1.1/cdn-cgi/trace`）和 IPv6（`https://[2606:4700:4700::1111]/cdn-cgi/trace`）请求 Cloudflare trace，两路并行，各 3 秒，不需要 DNS。每路结果：是否可用、出口 IP、是否为 WARP（`warp=on` 或 `warp=plus`）。
+- **每次运行最多一次、按需**：打开主菜单时在后台开始，与其他启动步骤并行；第一个需要结果的地方等待它完成（最多 3 秒）。`version`、`rollback` 等子命令不检测。开启或关闭 WARP 后重新检测一次。
+- 主菜单系统行末尾显示出口：`IPv4 ✓ IPv6 ✓`；WARP 出口显示 `IPv4 WARP`；不可用显示红色 `IPv4 ✗`。
+- **WARP 出口不是本机地址**：不作默认分享地址（该协议改用网卡上的公网地址，没有就不提供），不据此提示 NAT 机，不作扫描附近网站的中心。
+- 原有的"分享地址检测"（第 9.5 节）改为使用这里的结果，不再单独请求 trace。
+
+### 19.2 下载不使用 GitHub API（D-130）
+
+- 最新版本：请求 `https://github.com/<仓库>/releases/latest`，不跟随跳转，从 `Location`（`.../releases/tag/<标签>`）取标签，与 install.sh 一致。LiteNode 自我更新和 Xray 都这样做。
+- Xray 默认版本（D-054）：最新正式版 ≥ v26.9.8 时直接使用；否则读 `https://github.com/XTLS/Xray-core/releases.atom`（网页的订阅源，不是 API），取其中 ≥ v26.9.8 的最新标签；订阅源失败才回退到 API 的 releases 列表；都失败时用最新正式版。
+- 查不到默认 Xray 版本（未安装 Xray 时）：Reality 检测前显示一行警告说明原因（查询失败的错误），ML-KEM 目标按可用处理，不再静默判为"需要 Xray v26.9.8"。
+
+### 19.3 没有 IPv4 出口时的下载（D-131）
+
+- 下载（Xray、更新脚本）使用的 HTTP 客户端在 IPv4 出口不可用、IPv6 可用时，查询 `ipv4only.arpa` 的 AAAA 记录（RFC 7050）检测商家 DNS64 / NAT64：结果中嵌入了 `192.0.0.170` 或 `192.0.0.171` 的 /96 前缀即为 NAT64 前缀。之后只有 IPv4 地址的主机（github.com、release-assets.githubusercontent.com 等）用"前缀 + IPv4"连接。只影响本次运行的下载，不改系统 DNS 或路由。TLS 仍与原主机名建立，内容无法被篡改。
+- **不内置公共 NAT64**：nat64.net 的服务条款禁止绕过其 DNS64 的网关分配直接使用前缀，且条款可随时修改、要求使用者自己关注，不适合写进软件。公共 NAT64 / DNS64 只在 README 介绍，由用户自己决定。
+- 没有 IPv4 出口且下载失败时，报错改为提示开启 WARP（系统优化 → WARP）或参考 README。
+- install.sh：`curl -4` 访问不到 trace 且 github.com 没有 IPv6 地址时，用 `getent ahostsv6 ipv4only.arpa` 检测 NAT64 前缀，有则对 github.com 和 release-assets.githubusercontent.com 用 `curl --resolve` 指向换算后的地址；否则提示可先手动开启 WARP 或参考 README。
+
+### 19.4 WARP（系统优化第 6 项，D-133）
+
+```
+ WARP: 已开启（IPv4 经 WARP，出口 104.28.x.x，最近握手 35 秒前）
+──────────────────────────────────────────────
+ 1. 重新选择端点
+ 2. 关闭 WARP
+──────────────────────────────────────────────
+ 0. 返回
+```
+
+- **用途**：只补本机缺少的出口协议。纯 IPv6 机器让 IPv4 走 WARP；只有 IPv4 的机器让 IPv6 走 WARP。两种出口都有时提示不需要并停住；两种都没有时无法注册，提示后停住。原有协议、SSH 连接、入站流量都不变，因此不需要限时确认。
+- **实现**：`wireguard-tools`（缺少时 `apt-get install -y wireguard-tools`）+ 内核 WireGuard（`modprobe wireguard` 失败时提示当前环境不支持）。密钥用 `crypto/ecdh` X25519 生成；注册向 `https://api.cloudflareclient.com/v0a2158/reg` 发送公钥（标准库 HTTP），得到本机隧道地址、对端公钥和端点。不使用第三方程序或库，不使用官方 WARP 客户端。
+- **文件**：`/etc/wireguard/litenode-warp.conf`（600），接口名 `litenode-warp`，由 `wg-quick@litenode-warp` 开机启动。`[Interface]` 只写缺少协议的隧道地址、`MTU = 1280`，不写 `DNS`；`[Peer]` 的 `AllowedIPs` 为 `0.0.0.0/0` 或 `::/0`（wg-quick 用策略路由，本机已有的更具体路由不受影响）、`PersistentKeepalive = 25`。状态文件 `sysopt.warp` 记录账号 ID、令牌、补的协议和端点，私钥只在 conf 中。
+- **端点选择**：端点必须用本机已有的协议连接（纯 IPv6 用 IPv6 端点）。候选为注册响应中的端点地址和内置的几个地址（`2606:4700:d0::a29f:c001`、`2606:4700:d1::a29f:c001` / `162.159.192.1`、`162.159.193.1`），端口 2408、1701、500、4500 依次组合；逐个写入 conf 并启动，10 秒内有握手且缺少的协议能访问 trace 即选中。全部失败则关闭并删除文件，提示原因。
+- **开启**：统一变更流程（备份 → 生成 conf → 启用 `wg-quick@litenode-warp` → 检查出口），检查失败自动恢复（停用服务、删除 conf）。开启后重新检测出口，并提示 IPv4 出口已为 WARP、WARP 出口不会用作分享地址。
+- **状态**：出口 IP（trace）、最近握手（`wg show litenode-warp latest-handshakes`）。系统优化状态行加 `WARP: ✓ / 无`。
+- **重新选择端点**：断开后重新按上面的顺序选择（当前端点排最后）。
+- **关闭**：停用并删除服务与 conf，尽量向 Cloudflare 删除账号（失败忽略），清除 `sysopt.warp`，重新检测出口。
+- **卸载**：两种卸载都保留 WARP（卸载后 IPv4 出口不应突然消失），全部卸载完成后在保留的设置中列出 WARP 的文件和关闭方法。
+- 容器（LXC、OpenVZ）中该项隐藏。
+
+### 19.5 各处检查与提示（D-134）
+
+- **Reality 检测**：解析域名与连接分开限时（解析 5 秒，连接加握手 5 秒）；解析超过 2 秒时，检测结果下方提示"域名解析慢，建议在 系统优化 → DNS 中更换"。
+- **DNS 预设**：只有 IPv6 出口时预设使用各服务的 IPv6 地址（Cloudflare `2606:4700:4700::1111`、`::1001`，Google `2001:4860:4860::8888`、`::8844`，Quad9 `2620:fe::fe`、`2620:fe::9`）；两种出口都有时两个 IPv4 加一个 IPv6；只有 IPv4 时不变。DNS 菜单的状态区逐个探测当前服务器（并行，各 2 秒），连不上的标红并注明"不可达"，提示更换。
+- **节点出站 IP**：IPv4 是否可用改用出口检测结果（WARP 也算可用）。没有 IPv4 出口时"仅 IPv4"拒绝，"优先 IPv4"需确认；IPv6 同理。
+- **端口转发**：没有 IPv4 出口时添加或修改指向 IPv4 目标的规则需确认（IPv6 同理）。连通性测试的"网络不可达"提示按目标的地址族说明是本机没有该协议的出口。
+- **扫描附近网站**：没有本机 IPv4 地址（WARP 不算）时提示"纯 IPv6 机器不能扫描附近网站，请从常用列表选择或手动输入"，不进行扫描。
+- **全部卸载**：保留的设置中列出 DNS（文件位置）和 WARP。

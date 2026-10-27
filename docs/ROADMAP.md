@@ -578,10 +578,10 @@
 
 用户 2026-10-27 决定（D-129）。纯 IPv6 测试机（Debian 13）实测发现：GitHub 无 IPv6、WARP / NAT64 共享出口被 GitHub API 限流、镜像 DNS 含不可达 IPv4 服务器导致检测超时、WARP 出口被当作分享地址等。设计要先写进 DESIGN（M12-01 开始前，与本阶段第一个 PR 一起或单独 docs PR）。
 
-### M12-01 下载不使用 GitHub API `未开始`
+### M12-01 下载不使用 GitHub API `已完成`
 - LiteNode 和 Xray 的最新版本用 `github.com/<仓库>/releases/latest` 的跳转获取（与 install.sh 一致）；只有最新正式版低于 v26.9.8 时才回退到 API 查预发布版（D-054）。
 - 查不到默认 Xray 版本时，Reality 检测明确提示原因，不再把 ML-KEM 目标静默判为"需要 Xray v26.9.8"。
-- 验收：[ ] 单元测试（跳转解析、回退条件、查询失败的提示）；[ ] [VPS] WARP 出口被 API 限流时仍能安装 Xray、更新脚本、通过常用列表检测。
+- 验收：[x] 单元测试（跳转解析、订阅源解析、回退条件、查询失败的提示）；[x] [VPS] 纯 IPv6 + WARP 测试机用 /etc/hosts 屏蔽 api.github.com：安装 Xray（得到预发布版 v26.10.21）、更新脚本 v0.3.3 → v0.3.4、常用列表 12 个可用。
 
 ### M12-02 出口检测与识别 WARP `未开始`
 - 统一检测 IPv4 / IPv6 是否有可用出口、IPv4 是否为 WARP（trace 的 `warp=on`），每次运行最多一次、按需执行（修改 D-085 的否决项，见 D-129）。
