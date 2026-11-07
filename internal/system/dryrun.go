@@ -62,6 +62,24 @@ func (d *DryRun) WriteFile(path string, data []byte, perm fs.FileMode) error {
 	return nil
 }
 
+// WriteFileFrom runs src only to show the size; src writes to memory-only
+// sinks, so nothing on the system changes.
+func (d *DryRun) WriteFileFrom(path string, perm fs.FileMode, src func(io.Writer) error) error {
+	var n countingWriter
+	if err := src(&n); err != nil {
+		return err
+	}
+	fmt.Fprintln(d.Out, text.DryRunWriteFile(path, int(n), fmt.Sprintf("%04o", perm)))
+	return nil
+}
+
+type countingWriter int64
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	*c += countingWriter(len(p))
+	return len(p), nil
+}
+
 func (d *DryRun) Remove(path string) error {
 	fmt.Fprintln(d.Out, text.DryRunRemove(path))
 	return nil

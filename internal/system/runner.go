@@ -43,6 +43,9 @@ type Runner interface {
 	ReadDir(path string) ([]string, error)
 	// WriteFile atomically replaces path with data (temporary file + rename).
 	WriteFile(path string, data []byte, perm fs.FileMode) error
+	// WriteFileFrom is WriteFile for content too large to hold in memory:
+	// src writes it, and path is replaced only if src returns nil.
+	WriteFileFrom(path string, perm fs.FileMode, src func(io.Writer) error) error
 	// Remove deletes a file. Removing a file that does not exist is not an error.
 	Remove(path string) error
 	// RemoveAll deletes a path and everything under it.

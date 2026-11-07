@@ -1,10 +1,13 @@
 package xray
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -26,5 +29,25 @@ func TestFetcherKeepsDialError(t *testing.T) {
 	}
 	if len(dialed) != 2 || dialed[0] != "github.com:443" {
 		t.Errorf("dialed %v", dialed)
+	}
+}
+
+func TestFetchBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/chunked" {
+			w.(http.Flusher).Flush() // no Content-Length
+		}
+		w.Write(bytes.Repeat([]byte("x"), 1000))
+	}))
+	defer srv.Close()
+	f := NewHTTPFetcher(nil)
+	for _, path := range []string{"/known", "/chunked"} {
+		data, err := f.Fetch(t.Context(), srv.URL+path, 1000)
+		if err != nil || len(data) != 1000 {
+			t.Errorf("%s: got %d bytes, err %v", path, len(data), err)
+		}
+		if _, err := f.Fetch(t.Context(), srv.URL+path, 999); err == nil {
+			t.Errorf("%s: no error over the limit", path)
+		}
 	}
 }

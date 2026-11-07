@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Aspeternity/litenode/internal/state"
@@ -75,9 +77,11 @@ func (in *Installer) resolve(ctx context.Context, version string) (string, error
 }
 
 // download fetches the release archive, verifies it against the published
-// sha256 and returns the xray program from it. Other files in the archive
-// (geoip.dat, geosite.dat) are not used (D-008).
-func (in *Installer) download(ctx context.Context, version string) ([]byte, error) {
+// sha256 and returns the xray program in it. Other files in the archive
+// (geoip.dat, geosite.dat) are not used (D-008). The archive stays in
+// memory (it is on no disk yet and must be hashed); the much larger program
+// is only unpacked by writeProgram, straight to disk (D-140).
+func (in *Installer) download(ctx context.Context, version string) (*zip.File, error) {
 	asset, err := AssetName(in.Arch)
 	if err != nil {
 		return nil, err
@@ -99,33 +103,56 @@ func (in *Installer) download(ctx context.Context, version string) ([]byte, erro
 	if hex.EncodeToString(sum[:]) != want {
 		return nil, ErrDigestMismatch
 	}
-	return extractXray(archive)
+	return findXray(archive)
 }
 
-func extractXray(archive []byte) ([]byte, error) {
+func findXray(archive []byte) (*zip.File, error) {
 	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil {
 		return nil, fmt.Errorf("open xray archive: %w", err)
 	}
 	for _, f := range zr.File {
-		if f.Name != "xray" {
-			continue
+		if f.Name == "xray" {
+			return f, nil
 		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, fmt.Errorf("open xray in archive: %w", err)
-		}
-		defer rc.Close()
-		data, err := io.ReadAll(io.LimitReader(rc, maxArchiveSize+1))
-		if err != nil {
-			return nil, fmt.Errorf("extract xray: %w", err)
-		}
-		if len(data) > maxArchiveSize {
-			return nil, errors.New("xray in archive is too large")
-		}
-		return data, nil
 	}
 	return nil, errors.New("xray program not found in archive")
+}
+
+// writeProgram unpacks the xray program to BinPath.
+func (in *Installer) writeProgram(xray *zip.File) error {
+	in.removeStaleTemp()
+	return in.Runner.WriteFileFrom(BinPath, 0o755, func(w io.Writer) error {
+		rc, err := xray.Open()
+		if err != nil {
+			return fmt.Errorf("open xray in archive: %w", err)
+		}
+		defer rc.Close()
+		n, err := io.Copy(w, io.LimitReader(rc, maxArchiveSize+1))
+		if err != nil {
+			return fmt.Errorf("extract xray: %w", err)
+		}
+		if n > maxArchiveSize {
+			return errors.New("xray in archive is too large")
+		}
+		return nil
+	})
+}
+
+// removeStaleTemp deletes temporary program files of a run that was killed
+// while writing one (a machine out of memory): nothing else would ever
+// remove them, and each is as large as the program.
+func (in *Installer) removeStaleTemp() {
+	names, err := in.Runner.ReadDir(LibDir)
+	if err != nil {
+		return
+	}
+	prefix := "." + filepath.Base(BinPath) + ".tmp-"
+	for _, name := range names {
+		if strings.HasPrefix(name, prefix) {
+			in.Runner.Remove(filepath.Join(LibDir, name))
+		}
+	}
 }
 
 // DownloadError means querying or downloading a release failed; nothing
@@ -143,7 +170,7 @@ func (in *Installer) Install(ctx context.Context, version string) (v string, err
 	if v, err = in.resolve(ctx, version); err != nil {
 		return "", err
 	}
-	bin, err := in.download(ctx, v)
+	program, err := in.download(ctx, v)
 	if err != nil {
 		return "", err
 	}
@@ -158,7 +185,7 @@ func (in *Installer) Install(ctx context.Context, version string) (v string, err
 	if err := in.Runner.MkdirAll(LibDir, 0o755); err != nil {
 		return "", fmt.Errorf("create %s: %w", LibDir, err)
 	}
-	if err := in.Runner.WriteFile(BinPath, bin, 0o755); err != nil {
+	if err := in.writeProgram(program); err != nil {
 		return "", fmt.Errorf("install xray: %w", err)
 	}
 	if got, ok := in.Installed(ctx); !ok || got != v {
@@ -203,7 +230,7 @@ func (in *Installer) Update(ctx context.Context, version string) (string, error)
 	if err != nil {
 		return "", &DownloadError{Err: err}
 	}
-	bin, err := in.download(ctx, v)
+	program, err := in.download(ctx, v)
 	if err != nil {
 		return "", &DownloadError{Err: err}
 	}
@@ -216,7 +243,7 @@ func (in *Installer) Update(ctx context.Context, version string) (string, error)
 	if err := in.Runner.Rename(BinPath, bak); err != nil {
 		return "", fmt.Errorf("back up xray %s: %w", old, err)
 	}
-	if err := in.tryNew(ctx, bin, v, running); err != nil {
+	if err := in.tryNew(ctx, program, v, running); err != nil {
 		if rerr := in.revert(ctx, bak, running); rerr != nil {
 			return "", fmt.Errorf("update to %s failed: %w; reverting to %s also failed: %v", v, err, old, rerr)
 		}
@@ -226,8 +253,8 @@ func (in *Installer) Update(ctx context.Context, version string) (string, error)
 	return v, nil
 }
 
-func (in *Installer) tryNew(ctx context.Context, bin []byte, v string, running bool) error {
-	if err := in.Runner.WriteFile(BinPath, bin, 0o755); err != nil {
+func (in *Installer) tryNew(ctx context.Context, program *zip.File, v string, running bool) error {
+	if err := in.writeProgram(program); err != nil {
 		return fmt.Errorf("install xray: %w", err)
 	}
 	if got, ok := in.Installed(ctx); !ok || got != v {
@@ -305,6 +332,7 @@ func (in *Installer) Uninstall(ctx context.Context) error {
 // removeFiles deletes the program and unit and reloads systemd.
 func (in *Installer) removeFiles(ctx context.Context) error {
 	var errs []error
+	in.removeStaleTemp()
 	for _, p := range []string{BinPath, BinPath + ".bak", UnitPath} {
 		if err := in.Runner.Remove(p); err != nil {
 			errs = append(errs, fmt.Errorf("remove %s: %w", p, err))

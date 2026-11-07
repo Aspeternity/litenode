@@ -672,6 +672,11 @@ v0.3.0 之后的小修复，不属于任何阶段，按编号单独提交。
 - 验收：[x] 写入 / 替换 resolvconf.conf 的标记行、状态读取、卸载列出（单元测试）。全部测试通过。
 - 验收：[x] [VPS]（2026-10-28，纯 IPv6 测试机 Debian 13）启动询问回车后 resolv.conf 和 resolvconf.conf 都写入 Cloudflare IPv6；`resolvconf -u` 和重启后 IPv6 DNS 仍在最前，`getent` 由 6.3 秒变为 0.01 秒，再次启动不询问；菜单改为 Google 时标记行被替换（只有一组）；提示文字为 openresolv 版本。
 
+### FIX-13 128M 机器上安装 Xray 不再内存不足 `已完成`
+- 128M 的 NAT 容器上安装 Xray 时 LiteNode 被内核杀掉（屏幕只有 `Killed`），临时文件留在磁盘上。方案见 D-140。
+- 验收：[x] 程序解压时直接写磁盘；SIGKILL 留下的临时文件在下次安装、更新、卸载时删除，不动其他文件（单元测试）。全部测试通过。
+- 验收：[x] [VPS]（2026-11-07，NAT 测试机 Debian 13 arm64，128M，podman）v0.4.2 安装时 OOM，修复后安装成功、`oom_kill` 不增加、两个旧临时文件被删除；Reality 节点运行，Xray 常驻约 34M。
+
 ## 未排期
 
 产品成熟后再决定（D-089）：
