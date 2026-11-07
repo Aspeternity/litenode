@@ -1131,3 +1131,9 @@
 - **内容**：系统未使用 systemd-resolved 且存在 `/etc/resolvconf.conf`（openresolv）时，设置 DNS 除了写 `/etc/resolv.conf`，同一次变更还在 `/etc/resolvconf.conf` 末尾写入 LiteNode 标记行和 `name_servers="..."`（再次设置时替换，不动用户原有的行）。openresolv 重新生成 resolv.conf 时把这些服务器排在最前，网卡和 DHCP 给的服务器排在后面作为备用（glibc 只用前 3 个）。DNS 页面显示标记行中的服务器，状态为"LiteNode 设置"；全部卸载时列为保留的设置。
 - **原因**：实测纯 IPv6 Debian 13（cloud-init + ifupdown + openresolv）上 FIX-11 改好的 DNS 重启后被改回 `1.1.1.1 8.8.8.8 ...`（开机时 ifup 把 `dns-nameservers` 交给 resolvconf 重新生成），每次启动又询问。改后重启仍是 IPv6 DNS 在前，解析 0.01 秒，不再询问。
 - **否决**：`resolvconf=NO` 关闭 openresolv（会停掉 dnsmasq / unbound 等订阅者，也不再接收 DHCP 的服务器）；修改 `/etc/network/interfaces.d/50-cloud-init` 的 `dns-nameservers`（cloud-init 生成的文件，可能被重新生成）；`chattr +i` 锁定 resolv.conf（其他程序写入会失败，用户难以察觉）；同时处理 Debian 的 resolvconf 包（它管理的 resolv.conf 是软链接，LiteNode 原子写入会替换软链接，之后不再被改写，无需处理）。
+
+### D-140 Xray 程序解压时直接写磁盘（由 Claude 决定（用户授权），FIX-13）
+
+- **内容**：压缩包仍在内存中校验 sha256，但按 `Content-Length` 一次分配；其中的程序解压时写入目标目录的临时文件（`Runner.WriteFileFrom`），不再整个读入内存。被杀进程留下的 `.xray.tmp-*` 在下次写程序或卸载时删除。
+- **原因**：实测 128M cgroup 中，内存里同时有压缩包（约 13M）、程序（32M）和逐步扩容留下的垃圾，超过上限被 OOM 杀掉。压缩包要校验，且 zip 需要随机访问，小于 20M 放内存代价可接受。
+- **否决**：压缩包也写磁盘（`/tmp` 常是 tmpfs，同样计入 cgroup；放目标目录要多处理一份临时文件，收益只有十几 M）；用 `debug.SetMemoryLimit` 压 GC（治标，分配量不变）。

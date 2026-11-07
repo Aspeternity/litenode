@@ -4,6 +4,7 @@
 package systemtest
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -212,6 +213,14 @@ func (f *Fake) WriteFile(path string, data []byte, perm fs.FileMode) error {
 	f.Files[path] = data
 	f.Modes[path] = perm
 	return nil
+}
+
+func (f *Fake) WriteFileFrom(path string, perm fs.FileMode, src func(io.Writer) error) error {
+	var buf bytes.Buffer
+	if err := src(&buf); err != nil {
+		return err
+	}
+	return f.WriteFile(path, buf.Bytes(), perm)
 }
 
 func (f *Fake) Remove(path string) error {

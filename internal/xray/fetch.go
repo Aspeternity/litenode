@@ -1,6 +1,7 @@
 package xray
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -67,12 +68,17 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, url string, limit int64) ([]byt
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download %s: HTTP %s", url, resp.Status)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil {
+	// Allocating the known size at once matters on small machines: growing
+	// the buffer step by step leaves garbage several times the file size.
+	var buf bytes.Buffer
+	if n := resp.ContentLength; n > 0 && n <= limit {
+		buf.Grow(int(n) + bytes.MinRead)
+	}
+	if _, err := buf.ReadFrom(io.LimitReader(resp.Body, limit+1)); err != nil {
 		return nil, fmt.Errorf("download %s: %w", url, err)
 	}
-	if int64(len(data)) > limit {
+	if int64(buf.Len()) > limit {
 		return nil, fmt.Errorf("download %s: larger than %d bytes", url, limit)
 	}
-	return data, nil
+	return buf.Bytes(), nil
 }

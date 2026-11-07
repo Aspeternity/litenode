@@ -80,8 +80,17 @@ func (r *Real) Rename(oldPath, newPath string) error {
 }
 
 func (r *Real) WriteFile(path string, data []byte, perm fs.FileMode) error {
-	err := writeFileAtomic(path, data, perm)
+	err := writeFileAtomic(path, perm, func(w io.Writer) error {
+		_, err := w.Write(data)
+		return err
+	})
 	r.Log.Record(fmt.Sprintf("write %s (%d bytes, mode %04o)", path, len(data), perm), err)
+	return err
+}
+
+func (r *Real) WriteFileFrom(path string, perm fs.FileMode, src func(io.Writer) error) error {
+	err := writeFileAtomic(path, perm, src)
+	r.Log.Record(fmt.Sprintf("write %s (mode %04o)", path, perm), err)
 	return err
 }
 
@@ -131,9 +140,9 @@ func runInput(ctx context.Context, input []byte, name string, args []string) (Re
 	return res, nil
 }
 
-// writeFileAtomic writes data to a temporary file in the same directory and
+// writeFileAtomic has src write to a temporary file in the same directory and
 // renames it over path, so readers never see a partially written file.
-func writeFileAtomic(path string, data []byte, perm fs.FileMode) (err error) {
+func writeFileAtomic(path string, perm fs.FileMode, src func(io.Writer) error) (err error) {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
@@ -145,7 +154,7 @@ func writeFileAtomic(path string, data []byte, perm fs.FileMode) (err error) {
 			os.Remove(tmp.Name())
 		}
 	}()
-	if _, err = tmp.Write(data); err != nil {
+	if err = src(tmp); err != nil {
 		return fmt.Errorf("write temporary file for %s: %w", path, err)
 	}
 	if err = tmp.Chmod(perm); err != nil {

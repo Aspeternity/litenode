@@ -289,3 +289,32 @@ func TestUpdateDownloadFailed(t *testing.T) {
 		t.Errorf("program changed: %q", fx.r.Files[BinPath])
 	}
 }
+
+// TestInstallRemovesTempFilesOfKilledRun: a run killed while writing the
+// program (out of memory) leaves its temporary file behind.
+func TestInstallRemovesTempFilesOfKilledRun(t *testing.T) {
+	fx := newFixture(t)
+	fx.reportVersion("v26.3.27")
+	stale, other := LibDir+"/.xray.tmp-123", LibDir+"/keep"
+	fx.r.Files[stale] = []byte("partial")
+	fx.r.Files[other] = []byte("x")
+	if _, err := fx.in.Install(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fx.r.Files[stale]; ok {
+		t.Error("stale temporary file was not removed")
+	}
+	if _, ok := fx.r.Files[other]; !ok {
+		t.Error("unrelated file was removed")
+	}
+}
+
+func TestFindXrayMissing(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	zw.Create("geoip.dat")
+	zw.Close()
+	if _, err := findXray(buf.Bytes()); err == nil {
+		t.Fatal("no error for an archive without the program")
+	}
+}
