@@ -244,6 +244,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		s.HoldAll = true
 		pause = true
 	}
+	caps := system.ProbeAll(ctx, r)
 	nodes := &nodeUI{ctx: ctx, s: s, svc: svc, checker: env.TargetChecker, detector: env.AddressDetector, dns: env.Resolver, egress: eg}
 	if nodes.checker == nil {
 		nodes.checker = &reality.Checker{}
@@ -267,7 +268,8 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 	fwSvc := &firewall.Service{Store: store, Confirmer: sshSvc.Confirmer}
 	fwMenu := &firewallUI{ctx: ctx, s: s, svc: fwSvc, reg: reg}
 	fwdMenu := &forwardUI{ctx: ctx, s: s, svc: env.forwards(r, store), egress: eg}
-	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: system.ProbeAll(ctx, r), probeDNS: env.dnsProber(), syncWait: 30 * time.Second,
+	nodes.caps = caps
+	optMenu := &sysoptUI{ctx: ctx, s: s, info: info, caps: caps, probeDNS: env.dnsProber(), syncWait: 30 * time.Second,
 		svc: &sysopt.Service{Runner: r, Store: store, Changes: change.NewManager(r, store)},
 		warp: &warp.Service{Runner: r, Changes: change.NewManager(r, store), Rand: env.rand(), Trace: env.WARPTrace, Client: env.WARPClient,
 			Executable: env.Executable},
@@ -302,7 +304,7 @@ func runMenu(ctx context.Context, env Env, dryRun bool) int {
 		if installed {
 			active, _ = system.ServiceActive(ctx, r, xray.UnitName)
 		}
-		return mainMenu(s, env.Version, info, egressStatus(s, eg.Status(ctx)), st, xrayStatus(s, installed, active, st), sshMainStatus(ctx, sshSvc),
+		return mainMenu(s, env.Version, info, caps, egressStatus(s, eg.Status(ctx)), st, xrayStatus(s, installed, active, st), sshMainStatus(ctx, sshSvc),
 			fwSvc.BothActive(ctx, st),
 			func() error { return s.Run(nodes.menu) },
 			func() error { return s.Run(nodes.clientsMenu) },

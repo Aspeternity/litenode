@@ -20,6 +20,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/reality"
 	"github.com/Aspeternity/litenode/internal/share"
 	"github.com/Aspeternity/litenode/internal/state"
+	"github.com/Aspeternity/litenode/internal/system"
 	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ufw"
 	"github.com/Aspeternity/litenode/internal/ui"
@@ -54,6 +55,7 @@ type AddressDetector interface {
 type nodeUI struct {
 	ctx      context.Context
 	s        *ui.Session
+	caps     system.Capabilities
 	svc      *nodemgr.Service
 	checker  TargetChecker
 	detector AddressDetector
@@ -128,7 +130,7 @@ func (u *nodeUI) menu() ui.Menu {
 			{Label: text.NodeAdd, Action: u.add},
 			{Label: text.NodeModify, Hidden: none, Page: true, Action: u.modify},
 			{Label: text.NodeToggle, Hidden: none, Action: u.toggle},
-			{Label: text.NodeCheck, Hidden: none, Action: u.check},
+			{Label: text.NodeCheck, Hidden: none || !u.caps.Has(system.CapNetAdmin), Action: u.check},
 			{Label: text.NodeDelete, Hidden: none, Action: u.delete},
 		},
 	}

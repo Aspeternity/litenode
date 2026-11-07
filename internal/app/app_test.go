@@ -108,6 +108,28 @@ func TestRunShowsMainMenu(t *testing.T) {
 	}
 }
 
+// A container without CAP_NET_ADMIN gets no firewall or forwarding, and
+// what is left stays numbered without gaps (D-141).
+func TestRunHidesNetworkFeaturesWithoutNetAdmin(t *testing.T) {
+	f := supported()
+	f.Files["/proc/self/status"] = []byte("CapEff:\t00000000800405fb\n")
+	f.Respond(systemtest.Response{Result: system.Result{Stdout: "podman\n"}}, "systemd-detect-virt")
+	r := run(t, f, 0, "0\n")
+	if r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	for _, hidden := range []string{text.MenuForwards, text.MenuFirewall, "转发规则:", "防火墙:"} {
+		if strings.Contains(r.stdout, hidden) {
+			t.Errorf("%q shown:\n%s", hidden, r.stdout)
+		}
+	}
+	for _, want := range []string{"已隐藏", " 4. " + text.MenuXray, " 7. " + text.MenuMaint} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("stdout missing %q:\n%s", want, r.stdout)
+		}
+	}
+}
+
 // The sysctl file of an earlier version is renamed at startup (D-123).
 func TestRunMovesLegacySysctl(t *testing.T) {
 	f := supported()

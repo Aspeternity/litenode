@@ -54,9 +54,9 @@
 - 虚拟化类型：`systemd-detect-virt`，区分 KVM 等完整虚拟化和 LXC、OpenVZ、WSL 等容器环境。
 - 内存、BBR 状态等摘要信息。
 
-**能力探测优先于类型判断**：某个功能能不能用，以实际探测结果为准，而不是只看虚拟化类型。例如 BBR 检查 `/proc/sys/net/ipv4/tcp_available_congestion_control`，swap 尝试检查 `swapon` 是否可用，sysctl 尝试读写对应项。
+**能力探测优先于类型判断**：某个功能能不能用，以实际探测结果为准，而不是只看虚拟化类型。例如 BBR 检查 `/proc/sys/net/ipv4/tcp_available_congestion_control`，swap 尝试检查 `swapon` 是否可用，sysctl 尝试读写对应项。没有 CAP_NET_ADMIN（`/proc/self/status` 的 `CapEff`）时隐藏端口转发、防火墙和连通性检测；`/etc/resolv.conf` 是挂载点时隐藏 DNS 设置（D-141）。
 
-**不可用的功能隐藏**：探测为不可用的菜单项不显示，其余选项连续编号；该菜单顶部显示一行提示，例如"部分功能在当前环境（LXC）中不可用"。
+**不可用的功能隐藏**：探测为不可用的菜单项不显示，其余选项连续编号；该菜单顶部显示一行提示，例如"部分功能在当前环境（LXC）中不可用"。状态中已有转发规则或防火墙已启用时保留对应菜单，以便删除。
 
 **与已有软件共存**（D-037、D-038）：
 
