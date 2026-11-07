@@ -209,6 +209,16 @@ func (u *nodeUI) add() error {
 	if err != nil {
 		return err
 	}
+	sharePort := 0
+	if u.behindNAT(addr) {
+		external, err := u.s.PromptNumber(text.PromptExternalPort, port, 1, 65535)
+		if err != nil {
+			return err
+		}
+		if external != port {
+			sharePort = external
+		}
+	}
 	target := ""
 	if reality {
 		target, err = u.chooseTarget(2, steps)
@@ -225,15 +235,12 @@ func (u *nodeUI) add() error {
 		u.s.Println(text.InstallingXray)
 	}
 	u.s.Println(text.ApplyingChange)
-	n, err := u.svc.Add(u.ctx, nodemgr.AddInput{PresetID: preset.ID, Port: port, Target: target, Remark: remark})
+	n, err := u.svc.Add(u.ctx, nodemgr.AddInput{PresetID: preset.ID, Port: port, SharePort: sharePort, Target: target, Remark: remark})
 	if err != nil {
 		return err
 	}
 	u.s.Done(text.NodeAdded)
 	u.showLink(n, n.Clients[0], addr, true, true)
-	if u.behindNAT(addr) {
-		u.s.Println(u.s.Colors.Warn(text.NATShareHint(port)))
-	}
 	if len(u.state().Server.ShareAddresses) > 1 {
 		u.s.Println(text.OtherAddressesHint)
 	}
@@ -241,7 +248,7 @@ func (u *nodeUI) add() error {
 }
 
 // behindNAT reports whether the machine looks to be behind NAT when reached
-// at addr (D-043, D-142).
+// at addr (D-043, D-142, D-143).
 func (u *nodeUI) behindNAT(addr string) bool {
 	if net.ParseIP(addr) != nil {
 		return !u.detector.OnInterface(addr)
