@@ -140,6 +140,9 @@ func find(st *state.State, id int64) *node.Node {
 type AddInput struct {
 	PresetID string
 	Port     int
+	// SharePort is the port put in links when it differs from Port (a NAT
+	// mapping, D-143); 0 means Port.
+	SharePort int
 	// Target is the REALITY target "host:port".
 	Target string
 	Remark string
@@ -179,6 +182,7 @@ func (s *Service) Add(ctx context.Context, in AddInput) (node.Node, error) {
 	if err := s.EnsureXray(ctx, st); err != nil {
 		return node.Node{}, err
 	}
+	n.SharePort = in.SharePort
 	st.Nodes = append(st.Nodes, n)
 	if err := s.apply(ctx, st); err != nil {
 		return node.Node{}, err

@@ -38,6 +38,7 @@ const (
 	PromptTarget       = "目标网站域名（可带端口，默认 443；0 返回）"
 	PromptShareAddress = "主机地址（IP 或域名，0 返回）"
 	PromptSharePort    = "分享端口（0 表示与监听端口相同）"
+	PromptExternalPort = "外部端口（商家映射的公网端口，与内部端口相同时直接回车）"
 	Checking           = "正在检测……"
 	InstallingXray     = "首次添加节点，正在安装 Xray……"
 	ApplyingChange     = "正在应用配置……"
@@ -145,13 +146,8 @@ func HomepageSize(size int64) string {
 // Port step hints.
 const (
 	Non443Hint = "提示：Reality 使用 443 以外的端口更容易被识别。"
-	NATHint    = "提示：本机网卡上没有这个公网地址，这可能是 NAT 机。请输入商家映射到本机的内部端口；外部端口与内部端口不同时，添加后在\"修改节点\"中设置分享端口。"
+	NATHint    = "提示：本机网卡上没有这个公网地址，这可能是 NAT 机。下面先输入内部端口，再输入商家映射到它的外部端口。"
 )
-
-// NATShareHint reminds that the link above uses the local port (D-142).
-func NATShareHint(port int) string {
-	return fmt.Sprintf("这可能是 NAT 机：上面的链接使用内部端口 %d。如果商家映射的外部端口不同，请在\"修改节点\"中设置分享端口。", port)
-}
 
 // PortTaken explains a port conflict. owner is "" for another program.
 func PortTaken(port int, proto, owner string) string {

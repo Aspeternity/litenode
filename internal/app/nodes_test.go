@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Aspeternity/litenode/internal/egress"
+	"github.com/Aspeternity/litenode/internal/node"
 	"github.com/Aspeternity/litenode/internal/node/security"
 	"github.com/Aspeternity/litenode/internal/reality"
 	"github.com/Aspeternity/litenode/internal/share"
@@ -673,5 +674,36 @@ func TestBehindNAT(t *testing.T) {
 		if got := u.behindNAT(tc.addr); got != tc.want {
 			t.Errorf("%T %s: got %v", tc.d, tc.addr, got)
 		}
+	}
+}
+
+// TestAddNodeAsksExternalPort: behind NAT the external port is asked right
+// after the port and goes into the link; Enter keeps the two the same
+// (D-143).
+func TestAddNodeAsksExternalPort(t *testing.T) {
+	add := func(external string) (string, []node.Node) {
+		f := nodeSystem()
+		env := Env{Runner: f, Euid: 0, LockPath: filepath.Join(t.TempDir(), "lock"),
+			TargetChecker: fakeChecker{}, AddressDetector: natDetector{}, XrayFetcher: releaseFetcher{}}
+		// 1 nodes, 1 add, 3 Shadowsocks, port, external port, remark.
+		r := runEnv(t, env, strings.Join([]string{"1", "1", "3", "20003", external, "", "0", "0"}, "\n")+"\n")
+		st, err := state.NewStore(f).Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.stdout, st.Nodes
+	}
+	out, nodes := add("41000")
+	if !strings.Contains(out, text.PromptExternalPort) || !strings.Contains(out, text.NATHint) {
+		t.Errorf("no NAT prompts:\n%s", out)
+	}
+	if len(nodes) != 1 || nodes[0].Port != 20003 || nodes[0].SharePort != 41000 {
+		t.Fatalf("nodes = %+v", nodes)
+	}
+	if !strings.Contains(out, ":41000#") {
+		t.Errorf("link does not use the external port:\n%s", out)
+	}
+	if _, nodes := add(""); len(nodes) != 1 || nodes[0].SharePort != 0 {
+		t.Fatalf("Enter should keep the same port: %+v", nodes)
 	}
 }
