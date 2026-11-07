@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Aspeternity/litenode/internal/system"
@@ -48,5 +49,16 @@ func TestMainStatusLongXrayState(t *testing.T) {
 	got := MainStatusLines(MainStatus{Xray: "○ 已停止（手动）", Nodes: 1, System: info}, Colors{})
 	if got[0] != "Xray: ○ 已停止（手动）  节点: 1  转发规则: 0" {
 		t.Errorf("got %q", got[0])
+	}
+}
+
+func TestMainStatusLinesWithoutNetworkFeatures(t *testing.T) {
+	got := MainStatusLines(MainStatus{Xray: "x", SSH: "22", NoForwards: true, NoFirewall: true}, Colors{})
+	joined := strings.Join(got, "\n")
+	if strings.Contains(joined, "转发") || strings.Contains(joined, "防火墙") {
+		t.Errorf("hidden fields shown: %q", joined)
+	}
+	if got[0] != strings.TrimRight(got[0], " ") || got[1] != strings.TrimRight(got[1], " ") {
+		t.Errorf("trailing padding: %q", got[:2])
 	}
 }

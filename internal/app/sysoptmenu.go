@@ -84,7 +84,7 @@ func (u *sysoptUI) menu() ui.Menu {
 			{Label: text.SysoptBBR, Hidden: !u.caps.Has(system.CapBBR), Action: func() error { return u.bbr(bbr) }},
 			{Label: text.SysoptSwap, Hidden: !u.caps.Has(system.CapSwap), Action: u.swap},
 			{Label: text.SysoptPreference, Action: u.preference},
-			{Label: text.SysoptDNS, Action: u.dns},
+			{Label: text.SysoptDNS, Hidden: !u.caps.Has(system.CapDNS), Action: u.dns},
 			{Label: text.SysoptClock, Hidden: clockErr != nil, Action: u.clock},
 			{Label: text.SysoptWARP, Hidden: u.info.Virt.Container, Page: true, Action: func() error { return u.s.Run(u.warpMenu) }},
 		},
@@ -358,7 +358,7 @@ func (u *sysoptUI) dns() error {
 // the caller waits for Enter before the main menu clears the screen.
 func (u *sysoptUI) offerDNSFix() (bool, error) {
 	st, err := u.svc.Store.Load()
-	if err != nil || st.Server.SlowDNSDeclined {
+	if err != nil || st.Server.SlowDNSDeclined || !u.caps.Has(system.CapDNS) {
 		return false, nil
 	}
 	eg := u.egress.Status(u.ctx)

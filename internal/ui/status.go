@@ -80,6 +80,9 @@ type MainStatus struct {
 	System   system.Info
 	// Egress is the pre-rendered exits, appended to the system line.
 	Egress string
+	// NoForwards and NoFirewall drop those fields, for a system where the
+	// features are not available (DESIGN section 2).
+	NoForwards, NoFirewall bool
 	// Warnings are shown below the system line, e.g. when the LiteNode
 	// firewall and ufw are both active (DESIGN section 2).
 	Warnings []string
@@ -107,12 +110,15 @@ func MainStatusLines(st MainStatus, c Colors) []string {
 	if fw == "" {
 		fw = text.StatusUnknown
 	}
-	lines := []string{
-		column(column(text.StatusXray(xray), statusCol2)+text.StatusNodes(st.Nodes), statusCol3) +
-			text.StatusForwards(st.Forwards),
-		column(text.StatusSSH(ssh), statusCol3) + text.StatusFirewall(fw),
-		SystemLine(st.System),
+	first := column(text.StatusXray(xray), statusCol2) + text.StatusNodes(st.Nodes)
+	if !st.NoForwards {
+		first = column(first, statusCol3) + text.StatusForwards(st.Forwards)
 	}
+	second := text.StatusSSH(ssh)
+	if !st.NoFirewall {
+		second = column(second, statusCol3) + text.StatusFirewall(fw)
+	}
+	lines := []string{first, second, SystemLine(st.System)}
 	if st.Egress != "" {
 		lines[2] += " | " + st.Egress
 	}

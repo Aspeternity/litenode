@@ -10,6 +10,7 @@ import (
 	"github.com/Aspeternity/litenode/internal/nft"
 	"github.com/Aspeternity/litenode/internal/state"
 	"github.com/Aspeternity/litenode/internal/system"
+	"github.com/Aspeternity/litenode/internal/text"
 	"github.com/Aspeternity/litenode/internal/ufw"
 )
 
@@ -65,8 +66,18 @@ func (s *Service) Check(ctx context.Context) Preflight {
 	return p
 }
 
-// EnsureNft installs the nftables package if nft is missing.
+// ErrNoNetAdmin means nftables cannot work here (D-141). Menus hide what
+// needs it; this catches the paths that remain, such as importing enabled
+// forwards.
+var ErrNoNetAdmin = errors.New(text.NoNetAdmin)
+
+// EnsureNft installs the nftables package if nft is missing. Without
+// CAP_NET_ADMIN nft cannot change anything, so it does not try: on the small
+// containers where this happens apt itself may run out of memory.
 func EnsureNft(ctx context.Context, r system.Runner) error {
+	if !system.HasNetAdmin(r) {
+		return ErrNoNetAdmin
+	}
 	if NftInstalled(ctx, r) {
 		return nil
 	}

@@ -212,3 +212,16 @@ func TestInspect(t *testing.T) {
 		t.Errorf("loaded: %+v, %v", rep, err)
 	}
 }
+
+func TestEnsureNftWithoutNetAdmin(t *testing.T) {
+	r := systemtest.New()
+	r.Files["/proc/self/status"] = []byte("CapEff:\t00000000800405fb\n")
+	if err := EnsureNft(t.Context(), r); !errors.Is(err, ErrNoNetAdmin) {
+		t.Fatalf("EnsureNft = %v", err)
+	}
+	for _, c := range r.Calls() {
+		if strings.Contains(c.Command, "apt-get") {
+			t.Errorf("tried to install nftables: %s", c.Command)
+		}
+	}
+}

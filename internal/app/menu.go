@@ -9,13 +9,21 @@ import (
 )
 
 // mainMenu builds the main menu (DESIGN section 8).
-func mainMenu(s *ui.Session, version string, info system.Info, exits string, st *state.State, xrayState, sshState string, ufwToo bool, nodes, clients, shareMenu, forwards, xrayMenu, sshMenu, firewallMenu, sysoptMenu, maintMenu func() error) ui.Menu {
+func mainMenu(s *ui.Session, version string, info system.Info, caps system.Capabilities, exits string, st *state.State, xrayState, sshState string, ufwToo bool, nodes, clients, shareMenu, forwards, xrayMenu, sshMenu, firewallMenu, sysoptMenu, maintMenu func() error) ui.Menu {
 	var warnings []string
 	if st.Xray.Stopped && enabledNodes(st) > 0 {
 		warnings = append(warnings, text.XrayManualWarning)
 	}
 	if ufwToo {
 		warnings = append(warnings, text.FirewallUFWBoth)
+	}
+	// Rules that are already in the state (an imported configuration)
+	// keep their menu, or they could not be removed.
+	noForwards := !caps.Has(system.CapNetAdmin) && len(st.Forwards) == 0
+	noFirewall := !caps.Has(system.CapNetAdmin) && !st.Firewall.Enabled
+	notice := ""
+	if noForwards || noFirewall {
+		notice = s.Colors.Warn(text.SysoptUnavailableIn(ui.VirtName(info.Virt)))
 	}
 	return ui.Menu{
 		Title: text.MainTitle(version),
@@ -28,17 +36,21 @@ func mainMenu(s *ui.Session, version string, info system.Info, exits string, st 
 			System:   info,
 			Egress:   exits,
 			Warnings: warnings,
+
+			NoForwards: noForwards,
+			NoFirewall: noFirewall,
 		}, s.Colors),
+		Notice:    notice,
 		Grouped:   true,
 		ExitLabel: text.Exit,
 		Items: []ui.Item{
 			{Label: text.MenuNodes, Group: 1, Page: true, Action: nodes},
 			{Label: text.MenuClients, Group: 1, Page: true, Action: clients},
 			{Label: text.MenuShare, Group: 1, Page: true, Action: shareMenu},
-			{Label: text.MenuForwards, Group: 1, Page: true, Action: forwards},
+			{Label: text.MenuForwards, Group: 1, Page: true, Hidden: noForwards, Action: forwards},
 			{Label: text.MenuXray, Group: 1, Page: true, Action: xrayMenu},
 			{Label: text.MenuSSH, Group: 2, Page: true, Action: sshMenu},
-			{Label: text.MenuFirewall, Group: 2, Page: true, Action: firewallMenu},
+			{Label: text.MenuFirewall, Group: 2, Page: true, Hidden: noFirewall, Action: firewallMenu},
 			{Label: text.MenuSysopt, Group: 2, Page: true, Action: sysoptMenu},
 			{Label: text.MenuMaint, Group: 3, Page: true, Action: maintMenu},
 		},

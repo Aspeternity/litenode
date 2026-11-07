@@ -184,3 +184,43 @@ func TestProbeSwap(t *testing.T) {
 		t.Error("no /proc/swaps: want swap unavailable")
 	}
 }
+
+func TestProbeNetAdmin(t *testing.T) {
+	for _, tc := range []struct {
+		status string
+		want   bool
+	}{
+		{"Name:\tx\nCapEff:\t00000000800405fb\nCapBnd:\tffffffffffffffff\n", false}, // Podman default set
+		{"CapEff:\t000001ffffffffff\n", true},
+		{"CapEff:\t0000000000001000\n", true}, // only CAP_NET_ADMIN
+		{"CapEff:\tnot-hex\n", true},
+		{"Name:\tx\n", true},
+	} {
+		f := systemtest.New()
+		f.Files["/proc/self/status"] = []byte(tc.status)
+		if got := system.ProbeAll(t.Context(), f)[system.CapNetAdmin]; got != tc.want {
+			t.Errorf("%q: got %v, want %v", tc.status, got, tc.want)
+		}
+	}
+	if !system.ProbeAll(t.Context(), systemtest.New())[system.CapNetAdmin] {
+		t.Error("an unreadable status must not hide features")
+	}
+}
+
+func TestProbeDNS(t *testing.T) {
+	plain := "25 1 8:1 / / rw - ext4 /dev/sda1 rw\n"
+	bound := plain + "41 25 0:28 /x/resolv.conf /etc/resolv.conf rw - overlay overlay rw\n"
+	for _, tc := range []struct {
+		mounts string
+		want   bool
+	}{{plain, true}, {bound, false}} {
+		f := systemtest.New()
+		f.Files["/proc/self/mountinfo"] = []byte(tc.mounts)
+		if got := system.ProbeAll(t.Context(), f)[system.CapDNS]; got != tc.want {
+			t.Errorf("%q: got %v, want %v", tc.mounts, got, tc.want)
+		}
+	}
+	if !system.ProbeAll(t.Context(), systemtest.New())[system.CapDNS] {
+		t.Error("an unreadable mount table must not hide DNS")
+	}
+}

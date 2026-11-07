@@ -18,6 +18,9 @@ const (
 	StateOff          = "✗"
 )
 
+// NoNetAdmin explains why firewall and forwarding cannot work (D-141).
+const NoNetAdmin = "当前环境没有网络管理权限（CAP_NET_ADMIN），无法使用 nftables，防火墙和端口转发不可用。如果要导入配置，请先在导出文件中禁用转发规则。"
+
 // SysoptUnavailableIn names the environment that hides some options.
 func SysoptUnavailableIn(virt string) string {
 	return "部分功能在当前环境（" + virt + "）中不可用，已隐藏。"

@@ -1137,3 +1137,9 @@
 - **内容**：压缩包仍在内存中校验 sha256，但按 `Content-Length` 一次分配；其中的程序解压时写入目标目录的临时文件（`Runner.WriteFileFrom`），不再整个读入内存。被杀进程留下的 `.xray.tmp-*` 在下次写程序或卸载时删除。
 - **原因**：实测 128M cgroup 中，内存里同时有压缩包（约 13M）、程序（32M）和逐步扩容留下的垃圾，超过上限被 OOM 杀掉。压缩包要校验，且 zip 需要随机访问，小于 20M 放内存代价可接受。
 - **否决**：压缩包也写磁盘（`/tmp` 常是 tmpfs，同样计入 cgroup；放目标目录要多处理一份临时文件，收益只有十几 M）；用 `debug.SetMemoryLimit` 压 GC（治标，分配量不变）。
+
+### D-141 容器中隐藏做不到的功能（由 Claude 决定（用户授权），FIX-14）
+
+- **内容**：新增两项能力探测。`CapNetAdmin` 读 `/proc/self/status` 的 `CapEff`：没有 CAP_NET_ADMIN 时隐藏端口转发、防火墙（含主菜单状态字段）和连通性检测，`EnsureNft` 直接返回中文错误，不运行 apt。`CapDNS` 看 mountinfo：`/etc/resolv.conf` 是挂载点时隐藏 DNS 设置和启动时的 DNS 修复询问。读取失败时视为可用。状态中已有转发规则或防火墙已启用时保留对应菜单，否则规则无法删除。
+- **原因**：nft 需要 CAP_NET_ADMIN，Docker、Podman 默认不给，而 LXC 通常有，所以按权限判断而不是虚拟化类型（DESIGN 第 2 节"能力探测优先于类型判断"）。挂载点不能被 rename 替换，且容器运行时每次启动都会重写这个文件，改了也留不住。
+- **否决**：所有容器一律隐藏（误伤能用 nft 的 LXC）；就地写 `/etc/resolv.conf` 绕开 rename（不是原子写入，重启后丢失，用户会以为设置生效了）；尝试执行 nft 来探测（要先装 nftables，小容器上 apt 可能 OOM）。
