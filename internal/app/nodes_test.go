@@ -44,6 +44,7 @@ func (fakeDetector) Detect(context.Context) share.Detected {
 	return share.Detected{IPv4: "203.0.113.10", Source: share.SourceTrace}
 }
 func (fakeDetector) OnInterface(string) bool { return true }
+func (fakeDetector) HasPublicIP() bool       { return true }
 
 // nodeSystem is a supported Debian 12 with Xray installed and ufw off.
 func nodeSystem() *systemtest.Fake {
@@ -647,5 +648,30 @@ func TestAddNodeNoIPv4StopsEarly(t *testing.T) {
 	}
 	if strings.Contains(r.stdout, "1/3 "+text.PromptPort) {
 		t.Errorf("asked for the port:\n%s", r.stdout)
+	}
+}
+
+type natDetector struct{ fakeDetector }
+
+func (natDetector) OnInterface(string) bool { return false }
+func (natDetector) HasPublicIP() bool       { return false }
+
+// A domain cannot be looked up on the interfaces: what counts is whether
+// the machine has a public address at all (D-142).
+func TestBehindNAT(t *testing.T) {
+	for _, tc := range []struct {
+		d    AddressDetector
+		addr string
+		want bool
+	}{
+		{fakeDetector{}, "203.0.113.1", false},
+		{fakeDetector{}, "node.example.com", false},
+		{natDetector{}, "203.0.113.1", true},
+		{natDetector{}, "node.example.com", true},
+	} {
+		u := &nodeUI{detector: tc.d}
+		if got := u.behindNAT(tc.addr); got != tc.want {
+			t.Errorf("%T %s: got %v", tc.d, tc.addr, got)
+		}
 	}
 }

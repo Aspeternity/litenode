@@ -127,6 +127,32 @@ func publicAddrs(addrs []net.Addr) []netip.Addr {
 	return out
 }
 
+// cgnat is the shared address space of carrier-grade NAT (RFC 6598), which
+// netip does not count as private.
+var cgnat = netip.MustParsePrefix("100.64.0.0/10")
+
+// HasPublicIP reports whether a local interface has a public address.
+// Without one the machine is behind NAT, even when it is reached through a
+// domain, which OnInterface cannot judge. If the interfaces cannot be read
+// it reports true, so that no NAT hint is shown by mistake.
+func (d *Detector) HasPublicIP() bool {
+	addrs, err := d.InterfaceAddrs()
+	if err != nil {
+		return true
+	}
+	for _, a := range addrs {
+		p, err := netip.ParsePrefix(a.String())
+		if err != nil {
+			continue
+		}
+		ip := p.Addr().Unmap()
+		if ip.IsGlobalUnicast() && !ip.IsPrivate() && !cgnat.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // OnInterface reports whether ip is assigned to a local interface. A
 // public IP that is not suggests NAT (D-043).
 func (d *Detector) OnInterface(ip string) bool {
