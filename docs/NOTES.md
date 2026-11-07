@@ -22,7 +22,7 @@
 - **测试连通性检测**（M10-02）：落地机上用 `ptyx.py` 驱动菜单开始检测，几秒后在**另一台**测试机上运行客户端 `scripts/dev/m10cli.sh`（本机连自己不经过防火墙）。一次 DNS 查询只有 1 个 UDP 包，要连续查询 6 次才能达到"通"（5 个包）。LiteNode 每次打开菜单都会补回 ufw 规则（D-038），所以要在检测开始**之后**删除 ufw / LiteNode 防火墙的规则。`ptyx.py` 超时会 SIGKILL 程序，临时表留到下次启动时删除。非 root 用户的测试机上客户端配置不要写到 root 留下的 `/tmp/c.json`。
 - **测试 WARP**（M12-04）：每个端点尝试约 15 秒（启动 + 等握手 10 秒），重新选择端点时 `ptyx.py` 超时要给到 300 秒，否则 SIGKILL 会让隧道停在未验证的端点上（检查定时器 2 分钟内换回）。测试自动换端点：把 `/etc/wireguard/litenode-warp.conf` 的 Endpoint 改成 `[2001:db8::1]:2408` 后 `systemctl restart wg-quick@litenode-warp`，看 `journalctl -u litenode-warp-check`。
 - **测试 NAT 容器**（FIX-13）：机器上没有 python3，`ptyx.py` 在 WSL 运行，经 `VPS_SSH_OPTS=-tt` 驱动远程菜单（`python3 scripts/dev/ptyx.py 步骤文件 -- scripts/dev/vps.sh 'NO_COLOR=1 litenode'`）。不要在远程脚本里放后台循环，会让 ssh 一直挂住。内存看 `/sys/fs/cgroup/memory.events` 的 `oom_kill`；`apt-get update` 后 apt 自身会 OOM，测试后删除 `/var/lib/apt/lists/*`。测试改 SSH 端口前，先用 `systemd-run --on-active=300` 挂一个恢复 `/etc/ssh` 的保险定时器；sshd 换端口后映射失效，只能等回滚（60 秒）。节点协议在容器内自测：`link2client.py` 在 WSL 把链接地址换成 127.0.0.1 后转成配置，传到机器上运行客户端。
-- **NAT 机的外部测试不能用这两条路**（2026-11-07）：WSL 到 NAT 测试机的连接由软路由代答（没映射的端口也 3～5 毫秒"连上"），经模拟的中国线路，失败不说明问题（D-059）；容器连自己的公网地址，商家宿主不支持回环，所有端口都拒绝，包括 SSH。要用其他 VPS 或用户自己的客户端。
+- **NAT 机的外部测试不能用这两条路**（2026-11-07）：WSL 到 NAT 测试机的连接由软路由代答（没映射的端口也 3～5 毫秒"连上"），经模拟的中国线路，失败不说明问题（D-059）；容器连自己的公网地址，商家宿主不支持回环，所有端口都拒绝，包括 SSH。要用其他 VPS 或用户自己的客户端。这台机器的 TCP 未映射端口从外部也显示 open，"端口通"不能作为证据，要实际走通流量。查 UDP 映射是否到了本机：`openssl s_client -quic -alpn h3 -servername <sni> -connect <IP>:<端口>`（OpenSSL ≥ 3.2）看证书是不是节点的，并对比一个未映射的端口。
 - 验证脚本只输出结论（PASS / FAIL、关键几行），不要把整屏菜单或完整日志拿回会话（节省 token，见 CLAUDE.md）。
 
 ## 资源占用（M7-11，2026-10-19）
