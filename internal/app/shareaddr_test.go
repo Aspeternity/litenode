@@ -23,6 +23,7 @@ func (d dualDetector) Detect(context.Context) share.Detected {
 	return share.Detected{IPv4: "203.0.113.10", IPv6: "2001:db8::10", Source: share.SourceTrace}
 }
 func (dualDetector) OnInterface(string) bool { return true }
+func (dualDetector) HasPublicIP() bool       { return true }
 
 type fakeDNS map[string]string
 
@@ -130,6 +131,7 @@ func (v6Detector) Detect(context.Context) share.Detected {
 	return share.Detected{IPv6: "2001:db8::10", Source: share.SourceTrace}
 }
 func (v6Detector) OnInterface(string) bool { return true }
+func (v6Detector) HasPublicIP() bool       { return true }
 
 // TestWARPShareAddressReplaced: a WARP exit saved as the default address
 // by an older version is replaced when a node is added (D-132).

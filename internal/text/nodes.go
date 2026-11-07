@@ -145,8 +145,13 @@ func HomepageSize(size int64) string {
 // Port step hints.
 const (
 	Non443Hint = "提示：Reality 使用 443 以外的端口更容易被识别。"
-	NATHint    = "提示：检测到的公网 IP 不在本机网卡上，这可能是 NAT 机。请输入商家分配的端口；外部端口与内部端口不同时，添加后在\"修改节点\"中设置分享端口。"
+	NATHint    = "提示：本机网卡上没有这个公网地址，这可能是 NAT 机。请输入商家映射到本机的内部端口；外部端口与内部端口不同时，添加后在\"修改节点\"中设置分享端口。"
 )
+
+// NATShareHint reminds that the link above uses the local port (D-142).
+func NATShareHint(port int) string {
+	return fmt.Sprintf("这可能是 NAT 机：上面的链接使用内部端口 %d。如果商家映射的外部端口不同，请在\"修改节点\"中设置分享端口。", port)
+}
 
 // PortTaken explains a port conflict. owner is "" for another program.
 func PortTaken(port int, proto, owner string) string {

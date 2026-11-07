@@ -360,3 +360,24 @@ func TestHysteria2LinkMatchesDesign(t *testing.T) {
 		t.Errorf("QR too wide or failed: %v", err)
 	}
 }
+
+func TestHasPublicIP(t *testing.T) {
+	for _, tc := range []struct {
+		addrs []string
+		want  bool
+	}{
+		{[]string{"127.0.0.1/8", "::1/128", "10.91.0.56/20", "fd91:cafe:cafe:10::38/64", "fe80::1/64"}, false},
+		{[]string{"100.64.3.4/10"}, false},
+		{[]string{"10.0.0.2/24", "198.51.200.7/24"}, true},
+		{[]string{"2001:db8::1/64"}, true},
+	} {
+		d := &Detector{InterfaceAddrs: addrs(tc.addrs...)}
+		if got := d.HasPublicIP(); got != tc.want {
+			t.Errorf("%v: got %v", tc.addrs, got)
+		}
+	}
+	d := &Detector{InterfaceAddrs: func() ([]net.Addr, error) { return nil, net.ErrClosed }}
+	if !d.HasPublicIP() {
+		t.Error("unreadable interfaces must not suggest NAT")
+	}
+}

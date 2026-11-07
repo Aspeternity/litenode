@@ -48,6 +48,7 @@ type TargetScanner interface {
 type AddressDetector interface {
 	Detect(ctx context.Context) share.Detected
 	OnInterface(ip string) bool
+	HasPublicIP() bool
 }
 
 // nodeUI holds the node menus (DESIGN section 9). It only displays and
@@ -230,10 +231,22 @@ func (u *nodeUI) add() error {
 	}
 	u.s.Done(text.NodeAdded)
 	u.showLink(n, n.Clients[0], addr, true, true)
+	if u.behindNAT(addr) {
+		u.s.Println(u.s.Colors.Warn(text.NATShareHint(port)))
+	}
 	if len(u.state().Server.ShareAddresses) > 1 {
 		u.s.Println(text.OtherAddressesHint)
 	}
 	return nil
+}
+
+// behindNAT reports whether the machine looks to be behind NAT when reached
+// at addr (D-043, D-142).
+func (u *nodeUI) behindNAT(addr string) bool {
+	if net.ParseIP(addr) != nil {
+		return !u.detector.OnInterface(addr)
+	}
+	return !u.detector.HasPublicIP()
 }
 
 // showLink prints a client's link for addr, optionally with a QR code and
@@ -313,7 +326,7 @@ func (u *nodeUI) askNewPort(addr string, p node.Preset) (int, error) {
 	if !reality || len(pc.Check(ports.NodeKeys(tmpl, def), "", nil)) > 0 {
 		def = pc.RandomFree(nil, tmpl)
 	}
-	if ip := net.ParseIP(addr); ip != nil && !u.detector.OnInterface(addr) {
+	if u.behindNAT(addr) {
 		u.s.Println(u.s.Colors.Warn(text.NATHint))
 	}
 	for {
@@ -485,6 +498,11 @@ func (u *nodeUI) scanTarget() (string, error) {
 		u.s.Println(u.s.Colors.Warn(text.ScanIPv6Only))
 		return "", nil
 	}
+	center, ok := u.scanCenter()
+	if !ok {
+		u.s.Println(u.s.Colors.Warn(text.ScanNoAddress))
+		return "", nil
+	}
 	st := u.state()
 	if !st.Server.ScanWarned {
 		ok, err := u.s.Confirm(text.ScanWarning)
@@ -495,11 +513,6 @@ func (u *nodeUI) scanTarget() (string, error) {
 		if err := u.svc.Store.Save(st); err != nil {
 			return "", err
 		}
-	}
-	center, ok := u.scanCenter()
-	if !ok {
-		u.s.Println(u.s.Colors.Warn(text.ScanNoAddress))
-		return "", nil
 	}
 	u.s.Println(text.ScanStart(netip.PrefixFrom(center, 24).Masked().String()))
 	last := 0
