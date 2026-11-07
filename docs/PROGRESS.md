@@ -4,17 +4,17 @@
 
 ## 当前状态
 
-- **M0 ~ M12 全部完成**，最新版本 **v0.4.2**（2026-10-28，FIX-10 ~ FIX-12；v0.4.1 为 FIX-07 ~ FIX-09；v0.4.0 为 M12 纯 IPv6 支持；v0.3.4 为 FIX-05、FIX-06；v0.3.3 为 FIX-04；v0.3.2 为 FIX-03 与 Go 1.27.3；v0.3.1 为 FIX-01、FIX-02；v0.3.0 为 M11 Hysteria2）。各阶段内容见 ROADMAP，发布记录见 GitHub Releases。
+- **M0 ~ M12 全部完成**，最新版本 **v0.4.3**（2026-11-08，FIX-13 ~ FIX-16：小内存与容器、NAT 机；v0.4.2 为 FIX-10 ~ FIX-12；v0.4.1 为 FIX-07 ~ FIX-09；v0.4.0 为 M12 纯 IPv6 支持；v0.3.4 为 FIX-05、FIX-06；v0.3.3 为 FIX-04；v0.3.2 为 FIX-03 与 Go 1.27.3；v0.3.1 为 FIX-01、FIX-02；v0.3.0 为 M11 Hysteria2）。各阶段内容见 ROADMAP，发布记录见 GitHub Releases。
 - **用户决定（2026-10-20）：暂时不增加新功能**。ROADMAP"未排期"中的项目保留，等用户提出再排期。
 - **项目收尾（2026-10-20，D-121）**：测试用的真实 IP 换成文档专用地址；新增 Dependabot、Issue 模板、SECURITY.md、CI 的 govulncheck、README 徽章；调整 GitHub 仓库设置。
 
 ## 下次会话从这里开始
 
-1. NAT 小鸡实机测试（2026-11-07）：FIX-13 ~ FIX-15 已合并，未发布（v0.4.2 之后）。容器重启后 Xray 自动恢复；Reality（外部 26251 → 443）、Hysteria2（UDP 41752 → 20004）的分享端口已设置。外部实测（AWS 日本机作客户端）：Reality 通，10MB 下载完整，约 480 KB/s。Hysteria2 不通，原因在商家：该公网 IP 的 UDP 端口（已映射的 41752 和未映射的 41753）都由同一个 QUIC 服务应答（证书 `*.251313.xyz`），流量没有进入容器；容器内用同一链接连 20004 正常。等用户决定是否发布。
+1. v0.4.3 已发布（FIX-13 ~ FIX-16），NAT 测试机经菜单更新到正式版，Reality 外部实测通过。没有排期中的任务，等用户提出。
 
 ## 测试 VPS
 
-- **NAT 测试机**（2026-11-07，Debian 13 arm64，podman 容器，128M，1G 磁盘）：访问方式在本机记忆中。没有 CAP_NET_ADMIN，没有 `/dev/net/tun`，`/proc/sys` 只读，只有 ULA IPv6，IPv4 出口是商家的 WARP。端口映射在商家面板设置（SSH、Reality、Hysteria2 各一条）。当前状态：main 构建，Xray 26.10.31，4 个测试节点（443、20002、20003、20004）。
+- **NAT 测试机**（2026-11-07，Debian 13 arm64，podman 容器，128M，1G 磁盘）：访问方式在本机记忆中。没有 CAP_NET_ADMIN，没有 `/dev/net/tun`，`/proc/sys` 只读，只有 ULA IPv6，IPv4 出口是商家的 WARP。端口映射在商家面板设置（SSH、Reality、Hysteria2 各一条）。当前状态：LiteNode v0.4.3，Xray 26.10.31，4 个测试节点（443、20002、20003、20004）。外部实测：Reality（外部 26251）通，约 0.5 ~ 1 MB/s；Hysteria2（UDP 41752）不通，该公网 IP 的 UDP 端口（已映射的 41752、未映射的 41753）都由同一个 QUIC 服务应答（证书 `*.251313.xyz`），流量没有进入容器，原因在商家，容器内连 20004 正常。
 - **纯 IPv6 测试机**（2026-10-27，Debian 13，425M，只有内网 IPv4）：访问方式在本机记忆中。WSL 没有 IPv6，经 Windows 上的中转程序作 ssh ProxyCommand 连接（见记忆）。当前状态：用户 2026-10-28 重装为 Debian 13（cloud-init + ifupdown + openresolv，新密码在本机记忆中），经 nat64.net 安装了 v0.4.2；DNS 已由 LiteNode 设为 Cloudflare IPv6；未开 WARP、未装 Xray。
 - **外部测试机**（2026-11-07，AWS 日本，Debian 13，`VPS_USER=admin`）：NAT 测试用的干净客户端，访问方式在本机记忆中。客户端已删除，用时下载官方 Xray 到家目录。
 - 2026-11-07：双栈测试机从 WSL 和 NAT 测试机都连不上（端口 22 超时）；纯 IPv6 测试机已是仅公钥登录，密码失效。
